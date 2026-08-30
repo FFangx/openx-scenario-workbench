@@ -1,0 +1,3 @@
+* text=auto eol=lf
+*.xosc text eol=lf
+*.xodr text eol=lf

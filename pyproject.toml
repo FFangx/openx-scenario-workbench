@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openx-scenario-workbench"
+version = "0.1.0"
+description = "A bilingual workbench for inspecting ASAM OpenSCENARIO XML and OpenDRIVE files."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Junyu Fang" }]
+dependencies = ["streamlit>=1.38,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+openx-inspect = "openx_workbench.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openx_workbench"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,8 @@
+<?xml version="1.0" standalone="yes"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="7" name="Minimal road" version="1.00" date="2026-01-01" north="1" south="-1" east="1" west="-1"/>
+  <road name="Road" length="100" id="1" junction="-1">
+    <planView><geometry s="0" x="0" y="0" hdg="0" length="100"><line/></geometry></planView>
+    <lanes><laneSection s="0"><left><lane id="1" type="driving" level="false"/></left><center><lane id="0" type="none" level="false"/></center><right><lane id="-1" type="driving" level="false"/></right></laneSection></lanes>
+  </road>
+</OpenDRIVE>
