@@ -2,6 +2,8 @@
 
 English | [中文](README.md)
 
+Development roadmap: [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)
+
 A small, reproducible workbench for inspecting ASAM OpenSCENARIO XML (`.xosc`) and OpenDRIVE (`.xodr`) files. It turns scenario entities, actions, triggers, positions, and road-network metadata into a shared structured representation and provides a 中文 / English interface.
 
 ## Current capabilities

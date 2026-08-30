@@ -2,6 +2,8 @@
 
 [English](README.en.md) | 中文
 
+开发计划：[DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)
+
 一个轻量、可公开复现的 ASAM OpenSCENARIO XML（`.xosc`）与 OpenDRIVE（`.xodr`）检查工具。它将场景中的参与者、动作、触发条件、位置和道路网络摘要整理为统一的结构化结果，并提供中文 / English 界面切换。
 
 ## 当前能力
