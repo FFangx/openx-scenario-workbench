@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from openx_workbench.parser import parse_bundle, parse_xodr, parse_xosc
 
 
@@ -29,3 +31,9 @@ def test_bundle_warns_when_filename_does_not_match():
         "another-road.xodr",
     )
     assert "road_file_mismatch" in bundle.warnings
+
+
+@pytest.mark.parametrize("parse", [parse_xosc, parse_xodr])
+def test_parser_rejects_a_different_xml_document(parse):
+    with pytest.raises(ValueError, match="root element"):
+        parse("<unrelated />")

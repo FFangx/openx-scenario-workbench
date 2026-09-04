@@ -53,6 +53,8 @@ def _action(node: ET.Element, name: str, actor: str | None) -> ActionIR:
 
 def parse_xosc(data: bytes | str) -> ScenarioIR:
     root = ET.fromstring(data)
+    if _local(root) != "OpenSCENARIO":
+        raise ValueError("Expected an OpenSCENARIO root element.")
     header = _first(root, "FileHeader")
     logic_file = _first(root, "LogicFile")
     scenario = ScenarioIR(
@@ -118,6 +120,8 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
 
 def parse_xodr(data: bytes | str) -> RoadIR:
     root = ET.fromstring(data)
+    if _local(root) != "OpenDRIVE":
+        raise ValueError("Expected an OpenDRIVE root element.")
     header = _first(root, "header")
     road_ids = [road.get("id", "") for road in _all(root, "road")]
     return RoadIR(

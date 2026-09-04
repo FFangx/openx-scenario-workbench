@@ -4,7 +4,8 @@ from pathlib import Path
 from urllib.request import urlopen
 
 
-BASE = "https://raw.githubusercontent.com/esmini/esmini/master"
+ESMINI_COMMIT = "4b8fbafb1a8abd13f3d57b97e4a1b7e68cd93418"
+BASE = f"https://raw.githubusercontent.com/esmini/esmini/{ESMINI_COMMIT}"
 FILES = {
     "cut-in.xosc": "resources/xosc/cut-in.xosc",
     "e6mini.xodr": "resources/xodr/e6mini.xodr",

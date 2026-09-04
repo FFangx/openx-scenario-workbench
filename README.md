@@ -1,50 +1,121 @@
 # OpenX Scenario Workbench
 
-[English](README.en.md) | 中文
+[![CI](https://github.com/FFangx/openx-scenario-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/FFangx/openx-scenario-workbench/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-开发计划：[DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)
+English | [中文](README.zh-CN.md)
 
-一个轻量、可公开复现的 ASAM OpenSCENARIO XML（`.xosc`）与 OpenDRIVE（`.xodr`）检查工具。它将场景中的参与者、动作、触发条件、位置和道路网络摘要整理为统一的结构化结果，并提供中文 / English 界面切换。
+Inspect a traffic scenario before handing it to a simulator. OpenX Scenario Workbench reads **OpenSCENARIO XML (`.xosc`) and OpenDRIVE (`.xodr`)**, extracts a shared structured representation, and shows actors, actions, triggers, positions, and road metadata in a bilingual web UI or CLI.
 
-## 当前能力
+**Try it:** start the app, choose **English** in the top-right corner, and click **Load public demo**. The pinned esmini cut-in example needs no API key, model download, or local input files.
 
-- 同时导入 `.xosc` 和 `.xodr`
-- 提取场景头信息、道路引用、参与者、动作、触发条件和位置
-- 汇总道路、车道、路口、信号及静态对象数量
-- 检查场景引用的道路文件是否与上传文件一致
-- 在网页中查看摘要及可下载的 JSON
-- 命令行解析，便于后续接入检索或 Agent 流程
+![English interface showing the public cut-in example](docs/images/workbench-en.png)
 
-这是一个有意保持较小的 MVP。它不承诺执行完整的 ASAM 标准验证，也不包含任何私有格式、公司资产或内部数据。
+## What it does
 
-## 快速开始
+- Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
+- Summarizes road IDs and counts of lane elements, junctions, signals, and static objects.
+- Checks road-filename references, missing scenario entities, and missing road elements.
+- Shows the result in six views: Overview, Entities, Actions, Triggers, Road network, and Checks.
+- Exports the same structured JSON through the web UI and CLI.
+- Loads a fixed revision of an upstream esmini example for a repeatable demo.
+
+This v0.1 focuses on inspecting scenario structure. It does not run a simulation or perform full ASAM schema/conformance validation. Parameter expressions and external catalogs are not resolved; trigger thresholds and event hierarchy are not yet preserved. See [architecture and current limits](docs/ARCHITECTURE.md).
+
+## Quick start
+
+Requires **Python 3.10 or newer**. Commands below are run from the repository root.
 
 ```bash
+git clone https://github.com/FFangx/openx-scenario-workbench.git
+cd openx-scenario-workbench
 python -m venv .venv
-python -m pip install -e ".[dev]"
-streamlit run src/openx_workbench/app.py
 ```
 
-命令行使用：
+Activate the environment:
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
 
 ```bash
-openx-inspect scenario.xosc road.xodr --language zh
+# macOS / Linux
+source .venv/bin/activate
 ```
 
-## 获取公开示例
+Install and start:
 
-仓库不直接复制第三方场景。下面的命令会从 esmini 官方仓库下载公开示例，并保留其许可证文件：
+```bash
+python -m pip install ".[dev]"
+python -m streamlit run src/openx_workbench/app.py
+```
+
+Open the local URL printed by Streamlit. **Public demo** downloads two files from GitHub; **Upload files** works with your own local pair.
+
+### CLI and offline sample
+
+The small fixtures are authored for parser tests, not for simulator execution. They also provide an offline inspection example:
+
+```bash
+openx-inspect tests/fixtures/minimal.xosc tests/fixtures/minimal.xodr
+```
+
+The output has three top-level keys:
+
+```json
+{
+  "scenario": {
+    "name": "Minimal cut-in",
+    "road_file": "minimal.xodr",
+    "entities": [
+      {"name": "Ego", "kind": "vehicle", "category": "car"},
+      {"name": "Target", "kind": "vehicle", "category": "car"}
+    ]
+  },
+  "road": {"road_ids": ["1"], "lane_count": 3},
+  "warnings": []
+}
+```
+
+This excerpt omits other parsed fields. Standard output contains JSON only; human-readable warnings go to standard error. A valid inspection exits with 0, including inspections with warnings. Invalid input exits with 2.
+
+### Download the real public example
 
 ```bash
 python scripts/fetch_esmini_demo.py
+openx-inspect examples/esmini/cut-in.xosc examples/esmini/e6mini.xodr
 ```
 
-下载内容位于 `examples/esmini/`，不会被 Git 跟踪。第三方许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+The pinned example currently yields **2 entities, 6 actions, 5 trigger conditions, and 1 road**. These are extraction counts, not simulated behavior measurements. Downloads are stored under ignored `examples/esmini/`, alongside the upstream license.
 
-## 项目定位
+## Design
 
-当前版本主要用于“可解释地读取和检查 OpenX 场景”。后续可以在这个统一数据层上增加语义搜索、自然语言筛选、质量检查和 Agent 工具调用，而不需要把 UI、解析器与模型逻辑绑在一起。
+```mermaid
+flowchart LR
+    X["OpenSCENARIO XML"] --> P["Parser + reference checks"]
+    R["OpenDRIVE"] --> P
+    P --> IR["Shared dataclass representation"]
+    IR --> UI["Bilingual Streamlit UI"]
+    IR --> CLI["Command-line inspection"]
+    UI --> J["JSON export"]
+    CLI --> J
+```
 
-## License
+The parser and representation are independent of Streamlit. The UI and CLI share input validation and the same inspection workflow, so future retrieval or comparison tools can consume the structured output directly.
 
-本项目代码采用 MIT License。下载的第三方示例遵循其各自许可证。
+[Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## Development
+
+After changing Python source files, reinstall with `python -m pip install ".[dev]"`. An editable install (`-e`) is also available, but normal installation avoids editable-path encoding issues on Windows installations with non-ASCII checkout paths.
+
+```bash
+python -m pytest -q
+```
+
+CI tests on Windows and Linux with Python 3.10 and 3.12 and builds the distribution. Automated tests use local fixtures and mocked downloads; the live public demo is checked separately.
+
+## License and examples
+
+Code and authored test fixtures are licensed under [MIT](LICENSE). The optional esmini example is fetched from a pinned upstream revision and is not committed to this repository. The screenshot above shows an inspection of that example. See [third-party notices](THIRD_PARTY_NOTICES.md) for its source and license.
