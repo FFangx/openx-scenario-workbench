@@ -21,7 +21,10 @@ def test_parse_xodr_summarizes_network():
     road = parse_xodr((FIXTURES / "minimal.xodr").read_bytes())
     assert road.revision == "1.7"
     assert road.road_ids == ["1"]
+    assert road.total_length == 100.0
     assert road.lane_count == 3
+    assert road.lane_types == {"driving": 2, "none": 1}
+    assert road.geometry_types == {"line": 1}
 
 
 def test_bundle_warns_when_filename_does_not_match():

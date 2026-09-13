@@ -5,7 +5,7 @@
 
 English | [中文](README.zh-CN.md)
 
-Inspect a traffic scenario before handing it to a simulator. OpenX Scenario Workbench reads **OpenSCENARIO XML (`.xosc`) and OpenDRIVE (`.xodr`)**, extracts a shared structured representation, and shows actors, actions, triggers, positions, and road metadata in a bilingual web UI or CLI.
+Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets, and ranks candidates using text, scenario structure, and road fit.
 
 **Try it:** start the app, choose **English** in the top-right corner, and click **Load public demo**. The pinned esmini cut-in example needs no API key, model download, or local input files.
 
@@ -14,13 +14,19 @@ Inspect a traffic scenario before handing it to a simulator. OpenX Scenario Work
 ## What it does
 
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
+- Extracts candidate scene sections from text-based PDFs while retaining filename, section, page range, and source text.
+- Converts each PDF scene package into explicit entity, action, trigger, road, and parameter constraints.
 - Summarizes road IDs and counts of lane elements, junctions, signals, and static objects.
+- Preserves total road length, lane-type counts, and OpenDRIVE geometry types.
+- Pairs each `.xosc` with its referenced `.xodr` to build an OpenX asset catalog.
+- Retrieves assets with a local vector score plus scenario-structure and road-fit reranking.
+- Reports grounded reuse differences such as a missing participant, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.
 - Shows the result in six views: Overview, Entities, Actions, Triggers, Road network, and Checks.
 - Exports the same structured JSON through the web UI and CLI.
 - Loads a fixed revision of an upstream esmini example for a repeatable demo.
 
-This v0.1 focuses on inspecting scenario structure. It does not run a simulation or perform full ASAM schema/conformance validation. Parameter expressions and external catalogs are not resolved; trigger thresholds and event hierarchy are not yet preserved. See [architecture and current limits](docs/ARCHITECTURE.md).
+The current MVP foundation does not run a simulation or perform full ASAM schema/conformance validation. PDF OCR and table reconstruction, parameter expressions, external catalogs, trigger thresholds in XOSC, and event hierarchy are not yet fully supported. See [architecture and current limits](docs/ARCHITECTURE.md).
 
 ## Quick start
 
@@ -89,14 +95,29 @@ openx-inspect examples/esmini/cut-in.xosc examples/esmini/e6mini.xodr
 
 The pinned example currently yields **2 entities, 6 actions, 5 trigger conditions, and 1 road**. These are extraction counts, not simulated behavior measurements. Downloads are stored under ignored `examples/esmini/`, alongside the upstream license.
 
+### Build and search an OpenX asset library
+
+Place related `.xosc` and `.xodr` files under one directory. Each scenario is paired with the OpenDRIVE basename referenced by its `LogicFile`:
+
+```bash
+openx-search examples/esmini "cut-in SpeedAction relative distance"
+```
+
+The web UI exposes the same flow under **Asset retrieval** and reports the vector, scenario-structure, and road-fit scores separately. An optional ADAS PDF can be uploaded there; select an extracted scene section to use its text, structured constraints, and source evidence as the retrieval query.
+
 ## Design
 
 ```mermaid
 flowchart LR
+    D["ADAS requirements PDF"] --> S["ScenePackage + source evidence"]
     X["OpenSCENARIO XML"] --> P["Parser + reference checks"]
     R["OpenDRIVE"] --> P
     P --> IR["Shared dataclass representation"]
-    IR --> UI["Bilingual Streamlit UI"]
+    IR --> C["Paired OpenX asset catalog"]
+    S --> RAG
+    C --> RAG["Vector retrieval + structural reranking"]
+    RAG --> DIFF["Grounded reuse differences"]
+    DIFF --> UI["Bilingual Streamlit UI"]
     IR --> CLI["Command-line inspection"]
     UI --> J["JSON export"]
     CLI --> J

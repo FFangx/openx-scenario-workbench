@@ -6,7 +6,21 @@ Implemented: bilingual web UI, CLI, shared structured representation, selected s
 
 已实现：双语网页、CLI、统一结构化表示、部分场景元素提取、道路元数据、引用检查、JSON 导出和固定版本公开示例，并提供安装说明、测试与 CI。
 
-## Next: richer structure / 下一步：完善结构
+## v0.2 in progress: OpenX asset retrieval / OpenX 资产检索
+
+Implemented locally: XOSC/XODR pairing, road length/lane/geometry features, a dependency-free vector index, scenario and road reranking, reuse-level output, web retrieval UI, and `openx-search` CLI.
+
+本地已实现：XOSC/XODR 配对、道路长度/车道/几何特征、本地向量索引、场景与道路重排、复用等级、网页检索入口和 `openx-search` CLI。
+
+Implemented locally: a public `ScenePackage` contract, page/section/source evidence, deterministic PDF scene-section extraction, structured retrieval queries, and grounded scenario/road reuse differences. No private PDF, `.sim` adapter, customer configuration, or internal evaluation data is included.
+
+本地新增：公开版 `ScenePackage` 契约、页码/章节/原文证据、确定性 PDF 场景章节提取、结构化检索查询，以及有依据的场景与道路复用差异。仓库不包含私有 PDF、`.sim` 适配器、客户配置或内部评测数据。
+
+Next: replace the baseline hashing encoder with an optional semantic embedding backend and persist the asset index; then validate the complete PDF-to-OpenX path against a small licensed public corpus.
+
+下一步：增加可选语义向量后端和持久化资产索引，再用一组有明确许可的公开 PDF 与 OpenX 资产验证完整链路。
+
+## Parser enrichment / 解析完善
 
 - Preserve parameter declarations and resolve simple references.
 - Retain trigger thresholds, entity references, and event/action ownership.

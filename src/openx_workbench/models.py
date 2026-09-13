@@ -52,7 +52,10 @@ class RoadIR:
     name: str | None = None
     revision: str | None = None
     road_ids: list[str] = field(default_factory=list)
+    total_length: float = 0.0
     lane_count: int = 0
+    lane_types: dict[str, int] = field(default_factory=dict)
+    geometry_types: dict[str, int] = field(default_factory=dict)
     junction_count: int = 0
     signal_count: int = 0
     object_count: int = 0

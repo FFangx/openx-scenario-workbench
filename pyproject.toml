@@ -10,13 +10,14 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Junyu Fang" }]
-dependencies = ["streamlit>=1.38,<2"]
+dependencies = ["streamlit>=1.38,<2", "pymupdf>=1.24,<2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
 
 [project.scripts]
 openx-inspect = "openx_workbench.cli:main"
+openx-search = "openx_workbench.search_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openx_workbench"]

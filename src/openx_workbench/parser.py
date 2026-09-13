@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import PurePosixPath
 from xml.etree import ElementTree as ET
 
@@ -123,12 +124,24 @@ def parse_xodr(data: bytes | str) -> RoadIR:
     if _local(root) != "OpenDRIVE":
         raise ValueError("Expected an OpenDRIVE root element.")
     header = _first(root, "header")
-    road_ids = [road.get("id", "") for road in _all(root, "road")]
+    roads = list(_all(root, "road"))
+    road_ids = [road.get("id", "") for road in roads]
+    lane_types = Counter(lane.get("type", "unknown") for lane in _all(root, "lane"))
+    geometry_names = {"line", "arc", "spiral", "poly3", "paramPoly3"}
+    geometry_types = Counter(
+        _local(child)
+        for geometry in _all(root, "geometry")
+        for child in list(geometry)
+        if _local(child) in geometry_names
+    )
     return RoadIR(
         name=header.get("name") if header is not None else None,
         revision=_revision(header),
         road_ids=road_ids,
-        lane_count=sum(1 for _ in _all(root, "lane")),
+        total_length=round(sum(_float(road.get("length")) or 0.0 for road in roads), 3),
+        lane_count=sum(lane_types.values()),
+        lane_types=dict(sorted(lane_types.items())),
+        geometry_types=dict(sorted(geometry_types.items())),
         junction_count=sum(1 for _ in _all(root, "junction")),
         signal_count=sum(1 for _ in _all(root, "signal")),
         object_count=sum(1 for _ in _all(root, "object")),
