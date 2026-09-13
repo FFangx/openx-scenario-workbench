@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
 
 from .catalog import OpenXAsset
 from .models import ParseBundle
@@ -13,6 +16,8 @@ from .scene_package import RetrievalQuery
 
 
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}|\d+(?:\.\d+)?")
+DEFAULT_BGE_MODEL = "BAAI/bge-small-zh-v1.5"
+INDEX_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +55,7 @@ class HashingEncoder:
 
     def __init__(self, dimensions: int = 512) -> None:
         self.dimensions = dimensions
+        self.encoder_id = f"hashing-blake2b-{dimensions}"
 
     def encode(self, text: str) -> tuple[float, ...]:
         counts: Counter[int] = Counter()
@@ -59,12 +65,86 @@ class HashingEncoder:
         norm = math.sqrt(sum(value * value for value in counts.values())) or 1.0
         return tuple(counts.get(index, 0) / norm for index in range(self.dimensions))
 
+    def encode_many(self, texts: list[str]) -> list[tuple[float, ...]]:
+        return [self.encode(text) for text in texts]
+
+
+class TextEncoder(Protocol):
+    encoder_id: str
+
+    def encode(self, text: str) -> tuple[float, ...]: ...
+
+    def encode_many(self, texts: list[str]) -> list[tuple[float, ...]]: ...
+
+
+class SentenceTransformerEncoder:
+    def __init__(self, model_name: str = DEFAULT_BGE_MODEL) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                "Semantic retrieval requires: pip install 'openx-scenario-workbench[semantic]'"
+            ) from exc
+        self.model = SentenceTransformer(model_name)
+        self.encoder_id = f"sentence-transformers:{model_name}"
+
+    def encode(self, text: str) -> tuple[float, ...]:
+        return self.encode_many([text])[0]
+
+    def encode_many(self, texts: list[str]) -> list[tuple[float, ...]]:
+        vectors = self.model.encode(
+            texts,
+            batch_size=64,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        return [tuple(float(value) for value in vector) for vector in vectors]
+
+
+def build_encoder(name: str) -> TextEncoder:
+    if name == "hashing":
+        return HashingEncoder()
+    if name == "bge":
+        return SentenceTransformerEncoder()
+    raise ValueError(f"Unknown encoder: {name}")
+
 
 class OpenXIndex:
-    def __init__(self, assets: list[OpenXAsset], encoder: HashingEncoder | None = None) -> None:
+    def __init__(self, assets: list[OpenXAsset], encoder: TextEncoder | None = None) -> None:
         self.assets = assets
         self.encoder = encoder or HashingEncoder()
-        self.vectors = [self.encoder.encode(asset_text(asset)) for asset in assets]
+        self.vectors = self.encoder.encode_many([asset_text(asset) for asset in assets])
+
+    def save(self, path: Path) -> None:
+        payload = {
+            "schema_version": INDEX_SCHEMA_VERSION,
+            "encoder_id": self.encoder.encoder_id,
+            "asset_ids": [asset.asset_id for asset in self.assets],
+            "vectors": self.vectors,
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+
+    @classmethod
+    def load(
+        cls,
+        path: Path,
+        assets: list[OpenXAsset],
+        encoder: TextEncoder | None = None,
+    ) -> OpenXIndex:
+        selected_encoder = encoder or HashingEncoder()
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != INDEX_SCHEMA_VERSION:
+            raise ValueError("Unsupported index schema version.")
+        if payload.get("encoder_id") != selected_encoder.encoder_id:
+            raise ValueError("The saved index uses a different encoder.")
+        if payload.get("asset_ids") != [asset.asset_id for asset in assets]:
+            raise ValueError("The asset catalog changed; rebuild the index.")
+        index = cls.__new__(cls)
+        index.assets = assets
+        index.encoder = selected_encoder
+        index.vectors = [tuple(float(value) for value in row) for row in payload["vectors"]]
+        return index
 
     def search(
         self,

@@ -23,6 +23,8 @@ def test_search_cli_builds_and_queries_openx_catalog(tmp_path):
             "openx_workbench.search_cli",
             str(tmp_path),
             "cut-in SpeedAction",
+            "--index",
+            str(tmp_path / "index.json"),
         ],
         capture_output=True,
         text=True,
@@ -33,4 +35,6 @@ def test_search_cli_builds_and_queries_openx_catalog(tmp_path):
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     assert payload["asset_count"] == 1
+    assert payload["encoder"].startswith("hashing-")
     assert payload["results"][0]["xodr"] == "minimal.xodr"
+    assert (tmp_path / "index.json").is_file()

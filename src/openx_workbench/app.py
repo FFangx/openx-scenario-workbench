@@ -10,7 +10,7 @@ from openx_workbench.demo import DemoDownloadError, ESMINI_REPOSITORY, fetch_pub
 from openx_workbench.i18n import tr
 from openx_workbench.models import ParseBundle
 from openx_workbench.pdf_pipeline import extract_scene_packages_from_pdf
-from openx_workbench.retrieval import OpenXIndex, bundle_query_text
+from openx_workbench.retrieval import OpenXIndex, build_encoder, bundle_query_text
 from openx_workbench.scene_package import scene_package_to_query
 from openx_workbench.workflow import InputFile, InputValidationError, inspect_pair
 
@@ -26,6 +26,11 @@ def _load_public_demo():
 @st.cache_data(show_spinner=False)
 def _extract_pdf(pdf_data: bytes, filename: str, source_standard: str):
     return extract_scene_packages_from_pdf(pdf_data, filename, source_standard)
+
+
+@st.cache_resource(show_spinner=False)
+def _load_encoder(name: str):
+    return build_encoder(name)
 
 
 def _rows(items: list[object]) -> list[dict[str, object]]:
@@ -233,6 +238,11 @@ def _render_inspector(language: str) -> None:
 
 def _render_retrieval(language: str) -> None:
     st.caption(tr(language, "retrieval_intro"))
+    encoder_name = st.selectbox(
+        tr(language, "retrieval_encoder"),
+        ["hashing", "bge"],
+        format_func=lambda value: tr(language, f"encoder_{value}"),
+    )
     pdf_file = st.file_uploader(
         tr(language, "pdf_source"),
         type=["pdf"],
@@ -302,7 +312,8 @@ def _render_retrieval(language: str) -> None:
             effective_query = query_text.strip() or (
                 query.text if query else bundle_query_text(query_bundle)
             )
-            results = OpenXIndex(assets).search(
+            encoder = _load_encoder(encoder_name)
+            results = OpenXIndex(assets, encoder).search(
                 effective_query,
                 query_bundle=query_bundle,
                 query=query,

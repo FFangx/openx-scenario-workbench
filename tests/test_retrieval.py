@@ -1,7 +1,16 @@
 from pathlib import Path
+import sys
+from types import SimpleNamespace
+
+import pytest
 
 from openx_workbench.catalog import AssetFile, build_catalog
-from openx_workbench.retrieval import OpenXIndex, bundle_query_text
+from openx_workbench.retrieval import (
+    HashingEncoder,
+    OpenXIndex,
+    SentenceTransformerEncoder,
+    bundle_query_text,
+)
 from openx_workbench.scene_package import EvidenceRef, ScenePackage, scene_package_to_query
 
 
@@ -76,3 +85,48 @@ def test_unverified_pdf_parameter_prevents_direct_reuse():
 
     assert any(item.category == "parameter" for item in result.differences)
     assert result.reuse_level != "direct"
+
+
+def test_index_vectors_can_be_saved_and_reloaded(tmp_path):
+    assets = _catalog()
+    path = tmp_path / "openx-index.json"
+    original = OpenXIndex(assets, HashingEncoder(dimensions=32))
+    original.save(path)
+
+    loaded = OpenXIndex.load(path, assets, HashingEncoder(dimensions=32))
+    results = loaded.search("Minimal cut-in", top_k=1)
+
+    assert results[0].asset.title == "Minimal cut-in"
+    assert loaded.vectors == original.vectors
+
+
+def test_saved_index_rejects_a_different_encoder(tmp_path):
+    assets = _catalog()
+    path = tmp_path / "openx-index.json"
+    OpenXIndex(assets, HashingEncoder(dimensions=32)).save(path)
+
+    with pytest.raises(ValueError, match="different encoder"):
+        OpenXIndex.load(path, assets, HashingEncoder(dimensions=64))
+
+
+def test_sentence_transformer_encoder_batches_and_normalizes(monkeypatch):
+    calls = []
+
+    class FakeModel:
+        def __init__(self, model_name):
+            calls.append(("model", model_name))
+
+        def encode(self, texts, **options):
+            calls.append((texts, options))
+            return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        SimpleNamespace(SentenceTransformer=FakeModel),
+    )
+    encoder = SentenceTransformerEncoder("test/bge")
+
+    assert encoder.encode_many(["one", "two"]) == [(1.0, 0.0), (1.0, 0.0)]
+    assert calls[1][1]["normalize_embeddings"] is True
+    assert calls[1][1]["batch_size"] == 64

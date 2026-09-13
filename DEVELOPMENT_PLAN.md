@@ -16,9 +16,9 @@ Implemented locally: a public `ScenePackage` contract, page/section/source evide
 
 本地新增：公开版 `ScenePackage` 契约、页码/章节/原文证据、确定性 PDF 场景章节提取、结构化检索查询，以及有依据的场景与道路复用差异。仓库不包含私有 PDF、`.sim` 适配器、客户配置或内部评测数据。
 
-Next: replace the baseline hashing encoder with an optional semantic embedding backend and persist the asset index; then validate the complete PDF-to-OpenX path against a small licensed public corpus.
+Implemented locally: optional BGE semantic embeddings, batched corpus encoding, and a persistent index tied to both encoder identity and ordered asset IDs. Next: validate and tune the complete PDF-to-OpenX path against a small licensed public corpus.
 
-下一步：增加可选语义向量后端和持久化资产索引，再用一组有明确许可的公开 PDF 与 OpenX 资产验证完整链路。
+本地新增：可选 BGE 语义向量、批量资产编码，以及同时绑定编码器身份和有序资产 ID 的持久化索引。下一步用一组有明确许可的公开 PDF 与 OpenX 资产验证并调优完整链路。
 
 ## Parser enrichment / 解析完善
 

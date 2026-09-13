@@ -35,6 +35,8 @@
 
 `catalog.build_catalog` resolves each OpenSCENARIO `LogicFile` reference against the uploaded or discovered OpenDRIVE files. `OpenXIndex` embeds a compact text representation, then combines vector similarity with explicit scenario-structure and road-fit scores. Results retain the XOSC/XODR pair and explain which structures matched.
 
+The encoder boundary has two implementations: deterministic hashing for a zero-model offline demo, and `BAAI/bge-small-zh-v1.5` through SentenceTransformers for semantic retrieval. Corpus encoding is batched. Index files store normalized vectors, the encoder identity, and ordered asset IDs; loading fails when the encoder or catalog differs.
+
 PDF scene sections are converted to a `ScenePackage` that retains filename, section ID, page range, and source text. Its canonical entity, action, trigger, road, and parameter fields form a `RetrievalQuery`. The index combines text-vector retrieval with those explicit constraints, and each candidate reports missing scene or road features as grounded reuse differences.
 
 The current PDF path is deliberately compact: PyMuPDF extracts page text, numbered headings define traceable sections, and deterministic bilingual signals identify candidate scenes. OCR, tables, and document-specific classification remain later quality work. The public implementation shares the generic ScenePackage contract with ScenarioManager, but contains no private documents, `.sim` adapters, customer configuration, or internal evaluation data.
@@ -57,4 +59,4 @@ These limits determine the next parser improvements in the [roadmap](../DEVELOPM
 
 Uploaded files are read in memory by the local app. The parser makes no network requests. Public-demo mode downloads a fixed OpenSCENARIO/OpenDRIVE pair from GitHub and caches it through Streamlit. The optional download script also saves the upstream license.
 
-No external model, API key, or inference service is required for the current local vector index. The encoder is intentionally small; a semantic embedding backend and PDF scene-package input are the next MVP integration step.
+No API key or inference service is required. Lightweight retrieval has no model download. BGE semantic retrieval is an optional local dependency and downloads the model on first use.

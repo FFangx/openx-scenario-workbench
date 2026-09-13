@@ -19,7 +19,7 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 - Summarizes road IDs and counts of lane elements, junctions, signals, and static objects.
 - Preserves total road length, lane-type counts, and OpenDRIVE geometry types.
 - Pairs each `.xosc` with its referenced `.xodr` to build an OpenX asset catalog.
-- Retrieves assets with a local vector score plus scenario-structure and road-fit reranking.
+- Retrieves assets with either a lightweight offline encoder or optional BGE embeddings, plus scenario-structure and road-fit reranking.
 - Reports grounded reuse differences such as a missing participant, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.
 - Shows the result in six views: Overview, Entities, Actions, Triggers, Road network, and Checks.
@@ -104,6 +104,15 @@ openx-search examples/esmini "cut-in SpeedAction relative distance"
 ```
 
 The web UI exposes the same flow under **Asset retrieval** and reports the vector, scenario-structure, and road-fit scores separately. An optional ADAS PDF can be uploaded there; select an extracted scene section to use its text, structured constraints, and source evidence as the retrieval query.
+
+For semantic retrieval and a reusable on-disk index:
+
+```bash
+python -m pip install ".[semantic]"
+openx-search examples/esmini "target vehicle cuts in" --encoder bge --index .openx/index.json
+```
+
+The BGE model is downloaded by SentenceTransformers on first use. The index records the encoder and ordered asset IDs, so it cannot silently be reused with a different model or catalog.
 
 ## Design
 
