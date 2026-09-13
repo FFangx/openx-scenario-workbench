@@ -116,23 +116,9 @@ The BGE model is downloaded by SentenceTransformers on first use. The index reco
 
 ## Design
 
-```mermaid
-flowchart LR
-    D["ADAS requirements PDF"] --> S["ScenePackage + source evidence"]
-    X["OpenSCENARIO XML"] --> P["Parser + reference checks"]
-    R["OpenDRIVE"] --> P
-    P --> IR["Shared dataclass representation"]
-    IR --> C["Paired OpenX asset catalog"]
-    S --> RAG
-    C --> RAG["Vector retrieval + structural reranking"]
-    RAG --> DIFF["Grounded reuse differences"]
-    DIFF --> UI["Bilingual Streamlit UI"]
-    IR --> CLI["Command-line inspection"]
-    UI --> J["JSON export"]
-    CLI --> J
-```
+![OpenX Scenario Workbench architecture](docs/images/architecture-overview.svg)
 
-The parser and representation are independent of Streamlit. The UI and CLI share input validation and the same inspection workflow, so future retrieval or comparison tools can consume the structured output directly.
+The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The parser, retrieval core, and decision logic remain independent of Streamlit.
 
 [Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 

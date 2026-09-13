@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title description">
+  <title id="title">OpenX Scenario Workbench architecture</title>
+  <desc id="description">ADAS PDF evidence and paired OpenSCENARIO and OpenDRIVE assets flow through hybrid retrieval into a grounded reuse decision.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080D1B"/>
+      <stop offset="0.55" stop-color="#10172B"/>
+      <stop offset="1" stop-color="#0B1222"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+    <filter id="soft-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="760" rx="28" fill="url(#background)"/>
+  <circle cx="1010" cy="170" r="170" fill="#4F46E5" opacity="0.12" filter="url(#soft-glow)"/>
+  <circle cx="250" cy="650" r="150" fill="#0891B2" opacity="0.08" filter="url(#soft-glow)"/>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <text x="60" y="65" fill="#F8FAFC" font-size="29" font-weight="700" letter-spacing="-0.5">OpenX Scenario Workbench</text>
+    <text x="60" y="96" fill="#94A3B8" font-size="15">From ADAS evidence to a traceable scenario reuse decision</text>
+    <g transform="translate(1080 51)">
+      <rect width="140" height="36" rx="18" fill="#172033" stroke="#334155"/>
+      <circle cx="20" cy="18" r="5" fill="#34D399"/>
+      <text x="34" y="23" fill="#CBD5E1" font-size="13" font-weight="600">LOCAL · OPENX</text>
+    </g>
+
+    <path d="M400 260 H458" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="458,254 458,266 470,260" fill="#64748B"/>
+
+    <path d="M880 260 H822" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="822,254 822,266 810,260" fill="#64748B"/>
+
+    <path d="M640 370 V443" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="634,443 646,443 640,455" fill="#64748B"/>
+
+    <path d="M240 370 C240 420 350 420 350 443" fill="none" stroke="#64748B" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="5 7"/>
+    <polygon points="344,443 356,443 350,455" fill="#64748B"/>
+    <rect x="267" y="397" width="108" height="22" rx="11" fill="#11192A"/>
+    <text x="321" y="412" fill="#7DD3FC" font-size="10" font-weight="600" text-anchor="middle">source evidence</text>
+
+    <g transform="translate(60 140)" filter="url(#shadow)">
+      <rect width="340" height="230" rx="20" fill="#121A2C" stroke="#27344D"/>
+      <rect x="22" y="22" width="42" height="42" rx="12" fill="#172D3B"/>
+      <path d="M35 31h12l6 6v18H35z" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M47 31v7h6M39 44h10M39 49h10" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linecap="round"/>
+      <text x="80" y="39" fill="#64748B" font-size="11" font-weight="700" letter-spacing="1.4">REQUIREMENT</text>
+      <text x="80" y="61" fill="#F8FAFC" font-size="18" font-weight="650">ADAS PDF evidence</text>
+      <text x="22" y="98" fill="#94A3B8" font-size="13">Each extracted scene stays linked</text>
+      <text x="22" y="119" fill="#94A3B8" font-size="13">to its original clause and page.</text>
+      <rect x="22" y="143" width="296" height="62" rx="13" fill="#0C1425" stroke="#20304A"/>
+      <text x="38" y="168" fill="#67E8F9" font-size="12" font-weight="700">ScenePackage</text>
+      <text x="38" y="189" fill="#CBD5E1" font-size="12">text · fields · page · source evidence</text>
+    </g>
+
+    <g transform="translate(880 140)" filter="url(#shadow)">
+      <rect width="340" height="230" rx="20" fill="#121A2C" stroke="#27344D"/>
+      <rect x="22" y="22" width="42" height="42" rx="12" fill="#20203D"/>
+      <path d="M34 36h12v12H34zM44 46h12v12H44z" fill="none" stroke="#A78BFA" stroke-width="2"/>
+      <text x="80" y="39" fill="#64748B" font-size="11" font-weight="700" letter-spacing="1.4">ASSET LIBRARY</text>
+      <text x="80" y="61" fill="#F8FAFC" font-size="18" font-weight="650">Paired OpenX assets</text>
+      <text x="22" y="98" fill="#94A3B8" font-size="13">Resolve the scenario's road reference, then</text>
+      <text x="22" y="119" fill="#94A3B8" font-size="13">parse behavior and map structure together.</text>
+      <g transform="translate(22 143)">
+        <rect width="128" height="62" rx="13" fill="#0C1425" stroke="#342E60"/>
+        <text x="16" y="26" fill="#C4B5FD" font-size="12" font-weight="700">.xosc</text>
+        <text x="16" y="46" fill="#94A3B8" font-size="11">scenario IR</text>
+        <text x="139" y="38" fill="#64748B" font-size="18">+</text>
+        <rect x="168" width="128" height="62" rx="13" fill="#0C1425" stroke="#342E60"/>
+        <text x="184" y="26" fill="#C4B5FD" font-size="12" font-weight="700">.xodr</text>
+        <text x="184" y="46" fill="#94A3B8" font-size="11">road IR</text>
+      </g>
+    </g>
+
+    <g transform="translate(470 140)" filter="url(#shadow)">
+      <rect width="340" height="230" rx="20" fill="#121A2C" stroke="#3E3774"/>
+      <rect x="22" y="22" width="42" height="42" rx="12" fill="url(#violet)"/>
+      <circle cx="39" cy="39" r="8" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+      <path d="M45 45l7 7" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      <text x="80" y="39" fill="#8B83B8" font-size="11" font-weight="700" letter-spacing="1.4">RETRIEVAL CORE</text>
+      <text x="80" y="61" fill="#F8FAFC" font-size="18" font-weight="650">Hybrid candidate search</text>
+      <text x="22" y="98" fill="#94A3B8" font-size="13">Text recall stays grounded by explicit</text>
+      <text x="22" y="119" fill="#94A3B8" font-size="13">scenario and road constraints.</text>
+      <g transform="translate(22 145)">
+        <rect width="86" height="30" rx="15" fill="#211D3D"/>
+        <text x="43" y="20" fill="#C4B5FD" font-size="11" text-anchor="middle">hash / BGE</text>
+        <rect x="96" width="89" height="30" rx="15" fill="#211D3D"/>
+        <text x="140" y="20" fill="#C4B5FD" font-size="11" text-anchor="middle">vector recall</text>
+        <rect x="195" width="101" height="30" rx="15" fill="#211D3D"/>
+        <text x="245" y="20" fill="#C4B5FD" font-size="11" text-anchor="middle">scene + road</text>
+      </g>
+      <rect x="22" y="187" width="296" height="4" rx="2" fill="#252E42"/>
+      <rect x="22" y="187" width="224" height="4" rx="2" fill="url(#violet)"/>
+      <text x="22" y="211" fill="#64748B" font-size="11">persistent, encoder-bound index</text>
+    </g>
+
+    <g transform="translate(240 455)" filter="url(#shadow)">
+      <rect width="800" height="235" rx="22" fill="#121A2C" stroke="#27564F"/>
+      <rect x="0" y="0" width="7" height="235" rx="3.5" fill="url(#green)"/>
+      <text x="30" y="38" fill="#64748B" font-size="11" font-weight="700" letter-spacing="1.4">GROUNDED DECISION</text>
+      <text x="30" y="67" fill="#F8FAFC" font-size="21" font-weight="650">Reuse the closest asset — with differences made explicit</text>
+      <text x="30" y="94" fill="#94A3B8" font-size="13">Candidate facts and PDF evidence meet here with explicit differences.</text>
+
+      <g transform="translate(30 119)">
+        <rect width="448" height="84" rx="15" fill="#0C1425" stroke="#20384A"/>
+        <rect x="16" y="17" width="48" height="48" rx="12" fill="#123137"/>
+        <path d="M28 48l9-9 7 7 9-12" fill="none" stroke="#34D399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="80" y="34" fill="#F1F5F9" font-size="13" font-weight="650">Ranked candidate · paired scenario + map</text>
+        <text x="80" y="57" fill="#94A3B8" font-size="12">score · matching evidence · reuse differences</text>
+        <rect x="355" y="22" width="72" height="28" rx="14" fill="#12372F"/>
+        <text x="391" y="41" fill="#6EE7B7" font-size="11" font-weight="700" text-anchor="middle">ranked</text>
+      </g>
+
+      <g transform="translate(504 119)">
+        <rect width="78" height="84" rx="15" fill="#0C1425" stroke="#1F5147"/>
+        <circle cx="39" cy="28" r="7" fill="#34D399"/>
+        <text x="39" y="55" fill="#A7F3D0" font-size="11" font-weight="650" text-anchor="middle">Direct</text>
+        <text x="39" y="70" fill="#64748B" font-size="9" text-anchor="middle">reuse</text>
+        <rect x="92" width="92" height="84" rx="15" fill="#201C18" stroke="#6B4E25"/>
+        <circle cx="138" cy="28" r="7" fill="#F59E0B"/>
+        <text x="138" y="55" fill="#FCD34D" font-size="11" font-weight="650" text-anchor="middle">Modify</text>
+        <text x="138" y="70" fill="#64748B" font-size="9" text-anchor="middle">and reuse</text>
+        <rect x="198" width="68" height="84" rx="15" fill="#21191D" stroke="#633343"/>
+        <circle cx="232" cy="28" r="7" fill="#FB7185"/>
+        <text x="232" y="55" fill="#FDA4AF" font-size="11" font-weight="650" text-anchor="middle">New</text>
+        <text x="232" y="70" fill="#64748B" font-size="9" text-anchor="middle">build</text>
+      </g>
+    </g>
+
+    <text x="640" y="729" fill="#64748B" font-size="11" text-anchor="middle" letter-spacing="0.5">TRACEABLE BY DESIGN · LOCAL-FIRST · PUBLIC OPENX BOUNDARY</text>
+  </g>
+</svg>
