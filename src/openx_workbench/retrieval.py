@@ -61,7 +61,7 @@ class HashingEncoder:
         counts: Counter[int] = Counter()
         for token in TOKEN_RE.findall(text.casefold()):
             digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
-            counts[int.from_bytes(digest) % self.dimensions] += 1
+            counts[int.from_bytes(digest, byteorder="big") % self.dimensions] += 1
         norm = math.sqrt(sum(value * value for value in counts.values())) or 1.0
         return tuple(counts.get(index, 0) / norm for index in range(self.dimensions))
 
