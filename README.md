@@ -11,6 +11,14 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 
 ![English interface showing the public cut-in example](docs/images/workbench-en.png)
 
+## Design
+
+![OpenX Scenario Workbench architecture](docs/images/architecture-overview.svg)
+
+The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The parser, retrieval core, and decision logic remain independent of Streamlit.
+
+[Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+
 ## What it does
 
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
@@ -113,14 +121,6 @@ openx-search examples/esmini "target vehicle cuts in" --encoder bge --index .ope
 ```
 
 The BGE model is downloaded by SentenceTransformers on first use. The index records the encoder and ordered asset IDs, so it cannot silently be reused with a different model or catalog.
-
-## Design
-
-![OpenX Scenario Workbench architecture](docs/images/architecture-overview.svg)
-
-The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The parser, retrieval core, and decision logic remain independent of Streamlit.
-
-[Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Development
 
