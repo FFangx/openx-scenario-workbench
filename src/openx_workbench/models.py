@@ -26,12 +26,17 @@ class TriggerIR:
     kind: str
     delay: float | None = None
     edge: str | None = None
+    value: float | None = None
+    rule: str | None = None
+    entity_refs: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
 class PositionIR:
     kind: str
     attributes: dict[str, str] = field(default_factory=dict)
+    actor: str | None = None
+    orientation: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -66,6 +71,11 @@ class ParseBundle:
     scenario: ScenarioIR
     road: RoadIR
     warnings: list[str] = field(default_factory=list)
+    road_geometry: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "scenario": asdict(self.scenario),
+            "road": asdict(self.road),
+            "warnings": list(self.warnings),
+        }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import posixpath
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -27,11 +28,13 @@ class OpenXAsset:
 def build_catalog(files: list[AssetFile]) -> list[OpenXAsset]:
     """Build paired OpenSCENARIO/OpenDRIVE assets from a file collection."""
 
-    roads = {
-        PurePosixPath(item.name.replace("\\", "/")).name.casefold(): item
-        for item in files
-        if item.name.casefold().endswith(".xodr")
-    }
+    roads = [item for item in files if item.name.casefold().endswith(".xodr")]
+    roads_by_path = {item.name.replace("\\", "/").casefold(): item for item in roads}
+    roads_by_basename: dict[str, list[AssetFile]] = {}
+    for road in roads:
+        roads_by_basename.setdefault(
+            PurePosixPath(road.name.replace("\\", "/")).name.casefold(), []
+        ).append(road)
     assets: list[OpenXAsset] = []
 
     for scenario_file in sorted(
@@ -41,8 +44,17 @@ def build_catalog(files: list[AssetFile]) -> list[OpenXAsset]:
         scenario = parse_xosc(scenario_file.data)
         if not scenario.road_file:
             raise ValueError(f"{scenario_file.name} does not reference an OpenDRIVE file.")
-        road_name = PurePosixPath(scenario.road_file.replace("\\", "/")).name
-        road_file = roads.get(road_name.casefold())
+        reference = scenario.road_file.replace("\\", "/")
+        road_name = PurePosixPath(reference).name
+        relative = posixpath.normpath(posixpath.join(
+            posixpath.dirname(scenario_file.name.replace("\\", "/")), reference
+        ))
+        road_file = roads_by_path.get(relative.casefold())
+        if road_file is None:
+            matches = roads_by_basename.get(road_name.casefold(), [])
+            if len(matches) > 1:
+                raise ValueError(f"{scenario_file.name} has ambiguous road reference {scenario.road_file}.")
+            road_file = matches[0] if matches else None
         if road_file is None:
             raise ValueError(f"{scenario_file.name} references missing road file {road_name}.")
 

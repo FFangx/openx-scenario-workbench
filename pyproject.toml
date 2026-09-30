@@ -10,11 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Junyu Fang" }]
-dependencies = ["streamlit>=1.38,<2", "pymupdf>=1.24,<2"]
+dependencies = ["streamlit>=1.64,<2", "pymupdf>=1.24,<2", "Pillow>=10,<13", "pydantic>=2,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
-semantic = ["sentence-transformers>=3,<6"]
+desktop = ["pystray>=0.19,<1; sys_platform == 'win32'"]
+semantic = ["sentence-transformers>=3,<6", "faiss-cpu>=1.14,<2"]
 
 [project.scripts]
 openx-inspect = "openx_workbench.cli:main"

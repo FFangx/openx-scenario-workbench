@@ -1,0 +1,17 @@
+{
+  "source": "scenario-manager-v2/src/scenario_matcher/ingestion/pdf",
+  "date": "2026-09-28",
+  "sha256": {
+    "models": "3c24914c1a841cea8685b6821f717a8e790987db1e1a1af007445eec2123839a",
+    "parser": "d89391b01159909baf5b701bebb718dbd281c4ec52bf9c49c80b2159ab9f7023",
+    "numbering_chain": "06ecfb6b7d8ac13d8182ec1d88d9998c7b5b63728e4e76594a0903b4118eb804",
+    "section_tree": "e8e6497deb25ad52161b319f93e4c9738d8e0b257103e98c1ee934b38bd13244",
+    "quality": "d0a2dc3d3c127056baae4e736ed7e01c2f5b63ac2911f06afcc271ff3af18dd8",
+    "scene_proposer": "bb793fc27256c5ccf0805b824e8b8cdb0747d479e2eeaa37a687952bc75f0948",
+    "scene_schemas": "b3fb2f03a920c9271d76d897e7170d72e4d02f4c5adc0b1111c22f02f2511638",
+    "shared_containers": "db2883f7e24c8cad2261c24076dcef8593e42fff40682b1f17e64920e16ef5f4",
+    "stage_d_validation": "144d34bd2bf8d2133a430802718829f0fa6ea9a5297bdada14e79a7e1fa9371d",
+    "scene_first": "84bbc657117c2743a735a0af49fa69a61896ca394c7397c6147ea79e1d3ebc66",
+    "heading": "49c3acbacb844f76ec997ab5fc892ae75f43f1d5f7fdc30cff69bbf29e6a3f31"
+  }
+}

@@ -66,3 +66,24 @@ def test_extract_scene_packages_from_real_pdf_bytes():
     assert len(packages) == 1
     assert packages[0].evidence[0].source_pdf == "public-standard.pdf"
     assert packages[0].actions == ["lane_change"]
+
+
+def test_separate_number_and_title_keep_full_section_id_and_source_text():
+    packages = extract_scene_packages_from_pages([
+        PdfPage(2, "Table of Contents\n8.2.3.1\nCut-in scenario ........ 20"),
+        PdfPage(20, "8.2.3.1\nCut-in scenario\nTarget vehicle changes lane."),
+        PdfPage(21, "The test vehicle follows on a straight road.\n9\nAPPENDIX\nUnrelated notes."),
+    ], "authored.pdf")
+    assert len(packages) == 1
+    evidence = packages[0].evidence[0]
+    assert evidence.section_id == "8.2.3.1"
+    assert (evidence.page_start, evidence.page_end) == (20, 21)
+    assert packages[0].title == "Cut-in scenario"
+    assert "Cut-in scenario" in evidence.source_text
+    assert "Unrelated notes" not in evidence.source_text
+
+
+def test_numeric_table_values_do_not_become_headings():
+    sections = split_sections([PdfPage(1, "8.2 Test scenario\n3.0 4.0\n8.2.1")])
+    assert len(sections) == 1
+    assert sections[0].section_id == "8.2"

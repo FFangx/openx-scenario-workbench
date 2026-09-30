@@ -6,19 +6,19 @@ Implemented: bilingual web UI, CLI, shared structured representation, selected s
 
 已实现：双语网页、CLI、统一结构化表示、部分场景元素提取、道路元数据、引用检查、JSON 导出和固定版本公开示例，并提供安装说明、测试与 CI。
 
-## v0.2 in progress: OpenX asset retrieval / OpenX 资产检索
+## v0.2: evidence-to-reuse MVP / 证据到复用 MVP
 
-Implemented locally: XOSC/XODR pairing, road length/lane/geometry features, a dependency-free vector index, scenario and road reranking, reuse-level output, web retrieval UI, and `openx-search` CLI.
+Implemented locally: XOSC/XODR pairing, ScenarioManager-compatible `.sim` ingestion, road length/lane/geometry features, a dependency-free vector index, scenario and road reranking, reuse-level output, a responsive evidence-to-decision workbench, and the `openx-search` CLI.
 
-本地已实现：XOSC/XODR 配对、道路长度/车道/几何特征、本地向量索引、场景与道路重排、复用等级、网页检索入口和 `openx-search` CLI。
+本地已实现：XOSC/XODR 配对、ScenarioManager 兼容的 `.sim` 导入、道路长度/车道/几何特征、本地向量索引、场景与道路重排、复用等级、响应式证据到决策工作台和 `openx-search` CLI。
 
-Implemented locally: a public `ScenePackage` contract, page/section/source evidence, deterministic PDF scene-section extraction, structured retrieval queries, and grounded scenario/road reuse differences. No private PDF, `.sim` adapter, customer configuration, or internal evaluation data is included.
+Implemented locally: a public `ScenePackage` contract, page/section/source evidence, deterministic PDF scene-section extraction, structured retrieval queries, grounded scenario/road reuse differences, and an in-memory `.sim` adapter. No private PDF, customer configuration, or internal evaluation data is included.
 
-本地新增：公开版 `ScenePackage` 契约、页码/章节/原文证据、确定性 PDF 场景章节提取、结构化检索查询，以及有依据的场景与道路复用差异。仓库不包含私有 PDF、`.sim` 适配器、客户配置或内部评测数据。
+本地新增：公开版 `ScenePackage` 契约、页码/章节/原文证据、确定性 PDF 场景章节提取、结构化检索查询、有依据的场景与道路复用差异，以及纯内存 `.sim` 适配器。仓库不包含私有 PDF、客户配置或内部评测数据。
 
-Implemented locally: optional BGE semantic embeddings, batched corpus encoding, and a persistent index tied to both encoder identity and ordered asset IDs. Next: validate and tune the complete PDF-to-OpenX path against a small licensed public corpus.
+Implemented locally: optional BGE semantic embeddings, batched corpus encoding, and a persistent index tied to both encoder identity and ordered asset IDs. Next: validate and tune the complete PDF-to-OpenX path against a small licensed public corpus, then connect an actual local esmini launch/preview path.
 
-本地新增：可选 BGE 语义向量、批量资产编码，以及同时绑定编码器身份和有序资产 ID 的持久化索引。下一步用一组有明确许可的公开 PDF 与 OpenX 资产验证并调优完整链路。
+本地新增：可选 BGE 语义向量、批量资产编码，以及同时绑定编码器身份和有序资产 ID 的持久化索引。下一步用一组有明确许可的公开 PDF 与 OpenX 资产验证并调优完整链路，再接入真实的本地 esmini 启动/预览路径。
 
 ## Parser enrichment / 解析完善
 

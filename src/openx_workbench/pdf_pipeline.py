@@ -26,9 +26,13 @@ class DocumentSection:
     page_end: int
 
 
+_SECTION_PATTERN = r"(?:\d+(?:\.\d+){1,5}|[A-Z][.．]\d+(?:\.\d+)*)"
+_SECTION_ONLY_RE = re.compile(rf"^{_SECTION_PATTERN}$")
 _HEADING_RE = re.compile(
-    r"^(?P<section>(?:\d+(?:\.\d+){1,5}|[A-Z][.．]\d+(?:\.\d+)*))\s*[、.．]?\s*(?P<title>.+)$"
+    rf"^(?P<section>{_SECTION_PATTERN})(?!\d|[.．]\d)(?:\s+|[、.．]\s*)(?P<title>.+)$"
 )
+_ROOT_HEADING_RE = re.compile(r"^(?P<section>\d+)\s+(?P<title>[A-Z][A-Z /&–—-]{2,})$")
+_CONTENTS_ENTRY_RE = re.compile(r"\.{3,}\s*\d+\s*$")
 _SCENE_SIGNALS = (
     "scenario",
     "test vehicle",
@@ -37,6 +41,8 @@ _SCENE_SIGNALS = (
     "ttc",
     "lane change",
     "cut-in",
+    "car-to-car",
+    "braking",
     "场景",
     "测试车辆",
     "目标车辆",
@@ -60,7 +66,7 @@ def extract_scene_packages_from_pdf(
         raise RuntimeError("PDF support requires the 'pdf' optional dependency.") from exc
 
     with pymupdf.open(stream=pdf_data, filetype="pdf") as document:
-        pages = [PdfPage(index + 1, page.get_text("text")) for index, page in enumerate(document)]
+        pages = [PdfPage(index + 1, page.get_text("text", sort=True)) for index, page in enumerate(document)]
     return extract_scene_packages_from_pages(pages, source_pdf, source_standard)
 
 
@@ -105,18 +111,32 @@ def split_sections(pages: list[PdfPage]) -> list[DocumentSection]:
     current: DocumentSection | None = None
 
     for page in pages:
-        for raw_line in page.text.splitlines():
-            line = raw_line.strip()
-            if not line:
+        lines = [line.strip() for line in page.text.splitlines() if line.strip()]
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            index += 1
+            if (_SECTION_ONLY_RE.fullmatch(line) and index < len(lines)
+                    and re.search(r"[^\W\d_]", lines[index])
+                    and not _HEADING_RE.match(lines[index])):
+                # PDF text extraction often separates the number from its title.
+                line = f"{line} {lines[index]}"
+                index += 1
+            elif line.isdigit() and index < len(lines) and _ROOT_HEADING_RE.fullmatch(f"{line} {lines[index]}"):
+                line = f"{line} {lines[index]}"
+                index += 1
+            if _CONTENTS_ENTRY_RE.search(line):
                 continue
-            heading = _HEADING_RE.match(line)
+            heading = _HEADING_RE.match(line) or _ROOT_HEADING_RE.match(line)
+            if heading and not re.search(r"[^\W\d_]", heading.group("title")):
+                heading = None
             if heading:
                 if current:
                     sections.append(current)
                 current = DocumentSection(
                     section_id=heading.group("section"),
                     title=heading.group("title").strip(),
-                    text="",
+                    text=line,
                     page_start=page.number,
                     page_end=page.number,
                 )

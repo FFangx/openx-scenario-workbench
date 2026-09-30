@@ -1,0 +1,264 @@
+"""Launch an isolated, localhost-only esmini RAM-frame preview worker."""
+
+from __future__ import annotations
+
+import ctypes
+import io
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.request import urlopen
+from xml.etree import ElementTree as ET
+
+from .asset_store import AssetStore, AssetVersion
+from .dependency_package import stage_package
+
+
+def find_esmini(value: str = "") -> Path | None:
+    candidates = [value, os.environ.get("OPENX_ESMINI_PATH", ""), shutil.which("esmini.exe"),
+                  shutil.which("esmini")]
+    for item in candidates:
+        if not item:
+            continue
+        path = Path(item).expanduser()
+        if path.is_dir():
+            path = path / "bin" / "esmini.exe"
+        if path.is_file() and (path.parent / "esminiLib.dll").is_file():
+            return path.resolve()
+    return None
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@dataclass
+class PreviewProcess:
+    process: subprocess.Popen
+    url: str
+    token: str
+    version_id: str
+    workdir: Path
+
+    def status(self) -> dict:
+        try:
+            with urlopen(f"{self.url}/status?token={self.token}", timeout=1) as response:
+                return json.load(response)
+        except Exception:
+            return {"state": "stopped" if self.process.poll() is not None else "starting",
+                    "frames": 0, "error": "Preview worker exited." if self.process.poll() is not None else ""}
+
+    def stop(self) -> None:
+        if self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=3)
+        shutil.rmtree(self.workdir, ignore_errors=True)
+
+
+def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
+                  *, duration: int = 30) -> PreviewProcess:
+    if not executable.is_file() or not (executable.parent / "esminiLib.dll").is_file():
+        raise FileNotFoundError("Select an esmini.exe next to esminiLib.dll.")
+    root = Path(tempfile.mkdtemp(prefix="openx-preview-"))
+    scenario = store.file_bytes(version, "scenario")
+    road = store.file_bytes(version, "road")
+    try:
+        if version.source_name.casefold().endswith(".zip"):
+            stage_package(store.file_bytes(version, "source"), root)
+            scenario_path = root.joinpath(*Path(version.xosc_name.replace("\\", "/")).parts)
+            road_path = root.joinpath(*Path(version.xodr_name.replace("\\", "/")).parts)
+        else:
+            scenario_path = root / "xosc" / "scenario.xosc"
+            road_path = root / "xodr" / Path(version.xodr_name).name
+        scenario_path.parent.mkdir(parents=True, exist_ok=True)
+        road_path.parent.mkdir(parents=True, exist_ok=True)
+        xml = ET.fromstring(scenario)
+        logic = xml.find(".//RoadNetwork/LogicFile")
+        if logic is None:
+            raise ValueError("Scenario has no RoadNetwork/LogicFile.")
+        logic.set("filepath", os.path.relpath(road_path, scenario_path.parent).replace("\\", "/"))
+        scenario = ET.tostring(xml, encoding="utf-8", xml_declaration=True)
+        scenario_path.write_bytes(scenario)
+        road_path.write_bytes(road)
+        port = _free_port()
+        token = os.urandom(16).hex()
+        command = [sys.executable, "-m", "openx_workbench.esmini_preview", "--worker",
+                   str(executable), str(scenario_path), str(root), str(port), token,
+                   str(min(max(duration, 1), 120))]
+        env = os.environ.copy()
+        package_root = str(Path(__file__).resolve().parents[1])
+        env["PYTHONPATH"] = package_root + os.pathsep + env.get("PYTHONPATH", "")
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        with (root / "worker.log").open("wb") as error_log:
+            process = subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.DEVNULL,
+                                       stderr=error_log, creationflags=flags)
+        preview = PreviewProcess(process, f"http://127.0.0.1:{port}", token, version.version_id, root)
+        for _ in range(40):
+            status = preview.status()
+            if status["state"] in {"running", "finished", "failed"}:
+                return preview
+            if process.poll() is not None:
+                detail = (root / "worker.log").read_text(errors="replace")[-1000:]
+                preview.stop()
+                raise RuntimeError(f"Preview worker exited: {detail}")
+            time.sleep(0.1)
+        preview.stop()
+        raise TimeoutError("esmini preview did not start within four seconds.")
+    except Exception:
+        shutil.rmtree(root, ignore_errors=True)
+        raise
+
+
+class _Frame(ctypes.Structure):
+    _fields_ = [("width", ctypes.c_int), ("height", ctypes.c_int),
+                ("pixel_size", ctypes.c_int), ("pixel_format", ctypes.c_int),
+                ("data", ctypes.POINTER(ctypes.c_ubyte))]
+
+
+class _State:
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.frame: bytes | None = None
+        self.frames = 0
+        self.state = "starting"
+        self.error = ""
+
+
+def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state: _State) -> None:
+    try:
+        from PIL import Image
+        dll_dir = os.add_dll_directory(str(executable.parent)) if hasattr(os, "add_dll_directory") else None
+        lib = ctypes.CDLL(str(executable.parent / "esminiLib.dll"))
+        lib.SE_SetWindowPosAndSize.argtypes = [ctypes.c_int] * 4
+        lib.SE_SaveImagesToRAM.argtypes = [ctypes.c_bool]
+        lib.SE_SaveImagesToRAM.restype = ctypes.c_int
+        lib.SE_AddPath.argtypes = [ctypes.c_char_p]
+        lib.SE_AddPath.restype = ctypes.c_int
+        lib.SE_Init.argtypes = [ctypes.c_char_p] + [ctypes.c_int] * 4
+        lib.SE_Init.restype = ctypes.c_int
+        lib.SE_StepDT.argtypes = [ctypes.c_double]
+        lib.SE_StepDT.restype = ctypes.c_int
+        lib.SE_FetchImage.argtypes = [ctypes.POINTER(_Frame)]
+        lib.SE_FetchImage.restype = ctypes.c_int
+        lib.SE_GetQuitFlag.restype = ctypes.c_int
+        lib.SE_Close.argtypes = []
+        resource_dir = executable.parent.parent / "resources"
+        if resource_dir.is_dir():
+            lib.SE_AddPath(os.fsencode(resource_dir))
+        lib.SE_AddPath(os.fsencode(root))
+        lib.SE_AddPath(os.fsencode(scenario.parent))
+        lib.SE_SetWindowPosAndSize(0, 0, 640, 360)
+        if lib.SE_SaveImagesToRAM(True) != 0:
+            raise RuntimeError("esmini could not enable in-memory frame capture.")
+        if lib.SE_Init(os.fsencode(scenario), 0, 3, 0, 0) != 0:
+            raise RuntimeError("esmini rejected the scenario; inspect worker.log for its parser error.")
+        try:
+            state.state = "running"
+            deadline = time.monotonic() + duration
+            while not lib.SE_GetQuitFlag() and time.monotonic() < deadline:
+                if lib.SE_StepDT(0.1) != 0:
+                    raise RuntimeError("esmini failed while stepping the simulation.")
+                frame = _Frame()
+                if lib.SE_FetchImage(ctypes.byref(frame)) != 0 or not frame.data:
+                    raise RuntimeError("esmini did not return a rendered frame.")
+                if frame.pixel_size not in (3, 4) or frame.width <= 0 or frame.height <= 0:
+                    raise RuntimeError("esmini returned an unsupported frame format.")
+                raw = ctypes.string_at(frame.data, frame.width * frame.height * frame.pixel_size)
+                fmt = ("BGRX" if frame.pixel_size == 4 else "BGR") if frame.pixel_format == 0x80E0 else ("RGBX" if frame.pixel_size == 4 else "RGB")
+                image = Image.frombytes("RGB", (frame.width, frame.height), raw, "raw", fmt)
+                image = image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+                output = io.BytesIO()
+                image.save(output, "JPEG", quality=76)
+                with state.condition:
+                    state.frame = output.getvalue()
+                    state.frames += 1
+                    state.condition.notify_all()
+                time.sleep(0.1)
+        finally:
+            lib.SE_Close()
+            if dll_dir:
+                dll_dir.close()
+        state.state = "finished"
+    except Exception as exc:
+        state.error = str(exc)
+        state.state = "failed"
+    finally:
+        with state.condition:
+            state.condition.notify_all()
+
+
+def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, duration: int) -> None:
+    state = _State()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            from urllib.parse import parse_qs, urlsplit
+            parsed = urlsplit(self.path)
+            if parse_qs(parsed.query).get("token") != [token]:
+                self.send_error(403)
+                return
+            if parsed.path == "/status":
+                body = json.dumps({"state": state.state, "frames": state.frames,
+                                   "error": state.error}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif parsed.path == "/stream":
+                self.send_response(200)
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                seen = 0
+                try:
+                    while True:
+                        with state.condition:
+                            state.condition.wait_for(lambda: state.frames > seen or state.state in ("failed", "finished"), timeout=2)
+                            if state.frames == seen and state.state in ("failed", "finished"):
+                                break
+                            if state.frames == seen:
+                                continue
+                            seen, frame = state.frames, state.frame
+                        self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " +
+                                         str(len(frame)).encode() + b"\r\n\r\n" + frame + b"\r\n")
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+            else:
+                self.send_error(404)
+
+        def log_message(self, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=_simulate, args=(executable, scenario, root, duration, state), daemon=True).start()
+    timer = threading.Timer(duration + 20, server.shutdown)
+    timer.daemon = True
+    timer.start()
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        shutil.rmtree(root, ignore_errors=True)
+
+
+if __name__ == "__main__" and sys.argv[1:2] == ["--worker"]:
+    _serve(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]),
+           int(sys.argv[5]), sys.argv[6], int(sys.argv[7]))

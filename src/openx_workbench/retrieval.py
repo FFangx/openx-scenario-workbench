@@ -11,7 +11,16 @@ from typing import Protocol
 
 from .catalog import OpenXAsset
 from .models import ParseBundle
-from .reuse import ReuseDifference, bundle_features, compare_query_to_asset
+from .reuse import (
+    ReuseDifference,
+    bundle_features,
+    bundle_participant_relations,
+    bundle_participant_signatures,
+    bundle_scenario_families,
+    change_cost,
+    classify_reuse_level,
+    compare_query_to_asset,
+)
 from .scene_package import RetrievalQuery
 
 
@@ -30,6 +39,7 @@ class RetrievalResult:
     reuse_level: str
     reasons: tuple[str, ...]
     differences: tuple[ReuseDifference, ...] = ()
+    estimated_change_cost: float | None = None
 
 
 def asset_text(asset: OpenXAsset) -> str:
@@ -114,6 +124,36 @@ class OpenXIndex:
         self.assets = assets
         self.encoder = encoder or HashingEncoder()
         self.vectors = self.encoder.encode_many([asset_text(asset) for asset in assets])
+        self._build_recall()
+
+    def _build_recall(self) -> None:
+        self._faiss = None
+        self.recall_backend = "exact"
+        if not self.vectors:
+            return
+        try:
+            import faiss
+            import numpy as np
+        except ImportError:
+            return
+        matrix = np.asarray(self.vectors, dtype="float32")
+        if matrix.ndim != 2 or matrix.shape[0] != len(self.assets):
+            raise ValueError("The stored vectors do not match the asset catalog.")
+        index = faiss.IndexFlatIP(matrix.shape[1])
+        index.add(matrix)
+        self._faiss = index
+        self.recall_backend = "faiss-flat-ip"
+
+    def _recall(self, query_vector: tuple[float, ...], count: int) -> list[tuple[int, float]]:
+        if self._faiss is not None:
+            import numpy as np
+            vector = np.asarray([query_vector], dtype="float32")
+            scores, indices = self._faiss.search(vector, count)
+            return [(int(index), float(score)) for index, score in zip(indices[0], scores[0])
+                    if index >= 0]
+        ranked = [(index, sum(left * right for left, right in zip(query_vector, vector)))
+                  for index, vector in enumerate(self.vectors)]
+        return sorted(ranked, key=lambda item: (-item[1], item[0]))[:count]
 
     def save(self, path: Path) -> None:
         payload = {
@@ -144,6 +184,7 @@ class OpenXIndex:
         index.assets = assets
         index.encoder = selected_encoder
         index.vectors = [tuple(float(value) for value in row) for row in payload["vectors"]]
+        index._build_recall()
         return index
 
     def search(
@@ -153,15 +194,31 @@ class OpenXIndex:
         query: RetrievalQuery | None = None,
         top_k: int = 5,
     ) -> list[RetrievalResult]:
+        if top_k <= 0 or not self.assets:
+            return []
         if query is None and query_bundle is not None:
             query = bundle_to_query(query_bundle)
         if query is not None:
             text = query.text
         query_vector = self.encoder.encode(text)
         ranked: list[RetrievalResult] = []
-
-        for asset, vector in zip(self.assets, self.vectors):
-            vector_score = sum(left * right for left, right in zip(query_vector, vector))
+        recall_size = min(len(self.assets), max(100, top_k * 20)) if query else min(len(self.assets), top_k)
+        recalled = dict(self._recall(query_vector, recall_size))
+        differences_by_index = {}
+        if query:
+            # Structural compatibility is the primary ordering contract. Include
+            # its best buckets even when semantic recall misses them, keeping
+            # ties so semantic scores can still decide within a structural bucket.
+            differences_by_index = {index: compare_query_to_asset(query, asset)
+                                    for index, asset in enumerate(self.assets)}
+            structural_keys = {index: (sum(item.blocking for item in differences), change_cost(differences))
+                               for index, differences in differences_by_index.items()}
+            cutoff = sorted(structural_keys.values())[min(top_k, len(self.assets)) - 1]
+            for index, key in structural_keys.items():
+                if key <= cutoff and index not in recalled:
+                    recalled[index] = sum(left * right for left, right in zip(query_vector, self.vectors[index]))
+        for asset_index, vector_score in recalled.items():
+            asset = self.assets[asset_index]
             scenario_score = _scenario_query_score(query, asset.bundle) if query else 0.0
             road_score = _road_query_score(query, asset.bundle) if query else 0.0
             if query:
@@ -169,10 +226,8 @@ class OpenXIndex:
             else:
                 score = vector_score
             score = round(max(0.0, min(1.0, score)), 4)
-            differences = compare_query_to_asset(query, asset) if query else ()
-            reuse_level = _reuse_level(score, structured=query is not None)
-            if reuse_level == "direct" and differences:
-                reuse_level = "modify"
+            differences = differences_by_index[asset_index] if query else ()
+            reuse_level = classify_reuse_level(differences) if query is not None else "review"
             ranked.append(
                 RetrievalResult(
                     asset=asset,
@@ -183,9 +238,21 @@ class OpenXIndex:
                     reuse_level=reuse_level,
                     reasons=_reasons(query, asset.bundle),
                     differences=differences,
+                    estimated_change_cost=(
+                        change_cost(differences) if query is not None else None
+                    ),
                 )
             )
-        return sorted(ranked, key=lambda item: item.score, reverse=True)[:top_k]
+        if query is None:
+            return sorted(ranked, key=lambda item: item.score, reverse=True)[:top_k]
+        return sorted(
+            ranked,
+            key=lambda item: (
+                sum(difference.blocking for difference in item.differences),
+                change_cost(item.differences),
+                -item.score,
+            ),
+        )[:top_k]
 
 
 def bundle_query_text(bundle: ParseBundle) -> str:
@@ -206,6 +273,11 @@ def bundle_to_query(bundle: ParseBundle) -> RetrievalQuery:
     entities, actions, triggers, road_terms = bundle_features(bundle)
     return RetrievalQuery(
         text=text,
+        scenario_families=frozenset(bundle_scenario_families(bundle)),
+        participant_signatures=tuple(
+            item.key() for item in bundle_participant_signatures(bundle)
+        ),
+        participant_relations=frozenset(bundle_participant_relations(bundle)),
         entity_kinds=frozenset(entities),
         action_kinds=frozenset(actions),
         trigger_kinds=frozenset(triggers),
@@ -221,13 +293,29 @@ def _overlap(left: set[str], right: set[str]) -> float:
 
 def _scenario_query_score(query: RetrievalQuery, candidate: ParseBundle) -> float:
     entities, actions, triggers, _ = bundle_features(candidate)
+    families = bundle_scenario_families(candidate)
+    participant_signatures = {
+        item.key() for item in bundle_participant_signatures(candidate)
+    }
+    relations = bundle_participant_relations(candidate)
     comparisons = [
+        _overlap(set(query.scenario_families), families),
+        _overlap(set(query.participant_signatures), participant_signatures),
+        _overlap(set(query.participant_relations), relations),
         _overlap(set(query.entity_kinds), entities),
         _overlap(set(query.action_kinds), actions),
         _overlap(set(query.trigger_kinds), triggers),
     ]
     active = [score for requested, score in zip(
-        (query.entity_kinds, query.action_kinds, query.trigger_kinds), comparisons
+        (
+            query.scenario_families,
+            query.participant_signatures,
+            query.participant_relations,
+            query.entity_kinds,
+            query.action_kinds,
+            query.trigger_kinds,
+        ),
+        comparisons,
     ) if requested]
     return sum(active) / len(active) if active else 0.0
 
@@ -237,16 +325,6 @@ def _road_query_score(query: RetrievalQuery, candidate: ParseBundle) -> float:
         return 0.0
     _, _, _, candidate_features = bundle_features(candidate)
     return _overlap(set(query.road_features), candidate_features)
-
-
-def _reuse_level(score: float, structured: bool) -> str:
-    direct_threshold = 0.8 if structured else 0.55
-    modify_threshold = 0.45 if structured else 0.25
-    if score >= direct_threshold:
-        return "direct"
-    if score >= modify_threshold:
-        return "modify"
-    return "new_build"
 
 
 def _reasons(query: RetrievalQuery | None, candidate: ParseBundle) -> tuple[str, ...]:

@@ -27,11 +27,17 @@ class ScenePackage:
     actions: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=list)
     parameters: dict[str, float] = field(default_factory=dict)
+    classification: dict = field(default_factory=dict)
+    structure: dict = field(default_factory=dict)
+    extraction: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class RetrievalQuery:
     text: str
+    scenario_families: frozenset[str] = frozenset()
+    participant_signatures: tuple[str, ...] = ()
+    participant_relations: frozenset[str] = frozenset()
     entity_kinds: frozenset[str] = frozenset()
     action_kinds: frozenset[str] = frozenset()
     trigger_kinds: frozenset[str] = frozenset()
@@ -42,6 +48,7 @@ class RetrievalQuery:
 
 _ENTITY_TERMS = {
     "vehicle": ("vehicle", "car", "机动车", "车辆", "汽车", "目标车", "前车"),
+    "motorcycle": ("ptw", "motorcycle", "motorbike", "motorcyclist", "摩托车"),
     "pedestrian": ("pedestrian", "行人"),
     "cyclist": ("cyclist", "bicycle", "自行车", "骑行者"),
 }
@@ -52,15 +59,33 @@ _ACTION_TERMS = {
     "crossing": ("crossing", "cross", "横穿", "穿行"),
 }
 _TRIGGER_TERMS = {
-    "ttc": ("ttc", "碰撞时间"),
+    "ttc": ("ttc", "time to collision", "timetocollision", "碰撞时间"),
     "distance": ("distance", "距离", "间距"),
-    "time": ("simulation time", "time headway", "时间", "时距"),
+    "headway": ("time headway", "headway", "时距"),
 }
 _ROAD_TERMS = {
     "straight": ("straight", "直道", "直线"),
     "curve": ("curve", "curved", "bend", "弯道", "曲线"),
     "junction": ("junction", "intersection", "交叉口", "路口"),
     "motorway": ("motorway", "highway", "高速公路", "高速"),
+}
+_SCENARIO_FAMILY_TERMS = {
+    "unresponsive_driver": ("unresponsive driver", "indirect sensing 80km/h"),
+    "car_to_car": ("car-to-car", "car to car", "ccrs", "ccrm", "ccrb"),
+    "car_to_ptw": ("car-to-ptw", "car to ptw", "cmrs", "cmrm", "cmrb"),
+    "car_to_vru": ("car-to-vru", "car to vru", "cbla", "cpla"),
+    "overtaking_lane_change": (
+        "lane change with overtaking vehicle",
+        "overtaking vehicle",
+        "overtaking intentional",
+    ),
+}
+_RELATION_TERMS = {
+    "front": ("in front of", "ahead of", "前方", "前车"),
+    "rear": ("behind", "from the rear", "后方", "后车"),
+    "left": ("left side", "left lane", "左侧", "左车道"),
+    "right": ("right side", "right lane", "右侧", "右车道"),
+    "adjacent_lane": ("adjacent lane", "neighbouring lane", "相邻车道"),
 }
 
 
@@ -79,6 +104,8 @@ def scene_package_to_query(package: ScenePackage) -> RetrievalQuery:
     )
     return RetrievalQuery(
         text=text,
+        scenario_families=frozenset(canonical_scenario_families(package.title)),
+        participant_relations=frozenset(canonical_participant_relations(text)),
         entity_kinds=frozenset(_canonical_terms(text, _ENTITY_TERMS)),
         action_kinds=frozenset(_canonical_terms(text, _ACTION_TERMS)),
         trigger_kinds=frozenset(_canonical_terms(text, _TRIGGER_TERMS)),
@@ -86,6 +113,14 @@ def scene_package_to_query(package: ScenePackage) -> RetrievalQuery:
         parameters=tuple(sorted(package.parameters.items())),
         evidence=tuple(package.evidence),
     )
+
+
+def canonical_scenario_families(text: str) -> set[str]:
+    return _canonical_terms(text, _SCENARIO_FAMILY_TERMS)
+
+
+def canonical_participant_relations(text: str) -> set[str]:
+    return _canonical_terms(text, _RELATION_TERMS)
 
 
 def extract_parameters(text: str) -> dict[str, float]:

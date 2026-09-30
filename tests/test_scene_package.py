@@ -27,3 +27,28 @@ def test_scene_package_becomes_grounded_structured_query():
     assert query.road_features == frozenset({"straight"})
     assert query.parameters == (("ttc_s", 3.0),)
     assert query.evidence == (evidence,)
+
+
+def test_scene_package_preserves_scenario_family_and_ptw_type():
+    package = ScenePackage(
+        package_id="EuroNCAP_4.3.2",
+        title="Car-to-PTW",
+        preferred_text="A vehicle approaches a stationary motorcyclist.",
+    )
+
+    query = scene_package_to_query(package)
+
+    assert query.scenario_families == frozenset({"car_to_ptw"})
+    assert query.entity_kinds >= frozenset({"vehicle", "motorcycle"})
+
+
+def test_scene_package_preserves_explicit_relative_position():
+    package = ScenePackage(
+        package_id="DEMO_2",
+        title="Adjacent overtaking vehicle",
+        preferred_text="A vehicle approaches in the adjacent lane from the rear.",
+    )
+
+    query = scene_package_to_query(package)
+
+    assert query.participant_relations == frozenset({"rear", "adjacent_lane"})

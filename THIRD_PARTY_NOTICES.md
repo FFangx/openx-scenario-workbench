@@ -7,3 +7,16 @@ No esmini example is included in this repository by default. Users are responsib
 The screenshot in `docs/images/workbench-en.png` shows this application's inspection of the pinned esmini cut-in example. Scenario values shown there originate from esmini; it is an application screenshot, not a simulator rendering.
 
 The files in `tests/fixtures/` are small, locally authored parser fixtures distributed with the project under MIT. They are not copied from esmini and are not intended as simulator-ready scenarios.
+
+## Related project: ScenarioManager PDF core
+
+`src/openx_workbench/pdf_v2/` adapts the PDF core from the author's related
+[ScenarioManager project](https://github.com/FFangx/ScenarioManager), using the
+local V2 development revision. It includes native block parsing, heading and
+chapter decoding, scene-first schemas and prompts, shared clauses, and review
+validation. The source module hashes are recorded in `pdf_v2/upstream.json`;
+adaptation scope and limitations are described in `docs/PDF_MIGRATION.md`.
+
+The adaptation contains generic source algorithms only. ScenarioManager assets,
+private L2 scenarios, PDFs, evaluation datasets, extracted document content,
+model responses and machine configuration are not included.

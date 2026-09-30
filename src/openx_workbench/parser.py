@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 from xml.etree import ElementTree as ET
 
 from .models import ActionIR, EntityIR, ParseBundle, PositionIR, RoadIR, ScenarioIR, TriggerIR
+from .road_geometry import parse_road_geometry
 
 
 def _local(element: ET.Element) -> str:
@@ -103,19 +104,49 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
     for scope in ("StartTrigger", "StopTrigger"):
         for trigger in _all(root, scope):
             for condition in _all(trigger, "Condition"):
-                condition_types = [
-                    _local(node)
+                condition_nodes = [
+                    node
                     for node in condition.iter()
                     if _local(node).endswith("Condition")
                     and _local(node) not in {"Condition", "ByValueCondition", "ByEntityCondition"}
                 ]
-                condition_kind = condition_types[-1] if condition_types else "Condition"
-                scenario.triggers.append(TriggerIR(scope, condition.get("name", "unnamed"), condition_kind, _float(condition.get("delay")), condition.get("conditionEdge")))
+                condition_node = condition_nodes[-1] if condition_nodes else None
+                condition_kind = _local(condition_node) if condition_node is not None else "Condition"
+                scenario.triggers.append(TriggerIR(
+                    scope=scope,
+                    condition_name=condition.get("name", "unnamed"),
+                    kind=condition_kind,
+                    delay=_float(condition.get("delay")),
+                    edge=condition.get("conditionEdge"),
+                    value=_float(condition_node.get("value")) if condition_node is not None else None,
+                    rule=condition_node.get("rule") if condition_node is not None else None,
+                    entity_refs=tuple(
+                        node.get("entityRef", "")
+                        for node in _all(condition, "EntityRef")
+                        if node.get("entityRef")
+                    ),
+                ))
 
-    position_names = {"WorldPosition", "LanePosition", "RoadPosition", "RelativeWorldPosition", "RelativeLanePosition", "RelativeRoadPosition"}
-    for node in root.iter():
-        if _local(node) in position_names:
-            scenario.positions.append(PositionIR(_local(node), dict(node.attrib)))
+    position_names = {
+        "WorldPosition", "LanePosition", "RoadPosition", "RelativeObjectPosition",
+        "RelativeWorldPosition", "RelativeLanePosition", "RelativeRoadPosition",
+    }
+    for private in _all(root, "Private"):
+        actor = private.get("entityRef")
+        for node in private.iter():
+            if _local(node) in position_names:
+                scenario.positions.append(
+                    PositionIR(
+                        _local(node),
+                        dict(node.attrib),
+                        actor=actor,
+                        orientation=(
+                            dict(orientation.attrib)
+                            if (orientation := _first(node, "Orientation")) is not None
+                            else {}
+                        ),
+                    )
+                )
     return scenario
 
 
@@ -161,4 +192,9 @@ def parse_bundle(xosc_data: bytes | str, xodr_data: bytes | str, xodr_filename: 
         warnings.append("no_scenario_entities")
     if not road.road_ids:
         warnings.append("no_roads")
-    return ParseBundle(scenario, road, warnings)
+    return ParseBundle(
+        scenario=scenario,
+        road=road,
+        warnings=warnings,
+        road_geometry=parse_road_geometry(xodr_data),
+    )

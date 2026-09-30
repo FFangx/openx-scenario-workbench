@@ -44,6 +44,7 @@ def main() -> None:
                 "xodr": result.asset.xodr_name,
                 "score": result.score,
                 "reuse_level": result.reuse_level,
+                "estimated_change_cost": result.estimated_change_cost,
                 "reasons": result.reasons,
             }
             for rank, result in enumerate(results, start=1)

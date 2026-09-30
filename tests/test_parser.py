@@ -15,6 +15,11 @@ def test_parse_xosc_extracts_public_scenario_structure():
     assert [entity.name for entity in scenario.entities] == ["Ego", "Target"]
     assert any(action.kind == "SpeedAction" for action in scenario.actions)
     assert any(trigger.kind == "SimulationTimeCondition" for trigger in scenario.triggers)
+    assert any(
+        trigger.value == 1.0 and trigger.rule == "greaterThan"
+        for trigger in scenario.triggers
+    )
+    assert any(position.actor == "Ego" for position in scenario.positions)
 
 
 def test_parse_xodr_summarizes_network():
