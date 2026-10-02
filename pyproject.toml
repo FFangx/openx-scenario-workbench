@@ -10,16 +10,20 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Junyu Fang" }]
-dependencies = ["streamlit>=1.64,<2", "pymupdf>=1.24,<2", "Pillow>=10,<13", "pydantic>=2,<3"]
+dependencies = ["streamlit>=1.64,<2", "pymupdf>=1.24,<2", "Pillow>=10,<13", "pydantic>=2,<3", "lxml>=5,<7", "xmlschema>=4.3,<5"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9"]
+dev = ["pytest>=8,<9", "ruff>=0.16,<1"]
 desktop = ["pystray>=0.19,<1; sys_platform == 'win32'"]
 semantic = ["sentence-transformers>=3,<6", "faiss-cpu>=1.14,<2"]
+ocr = ["paddleocr[doc-parser]>=3.7,<3.8", "paddlepaddle>=3.2,<3.3; sys_platform == 'win32'", "paddlepaddle>=3.2,<4; sys_platform != 'win32'"]
 
 [project.scripts]
 openx-inspect = "openx_workbench.cli:main"
 openx-search = "openx_workbench.search_cli:main"
+openx-evaluate = "openx_workbench.evaluation:main"
+openx-validate = "openx_workbench.schema_validation:main"
+openx-setup-ocr = "openx_workbench.ocr_setup:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openx_workbench"]
@@ -27,3 +31,6 @@ packages = ["src/openx_workbench"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["F"]

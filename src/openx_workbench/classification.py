@@ -25,7 +25,7 @@ def classify_asset(store, version, *, client=None, use_model=False):
     road = asset.bundle.road
     rule = {"function_type": functions[0] if len(functions) == 1 else "未知",
             "label_road_type": "交叉口" if road.junction_count else ("弯道" if any(k in road.geometry_types for k in ("arc", "spiral")) else "未知"),
-            "label_target_type": sorted({{"pedestrian": "行人", "cyclist": "骑行者", "motorcycle": "两轮车", "vehicle": "乘用车"}.get(entity.kind, "障碍物") for entity in asset.bundle.scenario.entities}),
+            "label_target_type": _target_labels(asset),
             "label_actions": sorted({action.kind for action in asset.bundle.scenario.actions}),
             "scenario_intent": asset.bundle.scenario.description or asset.title}
     record = {"version_id": version.version_id, "rule": rule, "llm": None, "final": rule,
@@ -61,13 +61,23 @@ def classify_asset(store, version, *, client=None, use_model=False):
             if confidence >= .70:
                 record["final"] = {key: result[key] for key in rule}
                 record["differences"] = [key for key in rule if rule[key] != record["final"][key]]
+                record["final_accepted"] = True
         except (ValueError, KeyError, TypeError, IndexError) as error:
             record.update(status="failed", error=str(error), needs_review=True)
         if (record["status"] == "failed" or record["needs_review"]) and previous:
             record["final"] = previous["final"]
             record["fallback_source"] = "previous_classification"
+            record["final_accepted"] = previous.get("final_accepted", previous.get("status") in {"classified", "manual_confirmed"} and not previous.get("needs_review", True))
     _save(store, version, record)
     return record
+
+
+def _target_labels(asset):
+    from .reuse import bundle_participant_signatures
+    labels = {"pedestrian": "行人", "cyclist": "骑行者", "motorcycle": "两轮车",
+              "vehicle": "乘用车", "truck": "商用车", "bus": "商用车", "van": "商用车",
+              "trailer": "商用车", "obstacle": "障碍物"}
+    return sorted({labels[item.kind] for item in bundle_participant_signatures(asset.bundle) if item.kind in labels})
 
 
 def read_classification(store, version):
@@ -90,7 +100,7 @@ def confirm_classification(store, version, final):
         not isinstance(final.get("scenario_intent"), str)):
         raise ValueError("Invalid classification.")
     record = read_classification(store, version) or classify_asset(store, version)
-    record.update(final=final, status="manual_confirmed", needs_review=False,
+    record.update(final=final, status="manual_confirmed", needs_review=False, final_accepted=True,
                   differences=[key for key in record["rule"] if record["rule"][key] != final[key]])
     _save(store, version, record)
     return record

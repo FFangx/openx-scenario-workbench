@@ -1,6 +1,8 @@
 from pathlib import Path
+import json
 
 import pymupdf
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from openx_workbench.asset_store import AssetStore
@@ -72,6 +74,52 @@ def test_asset_management_opens_a_saved_version(tmp_path, monkeypatch):
     _select_asset(app, version)
     assert not app.exception
     assert app.button(key="run_esmini_preview")
+
+
+def test_preview_autodetection_keeps_path_settings_collapsed(tmp_path, monkeypatch):
+    from test_esmini_preview import installation
+    from openx_workbench.esmini_preview import managed_esmini_root
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "machine"))
+    monkeypatch.delenv("OPENX_ESMINI_PATH", raising=False)
+    monkeypatch.setattr("openx_workbench.esmini_preview.shutil.which", lambda command: None)
+    installation(managed_esmini_root())
+    _, versions, _, _ = _authored_assets(tmp_path)
+    app = _select_asset(_open_management(tmp_path, monkeypatch), versions[0])
+    assert not app.exception
+    assert not app.button(key="run_esmini_preview").disabled
+    assert app.button(key="run_esmini_preview").label == "播放仿真"
+    assert app.button(key="stop_esmini_preview").disabled
+    assert not next(item for item in app.expander if item.label == "预览高级设置").proto.expanded
+    assert any("预览工具已就绪" in item.value for item in app.caption)
+    assert not any(item.key == "esmini_path" for item in app.text_input)
+
+
+def test_preview_missing_tool_and_manual_folder_persist(tmp_path, monkeypatch):
+    from test_esmini_preview import installation
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "machine"))
+    monkeypatch.delenv("OPENX_ESMINI_PATH", raising=False)
+    # Bound the discovery surface so developer installations cannot alter the test.
+    import openx_workbench.ui_shell as shell
+    real_find = shell.find_esmini
+    monkeypatch.setattr(shell, "find_esmini", lambda value="": real_find(value) if value else None)
+    _, versions, _, _ = _authored_assets(tmp_path)
+    app = _select_asset(_open_management(tmp_path, monkeypatch), versions[0])
+    assert app.button(key="run_esmini_preview").disabled
+    assert next(item for item in app.expander if item.label == "预览高级设置").proto.expanded
+    app.text_input(key="preview_esmini_folder").set_value(str(tmp_path / "missing"))
+    app.button(key="save_preview_settings").click().run()
+    assert app.error and app.button(key="run_esmini_preview").disabled
+    executable = installation(tmp_path / "chosen install")
+    app.text_input(key="preview_esmini_folder").set_value(str(executable.parent.parent))
+    app.button(key="save_preview_settings").click().run()
+    assert not app.exception
+    assert not app.button(key="run_esmini_preview").disabled
+    assert app.session_state["esmini_path"] == str(executable)
+    reopened = _select_asset(_open_management(tmp_path, monkeypatch), versions[0])
+    assert reopened.session_state["esmini_path"] == str(executable)
+    assert not reopened.button(key="run_esmini_preview").disabled
 
 
 def test_empty_asset_management_has_import_access_without_details(tmp_path, monkeypatch):
@@ -282,6 +330,7 @@ def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, m
     next(item for item in app.button if item.label == "保存事实修订").click().run()
     assert not app.exception
     assert app.session_state["selected_stored_scene"].revision == 2
+    app.selectbox(key="retrieval_encoder").select("hashing").run()
     app.button(key="pdf_search_button").click().run()
     assert not app.exception
     app.button(key="view_source_files").click().run()
@@ -311,6 +360,48 @@ def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, m
     assert assets.references(version)
 
 
+def test_typed_structure_edit_changes_live_reuse_and_saved_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    assets = AssetStore(tmp_path)
+    projects = ProjectStore(assets)
+    project = projects.create("Typed review")
+    fixtures = Path(__file__).parent / "fixtures"
+    assets.import_files([AssetFile(name, (fixtures / name).read_bytes())
+                         for name in ("minimal.xosc", "minimal.xodr")])
+    with pymupdf.open() as document:
+        document.new_page().insert_text((72, 72), "7.4.1 Cut-in scenario\nTarget vehicle cuts in on a straight road.")
+        record = PdfStore(assets).import_pdf(project.project_id, "authored.pdf", document.tobytes(), engine="legacy")
+    store = PdfStore(assets)
+    scene = store.revise_scene(project.project_id, record.document_id, "scene-0001", {"structure": {"road_class": "直道"}})
+    app = AppTest.from_file(str(Path(__file__).parents[1] / "src/openx_workbench/app.py")).run(timeout=10)
+    app.button(key="nav_pdf_workflow").click().run()
+    app.button(key=f"scene_{record.document_id}_scene-0001").click().run()
+    assert not app.exception
+    assert not any(item.label == "参数 JSON / Parameters JSON" for item in app.text_input)
+    app.selectbox(key="retrieval_encoder").select("hashing").run()
+    app.button(key="pdf_search_button").click().run()
+    assert app.session_state["retrieval_results"][0].reuse_level == "direct"
+    assert app.session_state["retrieval_results"][0].confirmation_level == "review"
+    assert app.button(key="save_reuse_decision").disabled
+    assert any("文件标准待复核" in item.value for item in app.markdown)
+    editor = next(item for item in app.text_area if item.label == "结构 JSON / Structure JSON")
+    edited = json.loads(editor.value)
+    edited["road_class"] = "交叉口"
+    editor.set_value(json.dumps(edited, ensure_ascii=False))
+    next(item for item in app.button if item.label == "保存事实修订").click().run()
+    assert not app.exception
+    app.selectbox(key="retrieval_encoder").select("hashing").run()
+    app.button(key="pdf_search_button").click().run()
+    assert app.session_state["retrieval_results"][0].reuse_level == "modify"
+    app.button(key="save_reuse_decision").click().run()
+    report = projects.reports(project.project_id)[0]["trace"]
+    assert report["source"]["structure"]["road_class"] == "交叉口"
+    assert report["source"]["revision"] == scene.revision + 1
+    assert report["candidate"]["parsed_facts"]["road"]["geometry_types"] == {"line": 1}
+    with pytest.raises(ValueError, match="typed structure"):
+        store.revise_scene(project.project_id, record.document_id, scene.scene_id, {"parameters": {"ego_speed_kph": 80}})
+
+
 def test_workspace_language_help_and_settings_persist(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
     app_path = Path(__file__).parents[1] / "src" / "openx_workbench" / "app.py"
@@ -332,6 +423,48 @@ def test_workspace_language_help_and_settings_persist(tmp_path, monkeypatch):
     reopened = AppTest.from_file(str(app_path)).run(timeout=10)
     assert reopened.button(key="nav_home").label == "Overview"
     assert reopened.session_state["esmini_path"] == ""
+
+
+def test_m3_default_and_explicit_baseline_persist_across_pages_and_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    assets = AssetStore(tmp_path)
+    fixtures = Path(__file__).parent / "fixtures"
+    assets.import_files([AssetFile(name, (fixtures / name).read_bytes())
+                         for name in ("minimal.xosc", "minimal.xodr")])
+    app_path = Path(__file__).parents[1] / "src/openx_workbench/app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    app.button(key="nav_text_search").click().run()
+    assert app.selectbox(key="retrieval_encoder").value == "bge"
+    app.selectbox(key="retrieval_encoder").select("hashing").run()
+    app.button(key="nav_pdf_workflow").click().run()
+    assert app.selectbox(key="retrieval_encoder").value == "hashing"
+    reopened = AppTest.from_file(str(app_path)).run(timeout=10)
+    assert reopened.session_state["retrieval_encoder"] == "hashing"
+
+
+def test_document_batch_can_match_without_selecting_scene_and_reopen_saved_report(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    assets = AssetStore(tmp_path)
+    projects = ProjectStore(assets)
+    project = projects.create("Entire PDF")
+    fixtures = Path(__file__).parent / "fixtures"
+    assets.import_files([AssetFile(name, (fixtures / name).read_bytes())
+                         for name in ("minimal.xosc", "minimal.xodr")])
+    with pymupdf.open() as document:
+        document.new_page().insert_text((72, 72), "7.4.1 Cut-in scenario\nTarget vehicle cuts in on a straight road.")
+        PdfStore(assets).import_pdf(project.project_id, "authored-batch.pdf", document.tobytes(), engine="legacy")
+    app_path = Path(__file__).parents[1] / "src/openx_workbench/app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    app.button(key="nav_pdf_workflow").click().run()
+    app.selectbox(key="retrieval_encoder").select("hashing").run()
+    app.button(key="match_document").click().run()
+    assert not app.exception
+    assert app.session_state["selected_stored_scene"] is None
+    assert app.session_state["batch_assessment"][1]["scene_count"] == 1
+    app.button(key="save_batch_report").click().run()
+    assert projects.reports(project.project_id)[0]["trace"]["kind"] == "batch_match"
+    app.button(key="nav_home").click().run()
+    assert not app.exception and any("authored-batch.pdf" in item.value for item in app.caption)
 
 
 def test_appearance_choices_persist_without_changing_navigation(tmp_path, monkeypatch):

@@ -1,7 +1,6 @@
 """Functional navigation and workspace controls for the local workbench."""
 import html
 import json
-import os
 from pathlib import Path
 import tempfile
 
@@ -35,6 +34,8 @@ def initialize():
     st.session_state.setdefault("language", prefs.get("language", "中文"))
     st.session_state.setdefault("esmini_path", prefs.get("esmini_path", ""))
     st.session_state.setdefault("active_page", "home")
+    encoder = prefs.get("encoder", "bge")
+    st.session_state.setdefault("retrieval_encoder", encoder if encoder in {"bge", "hashing"} else "bge")
     mode = prefs.get("appearance", "system")
     st.session_state.setdefault("appearance", mode if mode in {"light", "dark", "system"} else "system")
 
@@ -50,6 +51,38 @@ def toggle_language():
     st.session_state.language = label
 
 
+def preview_settings(language, *, input_key="preview_esmini_folder", save_key="save_preview_settings"):
+    """One setup flow shared by the selected asset and workspace settings."""
+    zh = language == "zh"
+    configured = st.session_state.get("esmini_path", "")
+    detected = find_esmini(configured)
+    if detected:
+        st.caption("预览工具已就绪" if zh else "Preview tool ready")
+    else:
+        st.warning("未找到预览工具，请在下方设置安装文件夹。" if zh else "Preview tool not found. Set its installation folder below.")
+    with st.expander("预览高级设置" if zh else "Advanced preview settings", expanded=detected is None):
+        if detected:
+            st.caption("当前使用的位置" if zh else "Current installation")
+            st.code(str(detected), language=None)
+        with st.form(f"{input_key}_form"):
+            folder = st.text_input("安装文件夹（可选）" if zh else "Installation folder (optional)",
+                                   value=configured, key=input_key,
+                                   help="可填写 esmini 文件夹、bin 文件夹或 esmini.exe。留空时自动查找。" if zh else
+                                   "Accepts the esmini folder, bin folder or esmini.exe. Leave empty to detect automatically.")
+            saved = st.form_submit_button("保存预览设置" if zh else "Save preview settings", key=save_key)
+        if saved:
+            resolved = find_esmini(folder)
+            if folder.strip() and resolved is None:
+                st.error("此位置没有完整的预览工具。请选择包含 esmini.exe 和 esminiLib.dll 的 bin 文件夹，或它的上一级。" if zh else
+                         "This location has no complete preview tool. Choose the bin folder containing esmini.exe and esminiLib.dll, or its parent.")
+            else:
+                selected = str(resolved) if folder.strip() else ""
+                save_preferences(esmini_path=selected)
+                st.session_state.esmini_path = selected
+                st.rerun()
+    return detected
+
+
 @st.dialog("OpenX · 工作区设置 / Workspace settings", width="large")
 def settings(language):
     zh = language == "zh"
@@ -59,20 +92,9 @@ def settings(language):
         from .model_ui import model_settings
         model_settings(language)
     with service_tab:
-        path = st.text_input("esmini.exe", value=st.session_state.get("esmini_path", ""), key="settings_esmini")
-        detected = find_esmini(path)
-        st.caption(("已检测：" if zh else "Detected: ") + str(detected) if detected else
-                   ("未检测到 esmini；可填写可执行文件路径。" if zh else "esmini not detected; enter its executable path."))
+        preview_settings(language, input_key="settings_esmini", save_key="save_settings")
         st.write("数据位置" if zh else "Data location")
         st.code(str(AssetStore().root), language=None)
-        if st.button("保存设置" if zh else "Save settings", key="save_settings", type="primary"):
-            if path.strip() and not detected:
-                st.error("路径无效：需要 esmini.exe 及同目录的 esminiLib.dll。" if zh else
-                         "Invalid path: esmini.exe and esminiLib.dll must be in the same directory.")
-            else:
-                save_preferences(esmini_path=path.strip())
-                st.session_state.esmini_path = path.strip()
-                st.rerun()
 
 
 @st.dialog("OpenX · 使用帮助 / Help")
@@ -82,7 +104,7 @@ def help_panel(language):
 1. **资产管理**：导入 XOSC 与 XODR；带模型、目录等依赖时上传 ZIP。
 2. **新建项目**：项目用于保存 PDF、场景修订和决策。资产库由所有项目共用。
 3. **PDF 工作流**：上传规程，选择场景，核对原文和提取事实，再检索候选。
-4. **运行真实预览**：需要本机 esmini，可在设置中指定路径。
+4. **播放仿真**：选择资产后直接播放。工具会自动查找，特殊安装位置可在预览高级设置中调整。
 5. **保存复用决策**：报告固定当前场景修订和资产版本，可在总览重新下载。
 
 文本检索只寻找相似资产，不作复用结论。模型解释需另行点击才会发送所列证据。
@@ -94,7 +116,7 @@ def help_panel(language):
 1. **Asset management**: import paired XOSC/XODR files, or ZIP with dependencies.
 2. **Create a project** for PDFs, scene revisions and decisions. Assets are shared globally.
 3. **PDF workflow**: upload a protocol, select a scene, review the facts, then search.
-4. **Run preview** using local esmini. Set its path in workspace settings.
+4. **Play simulation** from the selected asset. Tools are detected automatically; use Advanced preview settings for a custom installation.
 5. **Save decision** to pin the scene revision and asset version. Reopen reports in Overview.
 
 Text search finds similar assets only. Model explanations send the listed evidence only when requested.

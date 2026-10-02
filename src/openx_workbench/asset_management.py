@@ -91,6 +91,8 @@ def _classification(store, version, language, busy):
             confirm_classification(store, version, {"function_type": function, "label_road_type": road,
                 "label_target_type": targets, "label_actions": [v.strip() for v in actions.split(",") if v.strip()],
                 "scenario_intent": intent})
+            catalog, mapping = store.catalog()
+            st.session_state.update(catalog=catalog, asset_versions=mapping, retrieval_results=[], text_results=[])
             st.rerun()
         st.download_button(label(language, "下载分类记录", "Download classification record"),
                            json.dumps(classification, ensure_ascii=False, indent=2), "classification.json", "application/json",
@@ -117,7 +119,7 @@ def _delete(store, version, language, busy):
                      key="delete_managed_version", icon=":material/delete:"):
             try:
                 preview = st.session_state.get("preview_process")
-                if preview and preview.version_id == version.version_id:
+                if preview and (preview.asset_id, preview.version_id) == (version.asset_id, version.version_id):
                     preview.stop()
                     st.session_state.pop("preview_process", None)
                 store.delete_version(version)
@@ -152,6 +154,8 @@ def _detail(store, version, versions, language, busy, preview_controls, road_sch
                 st.markdown(road_schematic(asset, scenario=True), unsafe_allow_html=True)
                 st.caption(label(language, "示意图来自已解析的场景与道路，不代表仿真结果。", "Schematic derived from parsed scenario and road data; it is not a simulation result."))
                 preview_controls(version, language, show_identity=False)
+                from .validation_ui import validation_details
+                validation_details(asset.bundle, language)
             except Exception as exc:
                 st.error(label(language, "无法读取此版本：", "Cannot read this version: ") + str(exc))
         with classification:
@@ -165,6 +169,8 @@ def _detail(store, version, versions, language, busy, preview_controls, road_sch
                            "SHA-256": item["sha256"]} for item in version.files], use_container_width=True, hide_index=True)
             if st.button(label(language, "查看源文件", "Inspect source files"), key="inspect_managed_source", icon=":material/code:"):
                 source_files(version, language)
+            if version.source_name.casefold().endswith(".sim"):
+                _standard_export(store, version, language, busy)
             with st.expander(label(language, "版本原始记录", "Raw version record")):
                 st.json(asdict(version))
                 classification_record = read_classification(store, version)
@@ -193,6 +199,55 @@ def _detail(store, version, versions, language, busy, preview_controls, road_sch
             for role, name in (("scenario", historical.xosc_name), ("road", historical.xodr_name)):
                 st.download_button(label(language, "下载 ", "Download ") + name.rsplit("/", 1)[-1], store.file_bytes(historical, role),
                                    name.replace("\\", "/").rsplit("/", 1)[-1], "application/xml", key=f"history_download_{role}", icon=":material/download:")
+
+
+def _standard_export(store, version, language, busy):
+    from .standard_export import build_standard_export
+    with st.expander(label(language, "标准副本与兼容检查", "Standard copy & compatibility")):
+        st.caption(label(language, "保留原文件，单独转换并检查副本。标准检查通过不代表仿真行为已验证。",
+                         "Keeps originals and checks a separate converted copy. Passing standard checks does not verify simulation behavior."))
+        key = "prepared_standard_export"
+        if st.button(label(language, "准备标准导出", "Prepare standard export"), disabled=busy,
+                     key="prepare_standard_export", icon=":material/file_export:"):
+            try:
+                with st.spinner(label(language, "转换并检查副本…", "Converting and checking the copy…")):
+                    export = build_standard_export(store, version)
+                    st.session_state[key] = (version.asset_id, version.version_id, export)
+            except Exception as error:
+                st.error(str(error))
+                st.session_state.pop(key, None)
+        prepared = st.session_state.get(key)
+        if not prepared or prepared[:2] != (version.asset_id, version.version_id):
+            return
+        export = prepared[2]
+        if export.ready:
+            st.success(label(language, "副本已通过场景与道路标准检查，可下载。", "The copy passed scenario and road standard checks and is ready to download."))
+        else:
+            st.warning(label(language, "副本仍需修复或复核，仅提供诊断包。原始资产可继续检索。",
+                             "The copy still needs repair or review. A diagnostic package is available; the original remains searchable."))
+        for role, record in export.audit["validation"].items():
+            st.write(("OpenSCENARIO" if role == "scenario" else "OpenDRIVE") + " · " +
+                     {"valid": label(language, "通过", "Passed"), "invalid": label(language, "未通过", "Failed"),
+                      "unsupported": label(language, "版本未支持", "Version unsupported"),
+                      "unavailable": label(language, "检查未完成", "Check unavailable")}[record["status"]])
+            if record.get("detail"):
+                st.caption(record["detail"])
+            for issue in record.get("issues", []):
+                st.warning(f"{issue.get('path', '')}: {issue['message']}")
+        if export.audit["external_dependencies"]:
+            st.warning(label(language, "还存在未打包的外部文件引用，请先补齐。", "External file references remain; provide those dependencies first."))
+        if export.audit["runtime_extension_points"]:
+            st.warning(label(language, "副本保留了自定义命令，目标仿真器需要支持这些命令；请单独验证运行行为。",
+                             "The copy retains custom commands. The target simulator must support them; verify execution separately."))
+        if export.audit["parameter_issues"] or export.audit["unresolved"]:
+            st.warning(label(language, "参数或命令内容有歧义，需要复核。", "Parameters or command content need review."))
+        st.download_button(label(language, "下载标准副本" if export.ready else "下载诊断包",
+                                 "Download standard copy" if export.ready else "Download diagnostic package"),
+                           export.package(diagnostic=not export.ready),
+                           f"openx-{'standard' if export.ready else 'diagnostic'}-{version.version_id}.zip",
+                           "application/zip", key="download_standard_export", icon=":material/download:")
+        with st.expander(label(language, "转换与校验记录", "Conversion and validation record")):
+            st.json(export.audit)
 
 
 def _requirements(language):

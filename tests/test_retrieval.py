@@ -406,3 +406,30 @@ def test_sentence_transformer_encoder_batches_and_normalizes(monkeypatch):
     assert encoder.encode_many(["one", "two"]) == [(1.0, 0.0), (1.0, 0.0)]
     assert calls[1][1]["normalize_embeddings"] is True
     assert calls[1][1]["batch_size"] == 64
+    assert encoder.encode_many(["two", "one", "two"]) == [(1.0, 0.0)] * 3
+    assert calls[-1][0] == ["two", "one"]
+    assert encoder.encode_many([]) == []
+    default_encoder = SentenceTransformerEncoder()
+    assert default_encoder.encoder_id == "sentence-transformers:BAAI/bge-m3"
+    assert calls[-1] == ("model", "BAAI/bge-m3")
+
+
+def test_m3_long_inputs_use_small_batches_without_losing_text_or_input_order(monkeypatch):
+    calls = []
+
+    class FakeModel:
+        def __init__(self, model_name):
+            pass
+
+        def encode(self, texts, **options):
+            calls.append((texts, options))
+            return [[float(len(text)), 1.0] for text in texts]
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers",
+                        SimpleNamespace(SentenceTransformer=FakeModel))
+    inputs = ["长" * 6000, "", "medium" * 100, "short", "长" * 6000]
+    vectors = SentenceTransformerEncoder().encode_many(inputs)
+    assert vectors == [(float(len(text)), 1.0) for text in inputs]
+    assert [options["batch_size"] for _, options in calls] == [64, 8, 1]
+    assert calls[-1][0] == [inputs[0]]
+    assert all(options["normalize_embeddings"] for _, options in calls)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import hmac
 import json
 import logging
@@ -26,6 +27,18 @@ def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def source_revision():
+    """Detect source updates without relying on Streamlit's module reloads."""
+    package = Path(__file__).resolve().parent
+    digest = hashlib.sha256()
+    for path in sorted(package.rglob("*.py")):
+        digest.update(path.relative_to(package).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def tray_image():
@@ -74,9 +87,14 @@ class Service:
         self.process = None
         self.job = None
         self.url = ""
+        self.source_revision = None
+
+    def needs_restart(self):
+        return self.source_revision != source_revision()
 
     def start(self):
         self.stop()
+        revision = source_revision()
         port = free_port()
         self.url = f"http://127.0.0.1:{port}"
         self.job = WindowsJob()
@@ -92,11 +110,13 @@ class Service:
                 self.process = subprocess.Popen(
                     [str(python), "-m", "openx_workbench.launcher", "--serve", str(port)],
                     stdin=subprocess.PIPE, stdout=log, stderr=log, env=env,
-                    cwd=Path(__file__).resolve().parents[2], creationflags=subprocess.CREATE_NO_WINDOW)
+                    cwd=Path(__file__).resolve().parents[2], creationflags=subprocess.CREATE_NO_WINDOW | 4)
             # Child waits on stdin: assign ownership before it can spawn any workers.
             self.job.assign(self.process)
+            self.job.resume(self.process)
             self.process.stdin.write(b"start\n")
             self.process.stdin.close()
+            self.source_revision = revision
             logging.info("Service started: pid=%s url=%s", self.process.pid, self.url)
         except Exception:
             self.stop()
@@ -163,7 +183,8 @@ class Launcher:
             if self.done.is_set():
                 return
             try:
-                if restart or self.service.process is None or self.service.process.poll() is not None:
+                if (restart or self.service.process is None or self.service.process.poll() is not None
+                    or self.service.needs_restart()):
                     self.service.start()
                 deadline = time.monotonic() + 40
                 while not self.done.is_set():

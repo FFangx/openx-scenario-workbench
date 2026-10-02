@@ -12,22 +12,28 @@ Implemented locally: XOSC/XODR pairing, ScenarioManager-compatible `.sim` ingest
 
 本地已实现：XOSC/XODR 配对、ScenarioManager 兼容的 `.sim` 导入、道路长度/车道/几何特征、本地向量索引、场景与道路重排、复用等级、响应式证据到决策工作台和 `openx-search` CLI。
 
-Implemented locally: a public `ScenePackage` contract, page/section/source evidence, deterministic PDF scene-section extraction, structured retrieval queries, grounded scenario/road reuse differences, and an in-memory `.sim` adapter. No private PDF, customer configuration, or internal evaluation data is included.
+Implemented locally: a public typed `ScenePackage` contract, page/section/source evidence, migrated ScenarioManager V2 scene-first extraction/classification, structured retrieval queries, grounded scenario/road reuse differences, and an in-memory `.sim` adapter. No private PDF, customer configuration, or internal evaluation data is included.
 
-本地新增：公开版 `ScenePackage` 契约、页码/章节/原文证据、确定性 PDF 场景章节提取、结构化检索查询、有依据的场景与道路复用差异，以及纯内存 `.sim` 适配器。仓库不包含私有 PDF、客户配置或内部评测数据。
+本地新增：公开版强类型 `ScenePackage` 契约、页码/章节/原文证据、ScenarioManager V2 场景优先提取与分类、结构化检索查询、有依据的场景与道路复用差异，以及纯内存 `.sim` 适配器。仓库不包含私有 PDF、客户配置或内部评测数据。
 
-Implemented locally: optional BGE semantic embeddings, batched corpus encoding, and a persistent index tied to both encoder identity and ordered asset IDs. Next: validate and tune the complete PDF-to-OpenX path against a small licensed public corpus, then connect an actual local esmini launch/preview path.
+Implemented locally: BGE-M3 semantic embeddings, shared name/structure recall, batched encoding and persistent content/classification fingerprints; immutable libraries and reports; real local esmini preview; native tables with verified cell spans and chapter-owned continuation, isolated PP-StructureV3 OCR and quality-gated PP-DocLayoutV2 native chapter rescue; offline version-specific XSD checks. See [reuse alignment](docs/REUSE_ALIGNMENT.md) and [PDF migration](docs/PDF_MIGRATION.md) for measured validation and limits. Next: broaden representative public-corpus evaluation, improve cross-page/merged-table handling, and extend semantic/event coverage.
 
-本地新增：可选 BGE 语义向量、批量资产编码，以及同时绑定编码器身份和有序资产 ID 的持久化索引。下一步用一组有明确许可的公开 PDF 与 OpenX 资产验证并调优完整链路，再接入真实的本地 esmini 启动/预览路径。
+本地新增：BGE-M3 语义向量、共用模型的名称与结构召回、批量编码和内容/分类指纹缓存；不可变资产库与报告；真实本机 esmini 预览；保留单元格合并关系与跨页章节归属的原生表格、独立 PP-StructureV3 OCR 与按质量门槛启动的 PP-DocLayoutV2 原生章节修复；离线版本专用 XSD 检查。实测和边界见[复用对齐](docs/REUSE_ALIGNMENT.md)与[PDF 迁移](docs/PDF_MIGRATION.md)。下一步扩展代表性公开语料评测、跨页/合并表格处理，以及语义与事件覆盖。
 
 ## Parser enrichment / 解析完善
 
-- Preserve parameter declarations and resolve simple references.
-- Retain trigger thresholds, entity references, and event/action ownership.
-- Attach XML source paths to extracted fields.
-- Expand regression coverage with a small, documented set of public scenarios.
+- Implemented locally: lexical parameter aliases and bounded arithmetic, with
+  declarations, resolution provenance and unresolved/dynamic-parameter review.
+- Implemented locally: trigger attributes, XML paths and event/action ownership.
+- Implemented locally: distinct review scopes and whole-PDF matching/reporting,
+  sharing individual ranking, snapshots and version-pinned persistence.
+- Implemented locally: shared standard gates for direct-reuse confirmation and
+  saving; audited, separately checked SIM standard copies and diagnostic packages.
+- Next: broader representative public scenarios and execution-aware event semantics.
 
-保留参数声明并处理简单引用；补齐触发阈值、实体引用与事件/动作归属；增加 XML 来源路径；用一组有明确来源的公开场景扩展回归测试。
+本地已完成参数作用域、引用与有限算术、原始值与解析记录、事件归属及 XML 路径；
+增加部分验证/无法判断状态和整份 PDF 匹配汇总，共用单场景决策和版本固定逻辑。
+后续扩展公开样例覆盖与依赖实际执行的事件语义。详见[收口验证](docs/REUSE_ALIGNMENT.md)。
 
 ## Later: comparison and retrieval / 后续：比较与检索
 

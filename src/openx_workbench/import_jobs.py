@@ -7,7 +7,6 @@ from threading import Event, Lock, Thread
 import time
 import uuid
 
-from .asset_store import AssetStore
 from .classification import classify_asset, read_classification
 from .llm_service import ModelClient
 from .pdf_store import PdfStore

@@ -33,3 +33,17 @@ def test_asset_classification_keeps_bytes_and_rule_model_manual_history(tmp_path
     assert result["status"] == "failed"
     assert result["final"] == confirmed["final"]
     assert result["fallback_source"] == "previous_classification"
+    assert store.load_asset(version).classification["function_type"] == "ACC"
+
+
+def test_pending_labels_cannot_certify_a_function_or_treat_ego_as_target(tmp_path):
+    fixtures = Path(__file__).parent / "fixtures"
+    source = (fixtures / "minimal.xosc").read_bytes().replace(
+        b'<ScenarioObject name="Target"><Vehicle vehicleCategory="car"/></ScenarioObject>',
+        b'<ScenarioObject name="Target"><Vehicle vehicleCategory="motorbike"/></ScenarioObject>')
+    store = AssetStore(tmp_path)
+    version = store.import_files([AssetFile("minimal.xosc", source),
+                                  AssetFile("minimal.xodr", (fixtures / "minimal.xodr").read_bytes())])[0]
+    record = classify_asset(store, version)
+    assert record["rule"]["label_target_type"] == ["两轮车"]
+    assert store.load_asset(version).classification == {}

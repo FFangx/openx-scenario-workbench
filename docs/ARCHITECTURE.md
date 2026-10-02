@@ -16,6 +16,7 @@
 | `retrieval.py` | Local vector retrieval with scenario and road reranking |
 | `scene_package.py` | Stable PDF-to-retrieval contract with source evidence |
 | `pdf_pipeline.py` | Explicit legacy offline extraction for historical compatibility |
+| `pdf_tables.py` | Geometrically verified native cell spans; original slots retained on ambiguity |
 | `pdf_v2/`, `pdf_extraction.py` | Migrated V2 chapter tree, scene-first v6, typed structures and evidence validation |
 | `llm_service.py`, `model_ui.py` | Shared model configuration, credential protection, discovery and probes |
 | `classification.py` | Rule/model/final asset labels and manual review history |
@@ -42,17 +43,26 @@
 
 `sim_archive.expand_sim_archives` treats `.sim` as a ZIP container. It reads case JSON and contained OpenDRIVE files in memory, resolves ScenarioManager's logical `<map-id>.xodr` reference to `map/<map-id>/<road-name>.xodr`, converts the embedded OpenSCENARIO-shaped JSON into deterministic XML for the existing parser, and supplements genuinely missing roads with separately uploaded XODR files. Cases whose `LogicFile` cannot be resolved are excluded and summarized in an import report; the adapter does not invent a road or silently accept an incomplete pair.
 
-The encoder boundary has two implementations: deterministic hashing for a zero-model offline demo, and `BAAI/bge-small-zh-v1.5` through SentenceTransformers for semantic retrieval. Corpus encoding is batched. Index files store normalized vectors, the encoder identity, and ordered asset IDs; loading fails when the encoder or catalog differs.
+The encoder boundary has two implementations: deterministic hashing for an explicit offline baseline, and `BAAI/bge-m3` through SentenceTransformers for semantic retrieval. Both name/label and name-free structure recall use the selected encoder, with no small-model fallback. Corpus encoding is batched and identical texts are encoded once per call. Index files store both normalized vector sets, model identity, ordered asset IDs and a fingerprint of parsed facts and accepted labels; loading fails when these change.
+
+The UI defaults to M3 and persists explicit encoder choices. Document matching uses
+`OpenXIndex.search_many` to encode all scene queries together, then invokes the same
+ranking path as single retrieval. `reuse_trace.build_trace` is shared by both modes;
+`ProjectStore` uses one atomic version-pinning save path. Batch reports retain all
+source revisions and included candidate versions. `review_kind` explains partial
+verification, missing core structure, or text recall without changing verdict ordering.
+The parser resolves bounded lexical parameter references in memory and records
+event/action/condition ownership; original asset bytes remain immutable.
 
 PDF scene sections are converted to a `ScenePackage` that retains filename, section ID, page range, and source text. Its canonical scenario-family, participant, relative-position, action, trigger, road, and parameter fields form a `RetrievalQuery`. Candidate ranking first minimizes blocking differences, then estimated change cost, and only then uses the combined relevance score. The same change cost is exposed in the UI and CLI. Vector similarity therefore affects recall but cannot turn an incompatible scenario into a direct-reuse recommendation.
 
-Reuse levels come from the explicit difference set: no differences means direct reuse, a missing non-blocking feature means modify and reuse, and a scenario-family or participant-interaction mismatch means build new. Each asset participant is represented by type, ego-relative bearing, facing direction, and actor-owned actions; participant names and continuous distances do not form the matching key. Initial `RelativeObjectPosition`, `LanePosition`, `RoadPosition`, and `WorldPosition` values support this signature. OpenDRIVE line, arc, spiral, and parametric-cubic reference lines plus polynomial lane widths normalize road, lane, and world coordinates before comparison.
+Reuse levels come from explicit differences: established matches allow direct reuse, adjustable differences allow modification, missing evidence requires review, and known function/type/topology conflicts require a new build. Typed structures are authoritative and compatibility fields are derived from them. Old rule-only requirements retain their legacy adapter. Participant signatures preserve multiplicity, relative bearing, facing and actor-owned behavior. Initialization speeds and story targets distinguish cruise, static, stopping and speed changes; unresolved or complex behavior remains unknown. Structure profiles are computed once per index. Initial relative, lane, road and world positions and OpenDRIVE reference lines support the existing geometry normalization.
 
 A free-text query without a selected `ScenePackage` is recall-only. It returns ranked candidates with semantic evidence and the neutral `review` state, but it cannot claim direct reuse, modification, or a new build because no explicit requested structure exists to compare. This keeps the decision panel consistent with its difference evidence.
 
 Unknown topology is a distinct state rather than a mismatch. If participant type and actions agree but either side lacks a resolvable bearing or facing direction, the result requires placement verification and cannot be marked as direct reuse.
 
-The default PDF path uses the migrated ScenarioManager V2 native block parser, chain chapter decoder, scene-first v6 model extraction, subtree resolution and Stage D review checks. The typed structure and original evidence are stored with every scene. Confirmed revisions can enter a shared requirement library. OCR, Paddle rescue and full table reconstruction remain deferred. See [migration scope and validation](PDF_MIGRATION.md). No private corpus or internal evaluation results are bundled.
+The default PDF path uses the migrated ScenarioManager V2 native block parser, chain chapter decoder, scene-first v6 model extraction, subtree resolution and Stage D review checks. Native tables preserve row/cell boundaries and verified row/column spans; cross-page continuation follows chapter ownership, retaining separate page evidence. Scanned pages (including image bodies with native footers) pass through an isolated local PP-StructureV3 worker; native pages retain their existing parser. Both paths preserve page/bbox/provenance in the same scene contract. Confirmed revisions can enter a shared requirement library. Native chapter quality failures can start an isolated PP-DocLayoutV2 overlay using the same runtime/cache runner; it retains original evidence and rechecks coverage before model extraction. Image semantics and complete cross-page/merged-table interpretation remain deferred. See [migration scope and validation](PDF_MIGRATION.md). No private corpus or internal evaluation results are bundled.
 
 The road-reference check first resolves the referenced relative path against the scenario directory, then falls back to a unique basename. Ambiguous same-name roads are rejected. Pairing does not prove that the scene can execute.
 
@@ -60,9 +70,13 @@ The road-reference check first resolves the referenced relative path against the
 
 This is a structure inspector for selected XML constructs with an optional esmini preview, not an ASAM conformance validator. Unsupported details may not appear in the summary:
 
-- Parameter expressions are not resolved. A nonnumeric speed expression currently produces a null target value.
+- Offline XSD validation selects the declared OpenSCENARIO/OpenDRIVE version from a locally installed, checksummed registry. It reports valid, invalid, unsupported or unavailable separately from structural reuse. Exact schema provenance and diagnostics enter saved decisions. Missing schemas never count as successful validation. Schemas are mirrored from a pinned esmini revision into machine-local storage; parsing itself never downloads them.
+- Direct-reuse confirmation requires passing checks for both files. The UI, single/batch traces, explanations and report exports use the same gate; persistence rechecks trusted immutable files. Historic snapshots are displayed conservatively without rewriting saved evidence.
+- SIM standard export uses an audited conversion whitelist and validates a separate copy. Only checked, resolved copies are downloadable as standard packages; diagnostics preserve unsupported extensions. Reimport verifies hashes and stages the checked pair while retaining exact originals in the source ZIP. Custom commands still need target-engine verification.
+
+- Parameter references, aliases and bounded arithmetic have resolution provenance. Unsupported expressions, ambiguous declarations and dynamic mutation require review; this is not a complete expression evaluator.
 - Catalog references are identified but not expanded.
-- Event hierarchy, trigger thresholds and entity references, action units, and source-element paths are not fully represented.
+- Event paths retain ownership, priority, actions and condition groups. Execution ordering, trigger evaluation and complete action semantics are not established by the flattened parsed facts.
 - Road geometry is used for relative-position matching, but physical feasibility and scenario behavior are not simulated or validated.
 - OpenSCENARIO DSL is outside the current parser's scope.
 - SIM import supports the observed ScenarioManager container shape; it is not a general converter for arbitrary proprietary `.sim` formats.

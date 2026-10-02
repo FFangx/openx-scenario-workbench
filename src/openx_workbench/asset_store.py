@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from .catalog import AssetFile, OpenXAsset, build_catalog
 from .dependency_package import package_files
 from .sim_archive import expand_sim_archives
+from .store_lock import serialized
 
 
 def default_store_root() -> Path:
@@ -197,6 +198,12 @@ class AssetStore:
                 AssetFile(version.xodr_name, self.file_bytes(version, "road"))]
         asset = build_catalog(pair)[0]
         asset.asset_id = f"{version.asset_id}:{version.version_id}"
+        from .classification import read_classification
+        record = read_classification(self, version)
+        # Preserve accepted labels even if a later model retry failed. Pending
+        # rule/model suggestions do not certify a tested function.
+        if record.get("final_accepted", record.get("status") in {"classified", "manual_confirmed"} and not record.get("needs_review", True)):
+            asset.classification = record.get("final", {})
         return asset
 
     def set_compatibility(self, version: AssetVersion, status: str, detail: str = "") -> None:
@@ -205,22 +212,40 @@ class AssetStore:
         from dataclasses import replace
         self._write_manifest(replace(version, compatibility=status, compatibility_detail=detail))
 
+    @serialized
     def pin_version(self, project_id: str, version: AssetVersion) -> None:
         """Record a project/report dependency on an exact immutable asset version."""
         if not project_id.strip():
             raise ValueError("Project or report ID is required.")
+        if not self._manifest_path(version.asset_id, version.version_id).is_file():
+            raise ValueError("Cannot reference a missing asset version.")
+        self._update_reference(project_id, version, add=True)
+
+    @serialized
+    def release_reference(self, reference_id: str, version: AssetVersion) -> None:
+        """Release only the caller's reference after a failed report write."""
+        self._update_reference(reference_id, version, add=False)
+
+    def _update_reference(self, reference_id: str, version: AssetVersion, *, add: bool) -> None:
         path = self.root / "version_references.json"
         references = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         key = f"{version.asset_id}:{version.version_id}"
         refs = set(references.get(key, []))
-        refs.add(project_id)
-        references[key] = sorted(refs)
+        if add:
+            refs.add(reference_id)
+        else:
+            refs.discard(reference_id)
+        if refs:
+            references[key] = sorted(refs)
+        else:
+            references.pop(key, None)
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=self.root,
                                          prefix="references-", suffix=".tmp", delete=False) as handle:
             json.dump(references, handle, ensure_ascii=False, indent=2)
             temporary = Path(handle.name)
         temporary.replace(path)
 
+    @serialized
     def delete_version(self, version: AssetVersion) -> None:
         path = self.root / "version_references.json"
         references = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -240,6 +265,7 @@ class AssetStore:
             if blob.parent == blobs_root and blob.is_file():
                 blob.unlink()
 
+    @serialized
     def references(self, version: AssetVersion) -> tuple[str, ...]:
         path = self.root / "version_references.json"
         references = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}

@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-01",
+  "scope": "Authored native three-page PDF and synthetic regular table; smoke checks, not accuracy or full-PDF performance benchmarks.",
+  "engine": "openx-v2-scene-first-4",
+  "pdf_sha256": "f483a85600b21f83c716c0ae4104dcb5e500c0502ae9eed56cdf3d606b6503fe",
+  "quality": {
+    "section_count": 3,
+    "block_coverage_rate": 1.0,
+    "requires_review": false,
+    "issues": []
+  },
+  "live_extraction_seconds": 5.203,
+  "repeat_extraction_seconds": 0.156,
+  "repeat_model_cached": true,
+  "scene_count": 2,
+  "scenes": [
+    {
+      "title": "静止目标车前车制动（AEB）",
+      "ego_speed_kph": 50.0,
+      "target_speeds_kph": [
+        0.0
+      ],
+      "page_ranges": [
+        [
+          1,
+          2
+        ]
+      ],
+      "table_pages": [
+        1,
+        2
+      ]
+    },
+    {
+      "title": "移动目标车前车制动（AEB）",
+      "ego_speed_kph": 80.0,
+      "target_speeds_kph": [
+        20.0
+      ],
+      "page_ranges": [
+        [
+          3,
+          3
+        ]
+      ],
+      "table_pages": [
+        3
+      ]
+    }
+  ],
+  "table_serializer": {
+    "sample": "Authored regular geometry: 200 rows x 20 columns, 4000 cells",
+    "before_median_seconds": 0.077048,
+    "after_median_seconds": 0.011216,
+    "output_unchanged": true,
+    "speedup": 6.87
+  },
+  "limitations": [
+    "Continuation stays in the existing chapter; separate page boxes are retained, not replaced by one synthetic table.",
+    "Unresolved geometry keeps extracted slots and emits a review flag; no cell values are filled.",
+    "Private L2 files were not used or transmitted."
+  ],
+  "validation": {
+    "pytest_passed": 189,
+    "ruff": "passed",
+    "wheel_and_sdist": "passed",
+    "launcher_health": "passed",
+    "existing_assets": 21,
+    "existing_versions": 21
+  }
+}

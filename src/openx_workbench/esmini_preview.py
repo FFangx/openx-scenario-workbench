@@ -13,7 +13,7 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
@@ -23,17 +23,28 @@ from .asset_store import AssetStore, AssetVersion
 from .dependency_package import stage_package
 
 
+def managed_esmini_root() -> Path:
+    """Keep the simulator installation separate from selectable asset stores."""
+    return Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local" / "share")) / "OpenXScenarioWorkbench" / "tools" / "esmini"
+
+
 def find_esmini(value: str = "") -> Path | None:
-    candidates = [value, os.environ.get("OPENX_ESMINI_PATH", ""), shutil.which("esmini.exe"),
-                  shutil.which("esmini")]
+    # An explicit override must be valid itself; silently selecting a different
+    # installation makes settings validation and playback disagree.
+    manual = str(value).strip().strip('"')
+    candidates = [manual] if manual else [
+        os.environ.get("OPENX_ESMINI_PATH", ""), shutil.which("esmini.exe"), shutil.which("esmini"),
+        managed_esmini_root(), Path(__file__).resolve().parents[2] / "tools" / "esmini",
+        Path.home() / "Downloads" / "esmini", Path.home() / "Desktop" / "esmini",
+    ]
     for item in candidates:
         if not item:
             continue
-        path = Path(item).expanduser()
-        if path.is_dir():
-            path = path / "bin" / "esmini.exe"
-        if path.is_file() and (path.parent / "esminiLib.dll").is_file():
-            return path.resolve()
+        path = Path(str(item).strip().strip('"')).expanduser()
+        executables = (path / "esmini.exe", path / "bin" / "esmini.exe") if path.is_dir() else (path,)
+        for executable in executables:
+            if executable.name.casefold() in {"esmini", "esmini.exe"} and executable.is_file() and (executable.parent / "esminiLib.dll").is_file():
+                return executable.resolve()
     return None
 
 
@@ -50,12 +61,18 @@ class PreviewProcess:
     token: str
     version_id: str
     workdir: Path
+    asset_id: str = ""
+    _last_status: dict | None = field(default=None, init=False, repr=False)
 
     def status(self) -> dict:
         try:
             with urlopen(f"{self.url}/status?token={self.token}", timeout=1) as response:
-                return json.load(response)
+                status = json.load(response)
+                self._last_status = dict(status)
+                return status
         except Exception:
+            if self.process.poll() is not None and self._last_status and self._last_status["state"] in {"finished", "failed"}:
+                return dict(self._last_status)
             return {"state": "stopped" if self.process.poll() is not None else "starting",
                     "frames": 0, "error": "Preview worker exited." if self.process.poll() is not None else ""}
 
@@ -107,7 +124,7 @@ def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
         with (root / "worker.log").open("wb") as error_log:
             process = subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.DEVNULL,
                                        stderr=error_log, creationflags=flags)
-        preview = PreviewProcess(process, f"http://127.0.0.1:{port}", token, version.version_id, root)
+        preview = PreviewProcess(process, f"http://127.0.0.1:{port}", token, version.version_id, root, version.asset_id)
         for _ in range(40):
             status = preview.status()
             if status["state"] in {"running", "finished", "failed"}:
@@ -166,7 +183,7 @@ def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state
         if lib.SE_SaveImagesToRAM(True) != 0:
             raise RuntimeError("esmini could not enable in-memory frame capture.")
         if lib.SE_Init(os.fsencode(scenario), 0, 3, 0, 0) != 0:
-            raise RuntimeError("esmini rejected the scenario; inspect worker.log for its parser error.")
+            raise RuntimeError("esmini rejected the scenario.")
         try:
             state.state = "running"
             deadline = time.monotonic() + duration
@@ -196,6 +213,13 @@ def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state
         state.state = "finished"
     except Exception as exc:
         state.error = str(exc)
+        try:
+            diagnostics = "\n".join(line for line in (root / "log.txt").read_text(errors="replace").splitlines()
+                                    if "[error]" in line.lower())[-4000:]
+            if diagnostics:
+                state.error += "\n\nesmini diagnostics:\n" + diagnostics
+        except OSError:
+            pass
         state.state = "failed"
     finally:
         with state.condition:

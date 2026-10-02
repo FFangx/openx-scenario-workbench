@@ -1,0 +1,383 @@
+{
+  "license": "MIT; original authored parser fixtures, not an ASAM conformance corpus.",
+  "assets": [
+    {
+      "id": "forward",
+      "xosc": "forward.xosc",
+      "xodr": "../minimal.xodr",
+      "classification": {
+        "function_type": "AEB"
+      }
+    },
+    {
+      "id": "rear",
+      "xosc": "rear.xosc",
+      "xodr": "../minimal.xodr",
+      "classification": {
+        "function_type": "AEB"
+      }
+    },
+    {
+      "id": "stop",
+      "xosc": "stop.xosc",
+      "xodr": "../minimal.xodr",
+      "classification": {
+        "function_type": "AEB"
+      }
+    },
+    {
+      "id": "unknown",
+      "xosc": "unknown.xosc",
+      "xodr": "../minimal.xodr",
+      "classification": {
+        "function_type": "AEB"
+      }
+    },
+    {
+      "id": "pedestrian",
+      "xosc": "pedestrian.xosc",
+      "xodr": "../minimal.xodr",
+      "classification": {
+        "function_type": "AEB"
+      }
+    },
+    {
+      "id": "extra",
+      "xosc": "extra.xosc",
+      "xodr": "../minimal.xodr",
+      "classification": {
+        "function_type": "AEB"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "forward-zh",
+      "title": "前方同向目标车匀速行驶",
+      "text": "前方同向目标车匀速行驶",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "乘用车",
+            "bearing": "正前方",
+            "facing": "同向",
+            "actions": [
+              "匀速行驶"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            36
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "forward"
+      ],
+      "levels": {
+        "forward": "direct",
+        "rear": "new_build",
+        "stop": "modify",
+        "unknown": "review",
+        "pedestrian": "new_build",
+        "extra": "modify"
+      }
+    },
+    {
+      "id": "forward-en",
+      "title": "A target car cruises ahead of the ego car.",
+      "text": "A target car cruises ahead of the ego car.",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "乘用车",
+            "bearing": "正前方",
+            "facing": "同向",
+            "actions": [
+              "匀速行驶"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            36
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "forward"
+      ],
+      "levels": {
+        "forward": "direct",
+        "rear": "new_build",
+        "stop": "modify",
+        "unknown": "review",
+        "pedestrian": "new_build",
+        "extra": "modify"
+      }
+    },
+    {
+      "id": "rear-zh",
+      "title": "后方同向目标车匀速行驶",
+      "text": "后方同向目标车匀速行驶",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "乘用车",
+            "bearing": "正后方",
+            "facing": "同向",
+            "actions": [
+              "匀速行驶"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            36
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "rear"
+      ],
+      "levels": {
+        "forward": "new_build",
+        "rear": "direct",
+        "stop": "new_build",
+        "unknown": "review",
+        "pedestrian": "new_build",
+        "extra": "new_build"
+      }
+    },
+    {
+      "id": "rear-en",
+      "title": "A target car cruises behind the ego car.",
+      "text": "A target car cruises behind the ego car.",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "乘用车",
+            "bearing": "正后方",
+            "facing": "同向",
+            "actions": [
+              "匀速行驶"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            36
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "rear"
+      ],
+      "levels": {
+        "forward": "new_build",
+        "rear": "direct",
+        "stop": "new_build",
+        "unknown": "review",
+        "pedestrian": "new_build",
+        "extra": "new_build"
+      }
+    },
+    {
+      "id": "stop-zh",
+      "title": "前方目标车减速刹停",
+      "text": "前方目标车减速刹停",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "乘用车",
+            "bearing": "正前方",
+            "facing": "同向",
+            "actions": [
+              "刹停"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            36
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "stop"
+      ],
+      "levels": {
+        "forward": "modify",
+        "rear": "new_build",
+        "stop": "direct",
+        "unknown": "review",
+        "pedestrian": "new_build",
+        "extra": "modify"
+      }
+    },
+    {
+      "id": "stop-en",
+      "title": "The target car ahead brakes to a stop.",
+      "text": "The target car ahead brakes to a stop.",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "乘用车",
+            "bearing": "正前方",
+            "facing": "同向",
+            "actions": [
+              "刹停"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            36
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "stop"
+      ],
+      "levels": {
+        "forward": "modify",
+        "rear": "new_build",
+        "stop": "direct",
+        "unknown": "review",
+        "pedestrian": "new_build",
+        "extra": "modify"
+      }
+    },
+    {
+      "id": "pedestrian-zh",
+      "title": "前方横向行人静止",
+      "text": "前方横向行人静止",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "行人",
+            "bearing": "正前方",
+            "facing": "横向",
+            "actions": [
+              "静止"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            0
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "pedestrian"
+      ],
+      "levels": {
+        "forward": "new_build",
+        "rear": "new_build",
+        "stop": "new_build",
+        "unknown": "new_build",
+        "pedestrian": "direct",
+        "extra": "new_build"
+      }
+    },
+    {
+      "id": "pedestrian-en",
+      "title": "A stationary pedestrian faces across the road ahead.",
+      "text": "A stationary pedestrian faces across the road ahead.",
+      "structure": {
+        "tested_function": "AEB",
+        "road_class": "直道",
+        "ego_actions": [
+          "匀速行驶"
+        ],
+        "participants": [
+          {
+            "kind": "行人",
+            "bearing": "正前方",
+            "facing": "横向",
+            "actions": [
+              "静止"
+            ]
+          }
+        ],
+        "params": {
+          "ego_speed_kph": 36,
+          "target_speeds_kph": [
+            0
+          ],
+          "weather": "晴天",
+          "time_of_day": "日间"
+        }
+      },
+      "relevant": [
+        "pedestrian"
+      ],
+      "levels": {
+        "forward": "new_build",
+        "rear": "new_build",
+        "stop": "new_build",
+        "unknown": "new_build",
+        "pedestrian": "direct",
+        "extra": "new_build"
+      }
+    }
+  ]
+}

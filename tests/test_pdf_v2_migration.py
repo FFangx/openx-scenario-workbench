@@ -1,7 +1,6 @@
 import io
 import json
 import re
-from pathlib import Path
 
 import pymupdf
 import pytest
@@ -91,6 +90,62 @@ def test_confirmed_empty_pdf_is_persisted_without_repeat_call(tmp_path):
     record = store.import_pdf(project.project_id, "rules.pdf", data, client=client)
     assert record.scene_count == 0
     assert store.import_pdf(project.project_id, "rules.pdf", data, client=client) == record
+    assert len(calls) == 1
+
+
+def test_service_error_envelope_does_not_retry_or_save_a_successful_document(tmp_path):
+    from openx_workbench.pdf_extraction import ExtractionError
+
+    calls = []
+
+    def opener(request, timeout):
+        calls.append(request)
+        return io.BytesIO(b'{"error":{"message":"private-provider-detail"}}')
+
+    client = ModelClient(ModelConfig(api_key="authored-test"), opener=opener)
+    assets = AssetStore(tmp_path)
+    project = ProjectStore(assets).create("Service failure")
+    store = PdfStore(assets)
+    with pytest.raises(ExtractionError, match="transport_failed") as error:
+        store.import_pdf(project.project_id, "authored.pdf", authored_pdf(), client=client)
+    assert len(calls) == 1
+    assert store.documents(project.project_id) == []
+    assert error.value.audit["run"]["retry_attempted"] is False
+    assert "private-provider-detail" not in str(error.value)
+
+
+def test_mixed_pdf_ocr_evidence_reaches_revision_and_library(tmp_path, monkeypatch):
+    from openx_workbench.pdf_ocr import parse_ocr_pages
+
+    with pymupdf.open(stream=authored_pdf(), filetype="pdf") as original, pymupdf.open() as pdf:
+        pdf.insert_pdf(original, from_page=0, to_page=0)
+        source = original[1]
+        page = pdf.new_page(width=source.rect.width, height=source.rect.height)
+        page.insert_image(page.rect, stream=source.get_pixmap().tobytes("png"))
+        pdf.insert_pdf(original, from_page=2, to_page=2)
+        data = pdf.tobytes()
+    def recognize(path, pages, **kwargs):
+        assert pages == [2]
+        raw = {"pages": [{"number": 2, "width": 595, "height": 842, "image_width": 595, "image_height": 842,
+                           "blocks": [
+                               {"block_label": "paragraph_title", "block_content": "2.1 Stationary car braking", "block_bbox": [60, 45, 500, 65]},
+                               {"block_label": "text", "block_content": "A target car is ahead.", "block_bbox": [60, 80, 500, 100]},
+                               {"block_label": "table", "block_content": "<table><tr><td>Ego speed</td><td>50 km/h</td></tr></table>", "block_bbox": [60, 110, 500, 160]},
+                           ]}]}
+        return parse_ocr_pages(raw, pages), {"cached": False, "engine": "authored"}
+    monkeypatch.setattr("openx_workbench.pdf_ocr.recognize_pdf_pages", recognize)
+    client, calls = fake_client()
+    assets = AssetStore(tmp_path)
+    store = PdfStore(assets)
+    project = ProjectStore(assets).create("Mixed evidence")
+    record = store.import_pdf(project.project_id, "mixed.pdf", data, client=client)
+    scene = store.scenes(project.project_id, record.document_id)[0]
+    assert scene.package.evidence[0].page_start == 2
+    assert "<td>50 km/h</td>" in scene.package.evidence[0].source_text
+    assert any(b["source"] == "ocr" for b in scene.package.extraction["source_blocks"])
+    published = store.publish_scene(scene)
+    assert published["package"]["extraction"]["source_blocks"] == scene.package.extraction["source_blocks"]
+    assert store.import_pdf(project.project_id, "mixed.pdf", data, client=client) == record
     assert len(calls) == 1
 
 

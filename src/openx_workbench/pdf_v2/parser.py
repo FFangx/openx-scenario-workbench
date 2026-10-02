@@ -147,12 +147,30 @@ def _resolve_heading_decoder(heading_decoder: str | None) -> str:
         value = PDF_HEADING_DECODER
     return value if value in {"greedy", "chain"} else "greedy"
 
-def _page_table_bboxes(page: object) -> list[tuple[float, float, float, float]]:
+def _native_tables(page, page_number):
+    """Preserve cell/row boundaries instead of flattening columns into prose."""
+    from ..pdf_tables import native_table_html
 
+    blocks, flags = [], []
     try:
-        return [tuple(map(float, table.bbox)) for table in page.find_tables().tables]
+        tables = page.find_tables().tables
+        for index, table in enumerate(tables):
+            rows = table.extract()
+            if not rows or not any(cell for row in rows for cell in row):
+                continue
+            block_id = f"p{page_number}-table{index}"
+            html, review_kind = native_table_html(table, rows)
+            blocks.append(ParsedBlock(block_id=block_id, page_number=page_number,
+                                      bbox=tuple(table.bbox), text=html, block_type="table"))
+            if review_kind:
+                flags.append(StructureFlag(block_id=block_id, page_number=page_number,
+                    kind=review_kind, detail="Detected spans retained; review source. No missing values are filled in."
+                    if review_kind == "table_merged_cells" else "Ambiguous cell geometry; extracted slots retained without inferred spans or values."))
     except Exception:
-        return []
+        # Retain native text if table detection fails, with an explicit audit.
+        flags.append(StructureFlag(block_id=f"p{page_number}-table-detection", page_number=page_number,
+                                   kind="table_detection_failed", detail="Native text retained; table layout was not reconstructed."))
+    return blocks, flags
 
 def _block_in_table(bbox: tuple[float, ...], tables: list[tuple[float, float, float, float]]) -> bool:
 
@@ -170,6 +188,9 @@ def parse_pdf_structure(
     pdf_path: str | Path,
     *,
     heading_decoder: str | None = None,
+    ocr: bool = False,
+    root=None,
+    progress=None,
 ) -> tuple[ParsedDocument, tuple[OutlineEntry, ...]]:
 
     import fitz
@@ -188,15 +209,33 @@ def parse_pdf_structure(
             for entry in outline
         }
 
-        latin_document = _is_latin_document(page_texts) if decoder == "chain" else False
 
         blocks: list[ParsedBlock] = []
+        table_flags = []
+        preprocessing = {}
+        ocr_pages = []
+        if ocr:
+            for number, page in enumerate(pdf_document, 1):
+                # A native footer on an image-only page must not suppress OCR.
+                images = [pymupdf_rect for image in page.get_images() for pymupdf_rect in page.get_image_rects(image[0])]
+                large_image = any(rect.width * rect.height >= page.rect.width * page.rect.height * .5 for rect in images)
+                if large_image or (len(_normalize_text(page_texts[number - 1])) < _MIN_NATIVE_TEXT_CHARS_PER_PAGE and images):
+                    ocr_pages.append(number)
+            if document_type != "born_digital" and not ocr_pages and not any(text.strip() for text in page_texts):
+                raise ValueError("OCR: PDF contains no readable text or page images")
+            if ocr_pages:
+                from ..pdf_ocr import recognize_pdf_pages
+                ocr_blocks, preprocessing = recognize_pdf_pages(source_path, ocr_pages, root=root, progress=progress)
+                blocks.extend(ocr_blocks)
 
-        candidate_meta: dict[str, tuple[bool, bool]] = {}
         for page_index, page in enumerate(pdf_document, start=1):
+            if page_index in ocr_pages:
+                continue
             page_dict = page.get_text("dict")
-            table_bboxes = _page_table_bboxes(page) if decoder == "chain" else []
-            page_blocks: list[ParsedBlock] = []
+            table_blocks, page_flags = _native_tables(page, page_index)
+            table_flags.extend(page_flags)
+            table_bboxes = [block.bbox for block in table_blocks]
+            page_blocks: list[ParsedBlock] = list(table_blocks)
             for block_index, raw_block in enumerate(page_dict.get("blocks", [])):
                 if raw_block.get("type") != 0:
                     continue
@@ -210,12 +249,9 @@ def parse_pdf_structure(
                     heading_level = _fallback_heading_level(text, raw_block)
                 raw_bbox = raw_block.get("bbox", (0.0, 0.0, 0.0, 0.0))
                 bbox = tuple(float(value) for value in raw_bbox)
+                if _block_in_table(bbox, table_bboxes):
+                    continue
                 block_id = f"p{page_index}-b{block_index}"
-                if decoder == "chain" and heading_level is not None:
-                    candidate_meta[block_id] = (
-                        outline_level is not None,
-                        _block_in_table(bbox, table_bboxes),
-                    )
                 page_blocks.append(
                     ParsedBlock(
                         block_id=block_id,
@@ -238,56 +274,12 @@ def parse_pdf_structure(
                 )
             )
 
-        structure_flags: tuple[StructureFlag, ...] = ()
+        blocks.sort(key=lambda block: (block.page_number, block.bbox[1], block.bbox[0], block.block_id))
+        structure_flags = tuple(table_flags)
         if decoder == "chain":
-
-            toc_pages = _detect_toc_pages(blocks, pdf_document.page_count)
-            toc_flags = [
-                StructureFlag(
-                    block_id=block.block_id,
-                    page_number=block.page_number,
-                    kind="toc_page_heading_rejected",
-                    detail=_normalize_text(block.text)[:50],
-                )
-                for block in blocks
-                if block.block_id in candidate_meta and block.page_number in toc_pages
-            ]
-            if toc_flags:
-                rejected_toc_ids = {flag.block_id for flag in toc_flags}
-                blocks = [
-                    block.model_copy(update={"block_type": "paragraph", "heading_level": None})
-                    if block.block_id in rejected_toc_ids
-                    else block
-                    for block in blocks
-                ]
-                for block_id in rejected_toc_ids:
-                    candidate_meta.pop(block_id, None)
-
-            if candidate_meta:
-
-                candidates = [
-                    HeadingCandidate(
-                        block_id=block.block_id,
-                        page_number=block.page_number,
-                        text=block.text,
-                        outline_hit=candidate_meta[block.block_id][0],
-                        in_table=candidate_meta[block.block_id][1],
-                    )
-                    for block in blocks
-                    if block.block_id in candidate_meta
-                ]
-                decisions, chain_flags = decode_headings(
-                    candidates, latin_document=latin_document
-                )
-                blocks = [
-                    block.model_copy(update={"block_type": "paragraph", "heading_level": None})
-                    if decisions.get(block.block_id) is False
-                    else block
-                    for block in blocks
-                ]
-                structure_flags = (*toc_flags, *chain_flags)
-            else:
-                structure_flags = tuple(toc_flags)
+            blocks, chain_flags = decode_document_headings(blocks, pdf_document.page_count, outline,
+                latin_document=_is_latin_document([b.text for b in blocks] if ocr_pages else page_texts))
+            structure_flags += chain_flags
 
         return (
             ParsedDocument(
@@ -297,6 +289,26 @@ def parse_pdf_structure(
                 page_count=pdf_document.page_count,
                 blocks=tuple(blocks),
                 structure_flags=structure_flags,
+                preprocessing=preprocessing,
             ),
             outline,
         )
+
+
+def decode_document_headings(blocks, page_count, outline=(), *, latin_document=None):
+    """Use one TOC and numbering gate for native, OCR and layout candidates."""
+    toc_pages = _detect_toc_pages(blocks, page_count)
+    toc_flags = tuple(StructureFlag(block_id=b.block_id, page_number=b.page_number,
+        kind="toc_page_heading_rejected", detail=_normalize_text(b.text)[:50])
+        for b in blocks if b.heading_level is not None and b.page_number in toc_pages)
+    rejected = {flag.block_id for flag in toc_flags}
+    outline_hits = {(entry.page_number, _normalize_text(entry.title)) for entry in outline}
+    candidates = [HeadingCandidate(b.block_id, b.page_number, b.text,
+        (b.page_number, _normalize_text(b.text)) in outline_hits, False)
+        for b in blocks if b.heading_level is not None and b.block_id not in rejected]
+    if latin_document is None:
+        latin_document = _is_latin_document([b.text for b in blocks])
+    decisions, chain_flags = decode_headings(candidates, latin_document=latin_document)
+    blocks = [b.model_copy(update={"block_type": "paragraph", "heading_level": None})
+        if b.block_id in rejected or decisions.get(b.block_id) is False else b for b in blocks]
+    return blocks, (*toc_flags, *chain_flags)

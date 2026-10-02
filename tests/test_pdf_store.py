@@ -53,3 +53,24 @@ def test_same_filename_with_changed_pdf_creates_new_document(tmp_path):
     second = store.import_pdf(project.project_id, "rules.pdf", _pdf("Crossing"), engine="legacy")
     assert first.document_id != second.document_id
     assert first.sha256 != second.sha256
+
+
+def test_concurrent_scene_edits_keep_separate_immutable_revisions(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    assets = AssetStore(tmp_path)
+    project = ProjectStore(assets).create("Concurrent edits")
+    store = PdfStore(assets)
+    document = store.import_pdf(project.project_id, "authored.pdf", _pdf("Cut-in"), engine="legacy")
+    original = store.scenes(project.project_id, document.document_id)[0]
+    barrier = threading.Barrier(2)
+    def edit(title):
+        barrier.wait(timeout=10)
+        return PdfStore(AssetStore(tmp_path)).revise_scene(project.project_id, document.document_id,
+                                                         original.scene_id, {"title": title})
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(edit, ["First authored edit", "Second authored edit"]))
+    assert {item.revision for item in results} == {2, 3}
+    revisions = store.revisions(project.project_id, document.document_id, original.scene_id)
+    assert {item.package.title for item in revisions[1:]} == {"First authored edit", "Second authored edit"}
+    assert all(item.package.evidence == original.package.evidence for item in revisions)

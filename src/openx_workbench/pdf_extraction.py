@@ -13,9 +13,9 @@ from .pdf_v2.parser import parse_pdf_structure
 from .pdf_v2.quality import assess_structure_quality
 from .pdf_v2.section_tree import build_section_tree
 from .pdf_v2.scene_first import run_scene_first_extraction
-from .scene_package import EvidenceRef, ScenePackage, canonical_features, extract_parameters
+from .scene_package import EvidenceRef, ScenePackage, canonical_features, synchronize_structure
 
-ENGINE_VERSION = "openx-v2-scene-first-1"
+ENGINE_VERSION = "openx-v2-scene-first-4"
 PROMPT_VERSION = "scene-first-prompt-v6"
 
 
@@ -40,14 +40,30 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
     with tempfile.TemporaryDirectory(prefix="openx-pdf-") as directory:
         path = Path(directory) / "document.pdf"
         path.write_bytes(data)
-        document, outline = parse_pdf_structure(path, heading_decoder="chain")
-    if document.document_type != "born_digital":
-        raise ValueError("这份 PDF 含扫描页，当前版本只支持文字版 PDF / Scanned or mixed PDF requires OCR, not enabled yet.")
-    tree = build_section_tree(document, outline=outline)
-    quality = assess_structure_quality(document, tree)
-    severe = [issue.code for issue in quality.issues if issue.code in {"empty_section_tree", "low_block_coverage"}]
-    if severe:
-        raise ValueError("PDF 章节结构不可靠，请检查文档 / Unreliable PDF structure: " + ", ".join(severe))
+        document, outline = parse_pdf_structure(path, heading_decoder="chain", ocr=True, root=root, progress=notify)
+        tree = build_section_tree(document, outline=outline)
+        quality = assess_structure_quality(document, tree)
+        severe_codes = {"empty_section_tree", "low_block_coverage"}
+        severe = [issue.code for issue in quality.issues if issue.code in severe_codes]
+        if severe and any(b.source == "native_text" for b in document.blocks):
+            from .native_layout import rescue_native_structure
+            initial_quality = quality.model_dump(mode="json")
+            try:
+                candidate = rescue_native_structure(path, document, outline=outline, root=root, progress=notify)
+                candidate_tree = build_section_tree(candidate, outline=outline)
+                candidate_quality = assess_structure_quality(candidate, candidate_tree)
+                document, tree, quality = candidate, candidate_tree, candidate_quality
+                layout_audit = {**document.preprocessing.get("native_layout", {}), "status": "completed"}
+            except ValueError as exc:
+                layout_audit = {"status": "failed", "reason": str(exc)}
+            document = document.model_copy(update={"preprocessing": {**document.preprocessing,
+                "native_layout": {**layout_audit, "initial_quality": initial_quality}}})
+            severe = [issue.code for issue in quality.issues if issue.code in severe_codes]
+        if severe:
+            reason = document.preprocessing.get("native_layout", {}).get("reason")
+            raise ExtractionError("PDF 章节结构不可靠，请检查文档 / Unreliable PDF structure: " + ", ".join(severe)
+                + (f"; {reason}" if reason else ""),
+                _structure_audit(data, filename, document, quality))
     blocks = {block.block_id: block for block in document.blocks}
     texts = {node.node_id: "\n".join(blocks[bid].text for bid in node.block_ids if bid in blocks) for node in tree.nodes}
     flagged = {flag.block_id for flag in document.structure_flags}
@@ -81,8 +97,7 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
     run = run_scene_first_extraction(tree, texts, standard=standard or "PDF", heading_decoder="chain",
                                      model=client.config.model, prompt_version=PROMPT_VERSION,
                                      transport=transport, retry_enabled=True, flagged_node_ids=flagged_nodes)
-    audit = {"engine": ENGINE_VERSION, "pdf_sha256": hashlib.sha256(data).hexdigest(),
-             "source_pdf": filename, "structure_quality": quality.model_dump(mode="json"),
+    audit = {**_structure_audit(data, filename, document, quality),
              "nodes": [dict(node.model_dump(mode="json"), source_text=texts[node.node_id]) for node in tree.nodes],
              "run": run.model_dump(mode="json"), "requests": requests}
     if run.status not in {"ok", "retried_ok"} or run.extraction is None:
@@ -97,6 +112,11 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
         ids = [scene.anchor_node_id, *[item for item in scene.node_ids if item != scene.anchor_node_id]]
         evidence = [EvidenceRef(filename, nodes[nid].section_id, nodes[nid].page_start, nodes[nid].page_end,
                                 texts[nid]) for nid in ids]
+        source_ids = dict.fromkeys(bid for nid in ids for bid in (nodes[nid].heading_block_id, *nodes[nid].block_ids) if bid in blocks)
+        source_blocks = [blocks[bid] for bid in source_ids]
+        source_flags = [flag.model_dump(mode="json") for flag in document.structure_flags
+                        if flag.block_id in {block.block_id for block in source_blocks}
+                        or (flag.block_id not in blocks and flag.page_number in {block.page_number for block in source_blocks})]
         structure = scene.structure.model_dump(mode="json") if scene.structure else {}
         entities, actions, triggers, roads = canonical_features(scene.name + "\n" + scene.story)
         # Keep the complete typed structure; legacy search fields are a compatibility view.
@@ -114,13 +134,23 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
             time_of_day=[params["time_of_day"]] if params.get("time_of_day") not in {None, "未知"} else [],
             classification=metadata, structure=structure,
             extraction={"engine": ENGINE_VERSION, "prompt": PROMPT_VERSION, "model": client.config.model,
+                        "source_blocks": [block.model_dump(mode="json") for block in source_blocks],
+                        "structure_flags": source_flags,
                         "anchor_node_id": scene.anchor_node_id, "node_ids": list(scene.node_ids),
                         "shared_node_ids": list(scene.declared_shared_node_ids),
                         "validation": {**run.validation.model_dump(mode="json"),
                                        "issues": [issue.model_dump(mode="json") for issue in run.validation.issues if issue.scene_id in {None, scene.scene_id}]} if run.validation else {},
                         "review_status": "pending"},
         ))
-    return ExtractionResult(packages, audit)
+    return ExtractionResult([synchronize_structure(package) for package in packages], audit)
+
+
+def _structure_audit(data, filename, document, quality):
+    return {"engine": ENGINE_VERSION, "pdf_sha256": hashlib.sha256(data).hexdigest(),
+            "document_type": document.document_type, "preprocessing": document.preprocessing,
+            "blocks": [block.model_dump(mode="json") for block in document.blocks],
+            "structure_flags": [flag.model_dump(mode="json") for flag in document.structure_flags],
+            "source_pdf": filename, "structure_quality": quality.model_dump(mode="json")}
 
 
 def _write_json(path, data):

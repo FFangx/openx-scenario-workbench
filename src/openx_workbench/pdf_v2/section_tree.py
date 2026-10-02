@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from .heading import extract_section_id
-from .models import EvidenceSpan, OutlineEntry, ParsedBlock, ParsedDocument, SectionNode, SectionTree
+from .models import EvidenceSpan, OutlineEntry, ParsedDocument, SectionNode, SectionTree
 
 @dataclass(frozen=True)
 class _HeadingEvent:

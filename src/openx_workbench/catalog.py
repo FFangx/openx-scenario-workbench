@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import posixpath
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from .models import ParseBundle
@@ -23,6 +23,7 @@ class OpenXAsset:
     xosc_name: str
     xodr_name: str
     bundle: ParseBundle
+    classification: dict[str, str] = field(default_factory=dict)
 
 
 def build_catalog(files: list[AssetFile]) -> list[OpenXAsset]:

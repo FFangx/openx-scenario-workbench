@@ -7,9 +7,24 @@ English | [中文](README.zh-CN.md)
 
 Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets from files or ScenarioManager-compatible `.sim` archives, and ranks candidates using text, scenario structure, and road fit.
 
-**Try it:** start the app, choose **English** in the top-right corner, and click **Load public demo**. The pinned esmini cut-in example needs no API key, model download, or local input files.
+**Try it:** start the app, switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public demo → Load public demo**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. Semantic search and simulation have separate dependencies below.
 
-![Three-column evidence, retrieval, and reuse workbench](docs/images/workbench.png)
+![Current PDF workflow with project navigation, a reviewed requirement, ranked assets and a reuse assessment](docs/images/workbench-en.jpg)
+
+*Actual running UI with an authored PDF and parser-test asset. Requirement facts were reviewed manually; the screenshot demonstrates retrieval and assessment, not model extraction or simulator execution.*
+
+## Using the workbench
+
+| Page or action | What to do |
+| --- | --- |
+| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a row to review classification, source files, standard checks and version history. |
+| **Play simulation** | Select an asset and click **Play simulation**. An installed Windows esmini is detected automatically; use **Advanced preview settings** for a custom installation. |
+| **Text search** | Find similar assets with BGE-M3; this page does not make a reuse decision. |
+| **PDF workflow** | Create a project, configure the language model in **Settings**, import a PDF, select a scene and review its evidence and facts before searching. The selected-scene workspace has evidence, candidates and assessment columns. |
+| **Match entire PDF and summarize** | Match all scenes in the selected document and export or save a version-pinned JSON/HTML summary. |
+| **Overview** | Inspect library statistics and reopen saved project reports. |
+
+Asset versions are shared across projects. PDF sources, scene revisions and decisions belong to the selected project.
 
 ## Design
 
@@ -22,7 +37,7 @@ The two input paths meet only through stable representations: a PDF-derived `Sce
 ## What it does
 
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
-- Extracts and classifies text-based PDF scenes using the migrated ScenarioManager V2 / scene-first v6 path, preserving chapter/page evidence and review issues. Configure a model in Settings first.
+- Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first v6 path, preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
 - Publishes confirmed PDF scene revisions into a shared requirement library; simulation assets have optional model classification with rule/model/final audit history.
 - Provides model URL/key settings, model discovery, manual model IDs and a selected-model JSON test.
 - Converts each PDF scene package into explicit scenario-family, participant, relative-position, action, trigger, road, and parameter constraints.
@@ -30,19 +45,21 @@ The two input paths meet only through stable representations: a PDF-derived `Sce
 - Preserves total road length, lane-type counts, and OpenDRIVE geometry types, and projects lane/road/world positions through the reference line for relative-position matching.
 - Pairs each `.xosc` with its referenced `.xodr` to build an OpenX asset catalog.
 - Imports ScenarioManager-compatible `.sim` ZIP archives, converts their embedded OpenSCENARIO JSON to the same parser input, and pairs cases with contained or separately uploaded `.xodr` roads.
-- Uses a lightweight offline encoder or optional BGE embeddings for candidate recall, then ranks candidates by blocking differences and estimated change cost.
+- Uses BGE-M3 for semantic recall, with an explicitly selected hashing baseline available offline, then ranks candidates by blocking differences and estimated change cost.
 - Builds participant interaction signatures from type, ego-relative bearing, facing direction, and actor-owned actions.
 - Reports grounded reuse differences such as a mismatched scenario family or participant interaction, or a missing relation, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.
-- Presents the complete evidence-to-decision path in one responsive three-column workbench: PDF evidence, asset retrieval, and reuse trace.
+- Provides separate Overview, Text search, PDF workflow and Asset management pages; selecting a PDF scene opens its three-column evidence-to-decision workspace.
 - Exports a structured decision trace through the web UI; the inspection and search CLIs expose the same parser and retrieval core.
 - Loads a fixed revision of an upstream esmini example for a repeatable demo.
 - Stores immutable asset versions in a machine-local global library, keeps named projects and multiple PDFs, and exports version-pinned JSON and HTML decisions.
 - Accepts a portable `.zip` containing XOSC, XODR, catalogs, models, and textures in their original relative layout.
-- Runs real esmini frames inside the page on Windows when the user starts a preview and supplies a working local esmini installation.
+- Detects a working local esmini installation on Windows and displays real frames after the user clicks **Play simulation**, with stop/replay controls and retained failure details.
 - Offers on-demand evidence-linked explanations from the selected PDF text and versioned OpenX facts when a model key is configured.
+- Requires both scenario and road XSD checks to pass before confirming direct reuse, including a fresh check when saving a single or batch decision.
+- Exports separate, audited SIM standard copies from **Asset management → Source**. A copy that fails checks is available only as a diagnostic package; originals and unsupported extensions remain preserved.
 
-The app does not perform full ASAM schema/conformance validation. PDF OCR and table reconstruction, parameter expressions, external-catalog parsing, XOSC trigger thresholds, and event hierarchy are not yet fully supported. The UI never fabricates media: PDF thumbnails come from the uploaded document and preview images come from esmini. Model explanations cite supplied evidence but require human review for factual accuracy. See [local assets and preview](docs/LOCAL_ASSETS_AND_PREVIEW.md) and [architecture and current limits](docs/ARCHITECTURE.md).
+The app reports offline, version-specific XSD checks when its local schema registry is installed. These do not certify complete ASAM conformance or simulation. Native PDF table cells and optional local PP-StructureV3 OCR feed the same anchored scene workflow; complex merged/cross-page tables, diagrams, unsupported parameter expressions, unresolved external catalogs and event hierarchy still require review. The UI never fabricates media: PDF thumbnails come from the uploaded document and preview images come from esmini. Model explanations cite supplied evidence but require human review for factual accuracy. See [local assets and preview](docs/LOCAL_ASSETS_AND_PREVIEW.md) and [architecture and current limits](docs/ARCHITECTURE.md).
 
 See [PDF migration and model setup](docs/PDF_MIGRATION.md) for scope, storage and validation.
 
@@ -75,7 +92,15 @@ python -m pip install ".[dev]"
 python -m streamlit run src/openx_workbench/app.py
 ```
 
-Open the local URL printed by Streamlit. **Public demo** downloads two files from GitHub; **Upload assets** accepts `.sim`, `.xosc`, `.xodr`, and portable `.zip` dependency packages. A `.sim` case is admitted only when its referenced road is available inside the archive or among the supplemental uploads; missing road references are reported instead of silently creating incomplete assets.
+Open the local URL printed by Streamlit. Use **Asset management → Import assets** for the public demo or your own files. The public demo downloads a scenario and its road from GitHub; uploads accept `.sim`, `.xosc`, `.xodr`, and portable `.zip` dependency packages. A `.sim` case is admitted only when its referenced road is available inside the archive or among the supplemental uploads; task details list missing road filenames so they can be supplied on reimport.
+
+### Optional capabilities
+
+- **BGE-M3 search:** install with `python -m pip install ".[semantic]"`. The UI defaults to BGE-M3; weights are downloaded on first use unless cached and are not included in the repository. Choose the hashing baseline explicitly for an offline smoke check without model weights.
+- **PDF extraction:** configure the model endpoint, key and model in **Settings**. Import sends document text to that service. For scanned PDFs, install and configure local OCR as described in [PDF migration](docs/PDF_MIGRATION.md).
+- **Standard checks:** run `openx-validate --install-schemas` once to download the pinned schema registry; later checks run locally. Both XOSC and XODR must pass before direct reuse can be confirmed.
+- **Simulation:** install esmini separately on Windows. Detection supports `OPENX_ESMINI_PATH`, PATH and the managed folder `%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini`. A custom setting accepts the installation folder, `bin` folder or `esmini.exe`. esmini is not bundled; some extensions and missing dependencies prevent playback.
+- **Windows desktop entry:** follow [desktop launcher setup](docs/DESKTOP_LAUNCHER.md) for shortcuts and tray controls. Daily use requires no terminal.
 
 ### CLI and offline sample
 
@@ -85,7 +110,7 @@ The small fixtures are authored for parser tests, not for simulator execution. T
 openx-inspect tests/fixtures/minimal.xosc tests/fixtures/minimal.xodr
 ```
 
-The output has three top-level keys:
+The output has four top-level keys: `scenario`, `road`, `warnings`, and `validation`. The excerpt below shows parsed facts and warnings; `validation` carries the version-specific XSD results:
 
 ```json
 {
@@ -102,7 +127,7 @@ The output has three top-level keys:
 }
 ```
 
-This excerpt omits other parsed fields. Standard output contains JSON only; human-readable warnings go to standard error. A valid inspection exits with 0, including inspections with warnings. Invalid input exits with 2.
+This excerpt omits other parsed fields and the `validation` object. Standard output contains JSON only; human-readable warnings go to standard error. Successful parsing exits with 0, including inspections with warnings or failed/unavailable XSD checks. Invalid input or parsing failure exits with 2. Use `openx-validate` when an exit code must reflect XSD validity.
 
 ### Download the real public example
 
@@ -115,13 +140,13 @@ The pinned example currently yields **2 entities, 6 actions, 5 trigger condition
 
 ### Build and search an OpenX asset library
 
-Place related `.xosc` and `.xodr` files under one directory. Each scenario is paired with the OpenDRIVE basename referenced by its `LogicFile`:
+Place related `.xosc` and `.xodr` files under one directory. Pairing resolves each scenario's `LogicFile` path first, with a basename fallback only when unambiguous:
 
 ```bash
 openx-search examples/esmini "cut-in SpeedAction relative distance"
 ```
 
-The middle workbench column exposes the same flow and reports vector, scenario-structure, and road-fit evidence. Upload an ADAS PDF in the left column, select an extracted scene section, and its text, structured constraints, and source evidence become the retrieval query. The right column explains the reuse level, blocking differences, required edits, and traceability links.
+**Text search** exposes the same retrieval core. For a requirement-based assessment, open **PDF workflow**, select an imported scene and review its facts. Its text, structured constraints and source evidence become the retrieval query; the candidate and assessment columns explain matching evidence, blocking differences, required edits and traceability links.
 
 For semantic retrieval and a reusable on-disk index:
 
@@ -130,7 +155,15 @@ python -m pip install ".[semantic]"
 openx-search examples/esmini "target vehicle cuts in" --encoder bge --index .openx/index.json
 ```
 
-The BGE model is downloaded by SentenceTransformers on first use. The index records the encoder and ordered asset IDs, so it cannot silently be reused with a different model or catalog.
+Semantic retrieval uses **BAAI/bge-m3** (BGE-M3), with no automatic fallback to a smaller model. SentenceTransformers downloads it on first use unless it is cached. The index records the model, schema version and a fingerprint of parsed facts and accepted classification labels. Changed models, labels or assets require a rebuild.
+
+The name/label and name-free structural routes share one encoder. Typed PDF facts directly control reuse decisions; unsupported or unknown requirements require review. See [alignment, validation and measured limits](docs/REUSE_ALIGNMENT.md).
+
+Both workbench retrieval pages default to BGE-M3 and persist explicit baseline
+choices. In the PDF workflow, **Match entire PDF and summarize** matches all current
+document scenes through the same retrieval engine. JSON/HTML summaries preserve
+source revisions, candidate versions and pending review states. Saved summaries
+reopen in Overview and pin all included asset versions.
 
 ## Development
 
@@ -145,7 +178,3 @@ CI tests on Windows and Linux with Python 3.10 and 3.12 and builds the distribut
 ## License and examples
 
 Code and authored test fixtures are licensed under [MIT](LICENSE). The optional esmini example is fetched from a pinned upstream revision and is not committed to this repository. See [third-party notices](THIRD_PARTY_NOTICES.md) for its source and license.
-# Windows desktop launcher
-
-See [desktop launcher setup](docs/DESKTOP_LAUNCHER.md) for the OpenX start/stop
-shortcuts and tray controls. Daily use requires no terminal.

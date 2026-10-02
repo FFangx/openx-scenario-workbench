@@ -17,6 +17,9 @@ class ActionIR:
     kind: str
     actor: str | None = None
     target_value: float | None = None
+    phase: str = "story"
+    source_path: str = ""
+    event_path: str = ""
 
 
 @dataclass(slots=True)
@@ -29,6 +32,9 @@ class TriggerIR:
     value: float | None = None
     rule: str | None = None
     entity_refs: tuple[str, ...] = ()
+    source_path: str = ""
+    event_path: str = ""
+    attributes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -50,6 +56,11 @@ class ScenarioIR:
     actions: list[ActionIR] = field(default_factory=list)
     triggers: list[TriggerIR] = field(default_factory=list)
     positions: list[PositionIR] = field(default_factory=list)
+    environment: dict[str, str | float] = field(default_factory=dict)
+    parameters: list[dict[str, str]] = field(default_factory=list)
+    parameter_issues: list[dict[str, str]] = field(default_factory=list)
+    parameter_resolutions: list[dict[str, str]] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -72,10 +83,12 @@ class ParseBundle:
     road: RoadIR
     warnings: list[str] = field(default_factory=list)
     road_geometry: dict[str, Any] = field(default_factory=dict, repr=False)
+    validation: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "scenario": asdict(self.scenario),
             "road": asdict(self.road),
             "warnings": list(self.warnings),
+            "validation": self.validation,
         }

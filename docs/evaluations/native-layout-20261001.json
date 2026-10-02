@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-01",
+  "scope": "Authored native PDFs only; smoke checks, not an accuracy benchmark.",
+  "engine": "openx-v2-scene-first-3",
+  "provider": {
+    "model": "PP-DocLayoutV2",
+    "model_sha256": "e1f6ae969533555b227553e90999463f81117388bc8c156d2a474d9062d3a4d3",
+    "worker_sha256": "a1477bfc1af2f436d209af4fccdda4d16ff7b3a30e88cb62d194d1c9af8f0ba2",
+    "runtime": {
+      "paddlex": "3.7.2",
+      "paddlepaddle": "3.2.2"
+    }
+  },
+  "success": {
+    "pdf_sha256": "8be357014f1a3a2335d5ef64155cc8bd8c32bc8a9a50ec2564079a243fa11399",
+    "pages": 1,
+    "before": {
+      "section_count": 0,
+      "block_coverage_rate": 0.0,
+      "requires_review": true,
+      "issues": [
+        {
+          "code": "empty_section_tree",
+          "node_id": "",
+          "message": "未识别到章节树，禁止自动推断场景边界。"
+        }
+      ]
+    },
+    "after": {
+      "section_count": 1,
+      "block_coverage_rate": 1.0,
+      "requires_review": false,
+      "issues": []
+    },
+    "layout_cpu_seconds": 5.141,
+    "repeat_extraction_seconds": 0.078,
+    "repeat_layout_cached": true,
+    "repeat_model_cached": true,
+    "scene_count": 1,
+    "tested_functions": [
+      "AEB"
+    ],
+    "ego_speeds_kph": [
+      50.0
+    ],
+    "heading_evidence_preserved": true
+  },
+  "rejection": {
+    "pdf_sha256": "ce23ee346b31b395f609d64c0716ef9a86499edd762de0f92b8b3148c5f27948",
+    "pages": 3,
+    "before": {
+      "section_count": 0,
+      "block_coverage_rate": 0.0,
+      "requires_review": true,
+      "issues": [
+        {
+          "code": "empty_section_tree",
+          "node_id": "",
+          "message": "未识别到章节树，禁止自动推断场景边界。"
+        }
+      ]
+    },
+    "after": {
+      "section_count": 1,
+      "block_coverage_rate": 0.6,
+      "requires_review": true,
+      "issues": [
+        {
+          "code": "low_block_coverage",
+          "node_id": "",
+          "message": "仅 60.0% 的非标题文本块被章节树覆盖。"
+        }
+      ]
+    },
+    "layout_cpu_seconds": 17.469,
+    "model_requested": false
+  },
+  "limitations": [
+    "Visual numbered headings only; no invented hierarchy for unnumbered titles.",
+    "Ambiguous/merged regions keep original blocks.",
+    "Stationary target speed was not populated by the model in this smoke sample; source review remains required.",
+    "Private L2 documents were not used or transmitted."
+  ],
+  "prior_ocr_cache": {
+    "cached": true,
+    "elapsed_seconds": 0.047,
+    "block_count": 3
+  },
+  "validation": {
+    "pytest_passed": 175,
+    "ruff": "passed",
+    "wheel_and_sdist": "passed",
+    "launcher_health": "passed",
+    "existing_assets": 21,
+    "existing_versions": 21
+  }
+}

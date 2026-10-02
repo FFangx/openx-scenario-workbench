@@ -56,12 +56,18 @@ Pinned versions cannot be deleted from Asset management.
 The home page lists saved decisions for the selected project and offers their
 original JSON and HTML exports, even after scene revisions or newer asset imports.
 
-**Run preview** starts a separate Python process that loads `esminiLib.dll`,
+**Play simulation** starts a separate Python process that loads `esminiLib.dll`,
 captures rendered frames in memory, and serves a token-protected MJPEG stream on
-`127.0.0.1`. The page displays that stream inline. **Stop preview** terminates
+`127.0.0.1`. The page displays that stream inline. **Stop** terminates
 the process and removes its temporary staging files. The simulation itself has a
-30-second limit. esmini is detected on PATH or via `OPENX_ESMINI_PATH`; the
-workbench also accepts an executable path in the selected candidate panel.
+30-second limit. Detection checks `OPENX_ESMINI_PATH`, PATH and conventional local
+locations, including `%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini` on
+Windows. The tool installation is separate from `OPENX_DATA_DIR`, so selecting a
+different asset store does not require configuring the simulator again. Normal
+playback shows tool readiness and one Play simulation action. Advanced preview
+settings accept the installation root, its `bin` directory or the executable;
+saved choices persist and an empty choice restores automatic detection. An
+invalid explicit choice is rejected rather than falling back to another engine.
 The executable needs `esminiLib.dll` beside it and its normal `resources`
 directory one level above `bin` for scenarios with catalog/model references.
 Parse facts remain available when preview fails.

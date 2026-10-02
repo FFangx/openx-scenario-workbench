@@ -1,9 +1,10 @@
 import io
 import json
 import zipfile
+from xml.etree import ElementTree as ET
 
 from openx_workbench.catalog import AssetFile, build_catalog
-from openx_workbench.sim_archive import expand_sim_archives
+from openx_workbench.sim_archive import expand_sim_archives, _osc_json_to_xml
 
 
 def _sim_bytes(road_name: str = "demo.xodr", include_road: bool = True) -> bytes:
@@ -48,6 +49,32 @@ def test_sim_archive_becomes_pairable_openx_assets() -> None:
     assert reports[0].case_count == 1
     assert reports[0].imported_count == 1
     assert reports[0].missing_road_references == ()
+
+
+def test_sim_custom_command_preserves_text_in_open_scenario_simple_content():
+    content = ' {"command": "speed < 10 & ready", "enabled": true}\n'
+    data = {"Storyboard": {"Init": {"Actions": {"UserDefinedAction": {
+        "CustomCommandAction": {"type": "simulation", "content": content}
+    }}}}}
+    xml = ET.fromstring(_osc_json_to_xml(data, "Authored command"))
+    command = xml.find(".//CustomCommandAction")
+    assert command.attrib == {"type": "simulation"}
+    assert command.text == content
+
+
+def test_sim_root_order_does_not_depend_on_json_parameter_edit_order():
+    data = {"Storyboard": {}, "Entities": {}, "RoadNetwork": {},
+            "CatalogLocations": {}, "FileHeader": {"revMajor": "1", "revMinor": "2"},
+            "VendorExtension": {"enabled": True}, "VariableDeclarations": {},
+            "ParameterDeclarations": {"ParameterDeclaration": {
+                "name": "$speed", "parameterType": "double", "value": "12.5"}}}
+    xml = ET.fromstring(_osc_json_to_xml(data, "Authored parameters"))
+    assert [child.tag for child in xml] == [
+        "FileHeader", "ParameterDeclarations", "VariableDeclarations",
+        "CatalogLocations", "RoadNetwork", "Entities", "Storyboard", "VendorExtension"]
+    assert xml.find("ParameterDeclarations/ParameterDeclaration").get("name") == "$speed"
+    assert xml.find("VendorExtension").get("enabled") == "true"
+    assert next(iter(data)) == "Storyboard"  # Input remains untouched.
 
 
 def test_sim_archive_reports_missing_road_and_accepts_supplement() -> None:

@@ -1,0 +1,404 @@
+{
+  "scope": "Original authored parser/decision regressions and repeated-pattern scale probes; CPU timings collected during local QA, not an isolated production benchmark.",
+  "validation": {
+    "pytest_passed": 133,
+    "ruff": "passed",
+    "build": "passed"
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "sentence-transformers": "5.7.0",
+    "transformers": "5.18.0",
+    "torch": "2.6.0+cpu"
+  },
+  "runs": [
+    {
+      "encoder": "hashing-blake2b-512",
+      "backend": "faiss-flat-ip",
+      "dimensions": 512,
+      "asset_count": 6,
+      "case_count": 8,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "name_route_hit_at_1": 0.25,
+      "structure_route_hit_at_1": 1,
+      "union_hit_at_5": 1,
+      "verdict_accuracy": 1.0,
+      "false_direct": 0,
+      "cases": [
+        {
+          "case": "forward-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "forward": "direct",
+            "extra": "modify",
+            "unknown": "review",
+            "stop": "modify",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.566
+        },
+        {
+          "case": "forward-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "forward": "direct",
+            "unknown": "review",
+            "stop": "modify",
+            "extra": "modify",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.472
+        },
+        {
+          "case": "rear-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "rear": "direct",
+            "unknown": "review",
+            "extra": "new_build",
+            "stop": "new_build",
+            "forward": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.421
+        },
+        {
+          "case": "rear-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "rear": "direct",
+            "unknown": "review",
+            "stop": "new_build",
+            "forward": "new_build",
+            "extra": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.454
+        },
+        {
+          "case": "stop-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "stop": "direct",
+            "extra": "modify",
+            "forward": "modify",
+            "unknown": "review",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.44
+        },
+        {
+          "case": "stop-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "stop": "direct",
+            "forward": "modify",
+            "extra": "modify",
+            "unknown": "review",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.451
+        },
+        {
+          "case": "pedestrian-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "pedestrian": "direct",
+            "extra": "new_build",
+            "unknown": "new_build",
+            "stop": "new_build",
+            "rear": "new_build",
+            "forward": "new_build"
+          },
+          "name_route_hit_at_1": true,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.428
+        },
+        {
+          "case": "pedestrian-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "pedestrian": "direct",
+            "extra": "new_build",
+            "unknown": "new_build",
+            "stop": "new_build",
+            "rear": "new_build",
+            "forward": "new_build"
+          },
+          "name_route_hit_at_1": true,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 0.47
+        }
+      ],
+      "scope": "Authored structural ranking/verdict regression; not PDF extraction accuracy or ASAM conformance.",
+      "benchmarks": [
+        {
+          "size": 1000,
+          "data": "repeated authored patterns",
+          "unique_name_texts": 6,
+          "unique_structure_texts": 6,
+          "build_s": 0.391,
+          "median_query_ms": 19.131,
+          "max_query_ms": 21.106,
+          "vector_float32_bytes": 4096000,
+          "memory_note": "vector payload only; excludes Python objects, model and catalog"
+        },
+        {
+          "size": 10000,
+          "data": "repeated authored patterns",
+          "unique_name_texts": 6,
+          "unique_structure_texts": 6,
+          "build_s": 5.863,
+          "median_query_ms": 414.013,
+          "max_query_ms": 452.295,
+          "vector_float32_bytes": 40960000,
+          "memory_note": "vector payload only; excludes Python objects, model and catalog"
+        }
+      ]
+    },
+    {
+      "encoder": "sentence-transformers:BAAI/bge-m3",
+      "backend": "faiss-flat-ip",
+      "dimensions": 1024,
+      "asset_count": 6,
+      "case_count": 8,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "name_route_hit_at_1": 0.5,
+      "structure_route_hit_at_1": 1,
+      "union_hit_at_5": 1,
+      "verdict_accuracy": 1.0,
+      "false_direct": 0,
+      "cases": [
+        {
+          "case": "forward-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "forward": "direct",
+            "stop": "modify",
+            "extra": "modify",
+            "unknown": "review",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 856.569
+        },
+        {
+          "case": "forward-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "forward": "direct",
+            "stop": "modify",
+            "unknown": "review",
+            "extra": "modify",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 902.089
+        },
+        {
+          "case": "rear-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "rear": "direct",
+            "unknown": "review",
+            "stop": "new_build",
+            "extra": "new_build",
+            "forward": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": true,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 871.976
+        },
+        {
+          "case": "rear-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "rear": "direct",
+            "unknown": "review",
+            "stop": "new_build",
+            "extra": "new_build",
+            "forward": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 875.392
+        },
+        {
+          "case": "stop-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "stop": "direct",
+            "extra": "modify",
+            "forward": "modify",
+            "unknown": "review",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": false,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 854.73
+        },
+        {
+          "case": "stop-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "stop": "direct",
+            "extra": "modify",
+            "forward": "modify",
+            "unknown": "review",
+            "rear": "new_build",
+            "pedestrian": "new_build"
+          },
+          "name_route_hit_at_1": true,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 799.459
+        },
+        {
+          "case": "pedestrian-zh",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "pedestrian": "direct",
+            "rear": "new_build",
+            "extra": "new_build",
+            "stop": "new_build",
+            "forward": "new_build",
+            "unknown": "new_build"
+          },
+          "name_route_hit_at_1": true,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 681.707
+        },
+        {
+          "case": "pedestrian-en",
+          "first_relevant_rank": 1,
+          "verdicts": {
+            "pedestrian": "direct",
+            "forward": "new_build",
+            "rear": "new_build",
+            "stop": "new_build",
+            "extra": "new_build",
+            "unknown": "new_build"
+          },
+          "name_route_hit_at_1": true,
+          "structure_route_hit_at_1": true,
+          "union_hit_at_5": true,
+          "correct_verdicts": 6,
+          "verdict_count": 6,
+          "false_direct": 0,
+          "query_ms": 784.991
+        }
+      ],
+      "scope": "Authored structural ranking/verdict regression; not PDF extraction accuracy or ASAM conformance.",
+      "benchmarks": [
+        {
+          "size": 1000,
+          "data": "repeated authored patterns",
+          "unique_name_texts": 6,
+          "unique_structure_texts": 6,
+          "build_s": 3.718,
+          "median_query_ms": 1045.128,
+          "max_query_ms": 1064.986,
+          "vector_float32_bytes": 8192000,
+          "memory_note": "vector payload only; excludes Python objects, model and catalog"
+        },
+        {
+          "size": 10000,
+          "data": "repeated authored patterns",
+          "unique_name_texts": 6,
+          "unique_structure_texts": 6,
+          "build_s": 14.082,
+          "median_query_ms": 1406.754,
+          "max_query_ms": 1714.539,
+          "vector_float32_bytes": 81920000,
+          "memory_note": "vector payload only; excludes Python objects, model and catalog"
+        }
+      ]
+    }
+  ]
+}
