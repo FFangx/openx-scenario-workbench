@@ -43,7 +43,10 @@ def main() -> None:
                 "xosc": result.asset.xosc_name,
                 "xodr": result.asset.xodr_name,
                 "score": result.score,
-                "reuse_level": result.reuse_level,
+                "reuse_level": result.confirmation_level,
+                "structural_level": result.reuse_level,
+                "review_kind": result.confirmation_review_kind,
+                "standard_checks": result.standard_checks,
                 "estimated_change_cost": result.estimated_change_cost,
                 "reasons": result.reasons,
             }

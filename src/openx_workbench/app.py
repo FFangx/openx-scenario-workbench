@@ -9,10 +9,10 @@ from dataclasses import asdict, replace
 from typing import Any
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from openx_workbench.appearance import appearance_css, theme_colors
-from openx_workbench.ui_shell import initialize, sidebar, header_controls, source_files
+from openx_workbench.asset_management import label as localized
+from openx_workbench.ui_shell import initialize, sidebar, header_controls, source_files, save_preferences, preview_settings
 from openx_workbench.catalog import AssetFile, OpenXAsset
 from openx_workbench.asset_store import AssetStore, AssetVersion
 from openx_workbench.demo import fetch_public_demo
@@ -21,7 +21,9 @@ from openx_workbench.grounding import deterministic_explanation, model_explanati
 from openx_workbench.pdf_store import PdfStore, StoredScene
 from openx_workbench.project_store import ProjectStore
 from openx_workbench.report_html import render_report
-from openx_workbench.retrieval import OpenXIndex, RetrievalResult, build_encoder
+from openx_workbench.reuse_trace import build_trace, checked_trace
+from openx_workbench.batch_matching import match_document, batch_signature
+from openx_workbench.retrieval import OpenXIndex, RetrievalResult, build_encoder, catalog_fingerprint
 from openx_workbench.scene_package import ScenePackage, scene_package_to_query
 from openx_workbench.sim_archive import SimImportReport
 
@@ -54,14 +56,13 @@ TEXT = {
         "files": "SIM / XOSC / XODR 文件", "pairs": "配对资产",
         "sim_cases": "SIM 可配对 case", "missing_roads": "缺少道路",
         "library_empty": "先载入公共样例或上传配套的 XOSC/XODR 文件。",
-        "encoder": "语义编码器", "hashing": "本地哈希（快速基线）", "bge": "BGE 语义向量",
+        "encoder": "语义编码器", "hashing": "本地哈希（快速基线）", "bge": "BGE-M3 语义向量",
         "query": "补充检索条件", "query_hint": "可选：道路、天气、速度或测试目标",
         "search": "检索可复用资产", "candidates": "候选场景",
         "no_results": "构建资产库并检索后显示真实候选结果。",
         "candidate": "查看候选", "selected": "选中资产摘要",
-        "preview_off": "已解析 · esmini 预览不可用", "preview_on": "已解析 · esmini 已检测",
-        "run_preview": "运行真实预览", "stop_preview": "停止预览",
-        "esmini_path": "esmini.exe 路径（可选）",
+        "preview_off": "已解析 · 预览工具未找到", "preview_on": "已解析 · 预览工具就绪",
+        "run_preview": "播放仿真", "stop_preview": "停止",
         "home": "总览", "text_search": "文本检索", "pdf_workflow": "PDF 工作流",
         "asset_management": "资产管理", "no_assets": "还没有导入资产。请到资产管理页上传文件。",
         "reuse": "复用决策与追踪链", "no_decision": "尚无复用决策",
@@ -88,14 +89,13 @@ TEXT = {
         "load_demo": "Load esmini sample", "build": "Build asset library", "files": "SIM / XOSC / XODR files",
         "sim_cases": "Pairable SIM cases", "missing_roads": "Missing roads",
         "pairs": "Paired assets", "library_empty": "Load the public sample or upload paired XOSC/XODR files.",
-        "encoder": "Semantic encoder", "hashing": "Local hashing (fast baseline)", "bge": "BGE semantic vectors",
+        "encoder": "Semantic encoder", "hashing": "Local hashing (fast baseline)", "bge": "BGE-M3 semantic vectors",
         "query": "Additional retrieval criteria", "query_hint": "Optional: road, weather, speed or test objective",
         "search": "Search reusable assets", "candidates": "Candidate scenarios",
         "no_results": "Build the library and run retrieval to see grounded candidates.",
         "candidate": "Inspect candidate", "selected": "Selected asset summary",
-        "preview_off": "Parsed · esmini preview unavailable", "preview_on": "Parsed · esmini detected",
-        "run_preview": "Run preview", "stop_preview": "Stop preview",
-        "esmini_path": "esmini.exe path (optional)",
+        "preview_off": "Parsed · preview tool not found", "preview_on": "Parsed · preview tool ready",
+        "run_preview": "Play simulation", "stop_preview": "Stop",
         "home": "Overview", "text_search": "Text search", "pdf_workflow": "PDF workflow",
         "asset_management": "Asset management", "no_assets": "No assets imported yet. Upload files in Asset management.",
         "reuse": "Reuse decision and traceability", "no_decision": "No reuse decision yet",
@@ -135,10 +135,10 @@ def _encoder(name: str):
 
 
 def _index_for(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
-    identity = (encoder_name, tuple(asset.asset_id for asset in catalog))
+    identity = (encoder_name, catalog_fingerprint(catalog))
     if st.session_state.get("index_identity") == identity:
         return st.session_state["search_index"]
-    fingerprint = hashlib.sha256("\0".join(identity[1]).encode("utf-8")).hexdigest()[:24]
+    fingerprint = identity[1][:24]
     path = AssetStore().root / "indexes" / encoder_name / f"{fingerprint}.json"
     encoder = _encoder(encoder_name)
     try:
@@ -242,9 +242,114 @@ def _header(*, show_steps: bool = True) -> str:
     return language
 
 
+def _encoder_changed():
+    save_preferences(encoder=st.session_state.retrieval_encoder)
+    for key in ("retrieval_results", "text_results"):
+        st.session_state[key] = []
+    st.session_state.pop("batch_assessment", None)
+
+
+def _encoder_control(language: str) -> str:
+    return st.selectbox(tx(language, "encoder"), ["bge", "hashing"],
+                        format_func=lambda value: tx(language, value), key="retrieval_encoder",
+                        on_change=_encoder_changed)
+
+
+def _verdict_label(language: str, level: str, scope: str = "") -> str:
+    names = {"standards": ("文件标准待复核", "File standards need review"),
+             "partial": ("部分已验证 · 待复核", "Partially verified · review"),
+             "undecidable": ("关键结构不足 · 无法判断", "Insufficient structure · undecidable"),
+             "recall": ("文本召回 · 待结构验证", "Text recall · verify structure"),
+             "no_candidates": ("没有候选资产", "No candidate assets")}
+    key = scope if level == "review" and scope else level
+    if key in names:
+        return names[key][0 if language == "zh" else 1]
+    return tx(language, level)
+
+
+def _review_detail(language: str, scope: str) -> str:
+    descriptions = {
+        "standards": ("结构相似，但场景或道路的标准检查未通过或未完成。修复并重新检查后才能确认直接复用。",
+                      "Structure matches, but scenario or road standard checks have not passed. Repair and recheck before confirming direct reuse."),
+        "partial": ("已完成部分结构比较；以下未验证项确认前，不能认定可直接复用。",
+                    "Some structure was compared. Resolve the unverified items before confirming direct reuse."),
+        "undecidable": ("参与者交互或主车动作缺少关键结构，现有证据无法支持复用判断。",
+                        "Key participant interaction or ego action evidence is missing; reuse cannot be assessed."),
+        "recall": ("这是文本检索结果。选择有结构和原文证据的 PDF 场景后才能评估复用。",
+                   "This is a text retrieval result. Select a structured PDF scene with source evidence to assess reuse."),
+    }
+    return descriptions.get(scope, descriptions["undecidable"])[0 if language == "zh" else 1]
+
+
+def _batch_summary(trace: dict, language: str):
+    st.caption(trace["source"]["title"])
+    encoder_label = (tx(language, "bge") if trace["encoder"] == "sentence-transformers:BAAI/bge-m3"
+                     else tx(language, "hashing") if trace["encoder"].startswith("hashing-") else trace["encoder"])
+    st.caption(localized(language, f"共 {trace['scene_count']} 个场景 · {encoder_label}",
+                     f"{trace['scene_count']} scenes · {encoder_label}"))
+    rows = []
+    for entry in trace["entries"]:
+        source, assessment = entry["source"], entry["assessment"]
+        candidates = entry["candidates"]
+        evidence = source.get("evidence") or []
+        pages = ", ".join(f"{item['page_start']}–{item['page_end']}" for item in evidence)
+        rows.append({tx(language, "scenario"): source["title"], tx(language, "pages"): pages,
+                     "Revision": source["revision"], tx(language, "candidates"): candidates[0]["candidate"]["xosc"] if candidates else "—",
+                     tx(language, "decision"): _verdict_label(language, assessment["level"], assessment.get("review_kind", "")),
+                     tx(language, "cost"): assessment.get("estimated_change_cost")})
+    st.dataframe(rows, hide_index=True, width="stretch",
+                 column_order=[tx(language, "decision"), tx(language, "scenario"), tx(language, "pages"),
+                               tx(language, "candidates"), "Revision", tx(language, "cost")],
+                 column_config={tx(language, "decision"): st.column_config.TextColumn(width="medium")})
+    st.caption(" · ".join(f"{_verdict_label(language, 'review' if key in {'partial', 'undecidable', 'recall', 'standards'} else key, key)}: {count}"
+                          for key, count in trace["counts"].items()))
+
+
+def _document_matching(document, scenes, language: str):
+    with st.expander("整份 PDF 匹配与汇总" if language == "zh" else "Match entire PDF and summarize"):
+        catalog = st.session_state.get("catalog", [])
+        versions = st.session_state.get("asset_versions", {})
+        encoder = st.session_state.get("retrieval_encoder", "bge")
+        signature = batch_signature(document, scenes, catalog, versions, encoder)
+        st.caption(localized(language, f"匹配本文档全部 {len(scenes)} 个场景，使用当前编码器和资产库。",
+                         f"Match all {len(scenes)} document scenes using the current encoder and asset library."))
+        if st.button("批量匹配" if language == "zh" else "Match all scenes", key="match_document",
+                     disabled=not catalog or not scenes, icon=":material/search:"):
+            try:
+                with st.spinner("正在匹配整份 PDF…" if language == "zh" else "Matching PDF scenes…"):
+                    trace = match_document(document, scenes, _index_for(catalog, encoder), versions)
+                st.session_state.batch_assessment = (signature, trace)
+            except Exception as exc:  # noqa: BLE001
+                st.error(str(exc))
+        saved = st.session_state.get("batch_assessment")
+        if not saved or saved[0] != signature:
+            if saved:
+                st.info("场景、资产或编码器已改变，请重新匹配。" if language == "zh" else
+                        "Scenes, assets or encoder changed. Run matching again.")
+            return
+        trace = saved[1]
+        _batch_summary(trace, language)
+        left, right = st.columns(2)
+        with left:
+            st.download_button("下载汇总 JSON" if language == "zh" else "Download summary JSON",
+                               json.dumps(trace, ensure_ascii=False, indent=2), "openx-document.json", "application/json")
+        with right:
+            st.download_button("下载汇总 HTML" if language == "zh" else "Download summary HTML",
+                               render_report(trace), "openx-document.html", "text/html")
+        if st.button("保存汇总报告" if language == "zh" else "Save summary report", key="save_batch_report"):
+            try:
+                ProjectStore().save_batch(document.project_id, trace)
+                st.success("汇总已保存，候选资产版本已固定。" if language == "zh" else
+                           "Summary saved with pinned candidate asset versions.")
+            except Exception as exc:  # noqa: BLE001
+                st.error(str(exc))
+
+
 def _project_pdf_panel(language: str) -> ScenePackage | None:
     project_id = st.session_state.get("active_project_id")
     _panel(1, tx(language, "requirements"))
+    with st.expander(tx(language, "encoder"), expanded=False):
+        _encoder_control(language)
     if not project_id:
         st.info("请先在左侧创建或选择项目。" if language == "zh" else "Create or select a project in the sidebar first.")
         st.session_state.selected_stored_scene = None
@@ -290,8 +395,10 @@ def _project_pdf_panel(language: str) -> ScenePackage | None:
                                     format_func=lambda item: f"{document_by_id[item].filename} · {item[:8]} · {document_by_id[item].scene_count} scenes")
         scenes = store.scenes(project_id, selected_doc)
         document = document_by_id[selected_doc]
+        _document_matching(document, scenes, language)
         st.caption(document.extraction_engine)
-        if document.extraction_engine == "legacy-rules":
+        from openx_workbench.pdf_extraction import ENGINE_VERSION
+        if document.extraction_engine != ENGINE_VERSION:
             if st.button("用 V2 重新提取" if language == "zh" else "Re-extract with V2", key="reextract_pdf", icon=":material/refresh:"):
                 try:
                     with st.status("正在重新提取 / Re-extracting", expanded=True):
@@ -309,6 +416,11 @@ def _project_pdf_panel(language: str) -> ScenePackage | None:
                 issues = audit["structure_quality"]["issues"] + (audit["run"].get("validation") or {}).get("issues", [])
                 for issue in issues:
                     st.warning(issue.get("detail") or issue.get("message") or issue["code"])
+                for flag in audit.get("structure_flags", []):
+                    st.warning(f"P{flag['page_number']}: {flag['detail']}")
+                if audit.get("preprocessing"):
+                    st.caption("扫描页已在本机识别；请对照原文复核文字与表格。" if language == "zh" else
+                               "Scanned pages were recognized locally. Review text and tables against the source.")
                 st.download_button("下载解析记录" if language == "zh" else "Download extraction record",
                                    json.dumps(audit, ensure_ascii=False, indent=2), "extraction.json", "application/json")
             if not scenes:
@@ -352,6 +464,11 @@ def _project_pdf_panel(language: str) -> ScenePackage | None:
         st.json({"structure": package.structure, "classification": package.classification})
         for issue in package.extraction.get("validation", {}).get("issues", []):
             st.warning(issue.get("detail", issue.get("code", "")))
+        for flag in package.extraction.get("structure_flags", []):
+            st.warning(flag["detail"])
+        if any(block.get("source") == "ocr" for block in package.extraction.get("source_blocks", [])):
+            st.caption("包含本机 OCR 识别的证据，请对照原文复核。" if language == "zh" else
+                       "Includes locally recognized OCR evidence; review against the source.")
     if st.button("确认当前修订并入库" if language == "zh" else "Confirm and publish revision", key="publish_pdf_scene", icon=":material/library_add:"):
         store.publish_scene(selected)
         st.success("已保存到全局需求场景库，可在资产管理中查看。" if language == "zh" else
@@ -368,23 +485,25 @@ def _project_pdf_panel(language: str) -> ScenePackage | None:
         preferred_text = st.text_area("提取事实 / 解释" if language == "zh" else "Extracted facts / interpretation",
                                       value=package.preferred_text, height=115)
         fields = {}
-        for key, label in (("entities", "参与者 / Entities"), ("actions", "动作 / Actions"),
-                           ("triggers", "触发条件 / Triggers"), ("road_types", "道路 / Road types"),
-                           ("weather", "天气 / Weather"), ("time_of_day", "时间 / Time of day")):
-            fields[key] = st.text_input(label, value=", ".join(getattr(package, key)))
-        parameters = st.text_input("参数 JSON / Parameters JSON",
-                                   value=json.dumps(package.parameters, ensure_ascii=False))
         if package.structure:
             structured_json = st.text_area("结构 JSON / Structure JSON", value=json.dumps(package.structure, ensure_ascii=False, indent=2), height=180)
+        else:
+            for key, label in (("entities", "参与者 / Entities"), ("actions", "动作 / Actions"),
+                               ("triggers", "触发条件 / Triggers"), ("road_types", "道路 / Road types"),
+                               ("weather", "天气 / Weather"), ("time_of_day", "时间 / Time of day")):
+                fields[key] = st.text_input(label, value=", ".join(getattr(package, key)))
+            parameters = st.text_input("参数 JSON / Parameters JSON",
+                                       value=json.dumps(package.parameters, ensure_ascii=False))
         save = st.form_submit_button("保存事实修订" if language == "zh" else "Save fact revision")
     if save:
         try:
-            edits = {"title": title, "preferred_text": preferred_text,
-                     **{key: [part.strip() for part in value.split(",") if part.strip()]
-                        for key, value in fields.items()},
-                     "parameters": json.loads(parameters)}
+            edits = {"title": title, "preferred_text": preferred_text}
             if package.structure:
                 edits.update(structure=json.loads(structured_json))
+            else:
+                edits.update({key: [part.strip() for part in value.split(",") if part.strip()]
+                              for key, value in fields.items()})
+                edits["parameters"] = json.loads(parameters)
             store.revise_scene(project_id, selected.document.document_id, selected.scene_id, edits)
             st.session_state.retrieval_results = []
             st.rerun()
@@ -413,7 +532,7 @@ def _project_pdf_panel(language: str) -> ScenePackage | None:
 
 
 def _rows(results: list[RetrievalResult], language: str) -> list[dict[str, Any]]:
-    return [{"#": i, tx(language,"scenario"): r.asset.xosc_name, tx(language,"road"): r.asset.xodr_name, tx(language,"score"): f"{r.score:.2f}", tx(language,"vector"): f"{r.vector_score:.2f}", "Struct.": f"{r.scenario_score:.2f}", "Road": f"{r.road_score:.2f}", tx(language,"cost"): "—" if r.estimated_change_cost is None else f"{r.estimated_change_cost:g}", tx(language,"decision"): tx(language,r.reuse_level)} for i, r in enumerate(results, 1)]
+    return [{"#": i, tx(language,"scenario"): r.asset.xosc_name, tx(language,"road"): r.asset.xodr_name, tx(language,"score"): f"{r.score:.2f}", tx(language,"vector"): f"{r.vector_score:.2f}", "Struct.": f"{r.scenario_score:.2f}", "Road": f"{r.road_score:.2f}", tx(language,"cost"): "—" if r.estimated_change_cost is None else f"{r.estimated_change_cost:g}", tx(language,"decision"): _verdict_label(language, r.confirmation_level, r.confirmation_review_kind)} for i, r in enumerate(results, 1)]
 
 
 def _candidate_table(results: list[RetrievalResult], selected: int, language: str) -> str:
@@ -430,7 +549,7 @@ def _candidate_table(results: list[RetrievalResult], selected: int, language: st
                 f'<td class="desc">{safe(result.asset.title or "Parsed OpenX scenario")}</td>'
                 f'<td class="score">{result.vector_score:.2f}</td><td class="score">{result.scenario_score:.2f}</td>'
                 f'<td class="score">{result.road_score:.2f}</td><td class="score">{safe(cost)}</td>'
-                f'<td><span class="ow-match {safe(result.reuse_level)}">{safe(tx(language, result.reuse_level))}</span></td></tr>'
+                f'<td><span class="ow-match {safe(result.confirmation_level)}">{safe(_verdict_label(language, result.confirmation_level, result.confirmation_review_kind))}</span></td></tr>'
             )
         body = "".join(rows)
     return (
@@ -490,27 +609,38 @@ def _asset_summary(asset: OpenXAsset, language: str) -> None:
     )
 
 
-@st.fragment(run_every="1s")
-def _preview_live(preview: PreviewProcess, version: AssetVersion) -> None:
-    status = preview.status()
+def _preview_live(preview: PreviewProcess, version: AssetVersion, language: str, status: dict) -> None:
     store = AssetStore()
     current = next((item for item in store.versions()
                     if item.asset_id == version.asset_id and item.version_id == version.version_id), version)
     if status["state"] == "failed":
         if current.compatibility != "failed" or current.compatibility_detail != status["error"]:
             store.set_compatibility(version, "failed", status["error"])
-        st.error(status["error"])
+        st.error(localized(language, "这个场景暂时无法播放，请查看下方详情。", "This scenario could not play. See the details below."))
+        with st.expander(localized(language, "预览失败详情", "Preview failure details")):
+            st.code(status["error"], language=None)
+            try:
+                st.code((preview.workdir / "worker.log").read_text(errors="replace")[-4000:], language=None)
+            except OSError:
+                pass  # A finished worker may already have removed its staging files.
     elif status["state"] == "stopped":
-        st.warning(status["error"])
+        st.warning(localized(language, "预览已停止，可以重新播放。", "Preview stopped. You can play it again."))
     elif status["state"] == "finished" and not status["frames"]:
         if current.compatibility != "failed":
             store.set_compatibility(version, "failed", "esmini finished without rendered frames.")
-        st.error("esmini finished without rendered frames.")
+        st.error(localized(language, "预览结束，但没有生成画面。", "Preview ended without producing a frame."))
     else:
         if status["frames"]:
             if current.compatibility != "playable":
                 store.set_compatibility(version, "playable")
-        st.caption(f"Real esmini frames · {status['state']} · {status['frames']} frames")
+            st.markdown(
+                f'<img src="{safe(preview.url)}/stream?token={safe(preview.token)}" '
+                'alt="Live esmini simulation" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;display:block;background:#17242e">',
+                unsafe_allow_html=True,
+            )
+        st.caption(localized(language, "预览已结束，可以重新播放。", "Preview finished. You can play it again.")
+                   if status["state"] == "finished" else localized(language,
+                   f"正在播放 · 已生成 {status['frames']} 帧真实画面", f"Playing · {status['frames']} rendered frames"))
 
 
 def _preview_controls(version: AssetVersion, language: str, *, show_identity: bool = True) -> None:
@@ -520,37 +650,39 @@ def _preview_controls(version: AssetVersion, language: str, *, show_identity: bo
         st.caption(f"Asset {version.asset_id[:10]} · version {version.version_number} ({version.version_id[:10]}) · {version.compatibility}")
     if version.compatibility_detail:
         st.caption(version.compatibility_detail)
-    st.text_input(tx(language, "esmini_path"), key="esmini_path", placeholder="PATH / OPENX_ESMINI_PATH")
+    _preview_playback(version, language, preview_settings(language))
+
+
+@st.fragment(run_every="1s")
+def _preview_playback(version: AssetVersion, language: str, executable: Path | None) -> None:
+    preview = st.session_state.get("preview_process")
+    selected_preview = preview is not None and (preview.asset_id, preview.version_id) == (version.asset_id, version.version_id)
+    status = preview.status() if selected_preview else None
+    active = selected_preview and preview.process.poll() is None and status["state"] != "finished"
     run_col, stop_col = st.columns(2)
     with run_col:
-        if st.button(tx(language, "run_preview"), use_container_width=True, key="run_esmini_preview", icon=":material/play_arrow:"):
+        if st.button(tx(language, "run_preview"), width="stretch", key="run_esmini_preview", icon=":material/play_arrow:",
+                     type="primary", disabled=executable is None):
             previous = st.session_state.pop("preview_process", None)
             if previous:
                 previous.stop()
-            executable = find_esmini(st.session_state.get("esmini_path", ""))
-            if executable is None:
-                st.error("esmini.exe and esminiLib.dll were not found. Select the executable path above.")
-            else:
-                try:
+            try:
+                with st.spinner(localized(language, "正在启动仿真…", "Starting simulation…")):
                     st.session_state.preview_process = start_preview(AssetStore(), version, executable)
-                    st.rerun()
-                except Exception as exc:  # noqa: BLE001
-                    AssetStore().set_compatibility(version, "failed", str(exc))
-                    st.error(f"esmini preview failed: {exc}")
+                status = st.session_state.preview_process.status()
+            except Exception as exc:  # noqa: BLE001
+                AssetStore().set_compatibility(version, "failed", str(exc))
+                st.error(localized(language, "预览未能启动。请检查工具设置或场景依赖。", "Preview could not start. Check tool settings or scenario dependencies."))
+                with st.expander(localized(language, "预览失败详情", "Preview failure details")):
+                    st.code(str(exc), language=None)
     with stop_col:
-        if st.button(tx(language, "stop_preview"), use_container_width=True, key="stop_esmini_preview", icon=":material/stop:"):
+        if st.button(tx(language, "stop_preview"), width="stretch", key="stop_esmini_preview", icon=":material/stop:", disabled=not active):
             previous = st.session_state.pop("preview_process", None)
             if previous:
                 previous.stop()
-            st.rerun()
     preview = st.session_state.get("preview_process")
-    if preview and preview.version_id == version.version_id:
-        components.html(
-            f'<img src="{safe(preview.url)}/stream?token={safe(preview.token)}" '
-            'alt="Live esmini simulation" style="width:100%;height:auto;display:block;background:#17242e">',
-            height=370,
-        )
-        _preview_live(preview, version)
+    if preview and (preview.asset_id, preview.version_id) == (version.asset_id, version.version_id):
+        _preview_live(preview, version, language, status)
 
 
 @st.fragment(run_every="1s")
@@ -731,10 +863,7 @@ def _asset_panel(language: str, package: ScenePackage | None) -> None:
         if st.button("Reset", use_container_width=True):
             st.session_state.retrieval_results = []
             st.rerun()
-    with st.expander(tx(language, "encoder"), expanded=False):
-        st.selectbox(tx(language, "encoder"), ["hashing", "bge"],
-                     format_func=lambda value: tx(language, value), key="encoder_select")
-    encoder_name = st.session_state.get("encoder_select", "hashing")
+    encoder_name = st.session_state.get("retrieval_encoder", "bge")
     source_title = package.title if package else ("Ad-hoc text recall" if query_text.strip() else "No requirement selected")
     st.markdown(
         '<div class="ow-filter-row">'
@@ -808,25 +937,13 @@ def _asset_panel(language: str, package: ScenePackage | None) -> None:
 
 def _trace(result: RetrievalResult, package: ScenePackage | None) -> dict[str, Any]:
     version = st.session_state.get("asset_versions", {}).get(result.asset.asset_id)
-    source = asdict(package) if package else None
     stored_scene: StoredScene | None = st.session_state.get("selected_stored_scene")
-    if source and stored_scene and stored_scene.package is package:
-        source.update(document_id=stored_scene.document.document_id,
-                      pdf_sha256=stored_scene.document.sha256,
-                      scene_id=stored_scene.scene_id, revision=stored_scene.revision)
-    candidate = {"asset_id": version.asset_id if version else result.asset.asset_id,
-                 "version_id": version.version_id if version else None,
-                 "version_number": version.version_number if version else None,
-                 "content_sha256": version.content_sha256 if version else None,
-                 "title": result.asset.title, "xosc": result.asset.xosc_name,
-                 "xodr": result.asset.xodr_name}
-    return {"source": source, "candidate": candidate,
-            "scores": {"combined": result.score, "semantic": result.vector_score,
-                       "scenario": result.scenario_score, "road": result.road_score},
-            "reuse": {"level": result.reuse_level,
-                      "estimated_change_cost": result.estimated_change_cost,
-                      "reasons": list(result.reasons),
-                      "differences": [asdict(item) for item in result.differences]}}
+    identity = {}
+    if package and stored_scene and stored_scene.package is package:
+        identity = {"document_id": stored_scene.document.document_id,
+                    "pdf_sha256": stored_scene.document.sha256,
+                    "scene_id": stored_scene.scene_id, "revision": stored_scene.revision}
+    return build_trace(result, package, version, identity)
 
 
 def _decision_panel(language: str, package: ScenePackage | None) -> None:
@@ -848,7 +965,7 @@ def _decision_panel(language: str, package: ScenePackage | None) -> None:
     blocking = [item for item in result.differences if item.blocking]
     edits = [item for item in result.differences if not item.blocking]
     st.markdown(
-        f'<div class="ow-decision {result.reuse_level}"><div class="ow-verdict-kicker"><span class="ow-check"></span>{safe(tx(language,"decision"))}</div><div class="ow-decision-line"><h3>{safe(tx(language,result.reuse_level))}</h3><span class="ow-score">Confidence {result.score:.2f}</span></div><p>{safe(result.asset.xosc_name)} + {safe(result.asset.xodr_name)}</p></div>',
+        f'<div class="ow-decision {result.confirmation_level}"><div class="ow-verdict-kicker"><span class="ow-check"></span>{safe(tx(language,"decision"))}</div><div class="ow-decision-line"><h3>{safe(_verdict_label(language, result.confirmation_level, result.confirmation_review_kind))}</h3><span class="ow-score">Confidence {result.score:.2f}</span></div><p>{safe(result.asset.xosc_name)} + {safe(result.asset.xodr_name)}</p></div>',
         unsafe_allow_html=True,
     )
     source_title = package.title if package else "Ad-hoc text query"
@@ -859,8 +976,13 @@ def _decision_panel(language: str, package: ScenePackage | None) -> None:
     version = st.session_state.get("asset_versions", {}).get(result.asset.asset_id)
     if version and st.button("查看源文件" if language == "zh" else "View source files", key="view_source_files", icon=":material/code:"):
         source_files(version, language)
-    if result.reuse_level == "review":
-        st.info(tx(language, "structured_needed"))
+    from openx_workbench.validation_ui import validation_details
+    validation_details(result.asset.bundle, language)
+    if result.confirmation_level == "review":
+        st.info(_review_detail(language, result.confirmation_review_kind))
+        for difference in result.differences:
+            if not difference.verified:
+                st.warning(f"{difference.category}: {difference.requested} → {difference.action}")
     else:
         blocking_body = (
             f'<ul class="ow-list">{"".join(f"<li><strong>{safe(d.category)}</strong>: {safe(d.requested)} → {safe(d.action)}</li>" for d in blocking)}</ul>'
@@ -868,7 +990,7 @@ def _decision_panel(language: str, package: ScenePackage | None) -> None:
         )
         st.markdown(f'<div class="ow-section"><div class="ow-section-title">{safe(tx(language,"blocking"))} <span>{len(blocking)}</span></div>{blocking_body}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="ow-section"><div class="ow-section-title">{safe(tx(language,"matched"))}<span>{len(result.reasons)}</span></div>{_chips([reason.replace("_"," ") for reason in result.reasons])}</div>', unsafe_allow_html=True)
-    if result.reuse_level != "review":
+    if result.confirmation_level != "review":
         edits_body = (
             f'<ul class="ow-list">{"".join(f"<li><strong>{safe(d.category)}</strong>: {safe(d.requested)} → {safe(d.action)}</li>" for d in edits)}</ul>'
             if edits else f'<span class="ow-status good">{safe(tx(language,"none"))}</span>'
@@ -927,7 +1049,7 @@ def _decision_panel(language: str, package: ScenePackage | None) -> None:
         version = st.session_state.get("asset_versions", {}).get(result.asset.asset_id)
         if st.button("Save decision" if language == "en" else "保存复用决策",
                      use_container_width=True, key="save_reuse_decision", icon=":material/bookmark_add:",
-                     disabled=not project_id or version is None or package is None or result.reuse_level == "review",
+                     disabled=not project_id or version is None or package is None or result.confirmation_level == "review",
                      help="Create or select a project in the sidebar first."):
             try:
                 ProjectStore().save_decision(project_id, version, payload)
@@ -959,10 +1081,19 @@ def _saved_decisions(language: str) -> None:
             ), key=f"saved_report_{project_id}",
         )
         report = by_id[selected]
-        trace = report["trace"]
+        trace = checked_trace(report["trace"])
+        if trace.get("kind") == "batch_match":
+            _batch_summary(trace, language)
+            st.caption("保存时的快照，含待复核和无法判断项。" if language == "zh" else
+                       "Saved assessment snapshot, including review and undecidable cases.")
+            st.download_button("下载已保存 JSON" if language == "zh" else "Download saved JSON",
+                               json.dumps(trace, ensure_ascii=False, indent=2), f"openx-batch-{selected}.json", "application/json")
+            st.download_button("下载已保存 HTML" if language == "zh" else "Download saved HTML",
+                               render_report(trace), f"openx-batch-{selected}.html", "text/html")
+            return
         source = trace.get("source") or {}
         candidate = trace.get("candidate") or {}
-        st.write(tx(language, trace["reuse"]["level"]))
+        st.write(_verdict_label(language, trace["reuse"]["level"], trace["reuse"].get("review_kind", "")))
         st.caption(("保存时的快照；后续事实修订和资产更新不会改变这份报告。" if language == "zh"
                     else "Saved snapshot. Later fact revisions and asset updates do not change this report."))
         st.write(f"{source.get('title', '')} · revision {source.get('revision', '—')}")
@@ -1027,8 +1158,7 @@ def _text_search_page(language: str) -> None:
         return
     query = st.text_input("Search scenario assets" if language == "en" else "描述要查找的场景",
                           key="text_search_query")
-    encoder = st.selectbox(tx(language, "encoder"), ["hashing", "bge"],
-                           format_func=lambda value: tx(language, value), key="text_encoder")
+    encoder = _encoder_control(language)
     if st.button(tx(language, "search"), type="primary", disabled=not query.strip(), key="text_search_button", icon=":material/search:"):
         try:
             st.session_state.text_results = _index_for(catalog, encoder).search(

@@ -20,13 +20,14 @@ from .reuse import (
     change_cost,
     classify_reuse_level,
     compare_query_to_asset,
+    asset_structure_query,
 )
-from .scene_package import RetrievalQuery
+from .scene_package import RetrievalQuery, query_structure_text
 
 
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}|\d+(?:\.\d+)?")
-DEFAULT_BGE_MODEL = "BAAI/bge-small-zh-v1.5"
-INDEX_SCHEMA_VERSION = 1
+DEFAULT_BGE_MODEL = "BAAI/bge-m3"
+INDEX_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,36 @@ class RetrievalResult:
     reasons: tuple[str, ...]
     differences: tuple[ReuseDifference, ...] = ()
     estimated_change_cost: float | None = None
+    review_kind: str = ""
+
+    @property
+    def standard_checks(self):
+        from .schema_validation import standard_gate
+        return standard_gate(self.asset.bundle.validation)
+
+    @property
+    def confirmation_level(self):
+        return "review" if self.reuse_level == "direct" and not self.standard_checks["passed"] else self.reuse_level
+
+    @property
+    def confirmation_review_kind(self):
+        return "standards" if self.confirmation_level != self.reuse_level else self.review_kind
+
+
+def review_kind(query: RetrievalQuery | None, candidate: RetrievalQuery) -> str:
+    """Describe evidence coverage without changing the four verdicts or ranking."""
+    if query is None:
+        return "recall"
+    if query.structured:
+        participants_known = bool(query.participant_signatures and candidate.participant_signatures) and all(
+            "unknown" not in signature for signature in (*query.participant_signatures, *candidate.participant_signatures)
+        )
+        ego_known = bool(query.ego_actions and candidate.ego_actions) and "unknown" not in (
+            query.ego_actions | candidate.ego_actions
+        )
+        core_known = participants_known if query.participant_signatures else ego_known
+        return "partial" if core_known else "undecidable"
+    return "partial" if query.entity_kinds or query.action_kinds else "undecidable"
 
 
 def asset_text(asset: OpenXAsset) -> str:
@@ -47,6 +78,7 @@ def asset_text(asset: OpenXAsset) -> str:
     road = asset.bundle.road
     parts = [
         asset.title,
+        " ".join(str(value) for _, value in sorted(asset.classification.items())),
         scenario.description or "",
         " ".join(entity.name for entity in scenario.entities),
         " ".join(filter(None, (entity.category for entity in scenario.entities))),
@@ -54,10 +86,34 @@ def asset_text(asset: OpenXAsset) -> str:
         " ".join(trigger.kind for trigger in scenario.triggers),
         f"roads {len(road.road_ids)} length {road.total_length} lanes {road.lane_count}",
         " ".join(f"lane_{name} {count}" for name, count in road.lane_types.items()),
-        " ".join(f"geometry_{name} {count}" for name, count in road.geometry_types.items()),
+        " ".join(
+            f"geometry_{name} {count}" for name, count in road.geometry_types.items()
+        ),
         f"junctions {road.junction_count} signals {road.signal_count} objects {road.object_count}",
     ]
     return " ".join(parts)
+
+
+def asset_structure_text(asset: OpenXAsset) -> str:
+    return query_structure_text(asset_structure_query(asset))
+
+
+def catalog_fingerprint(assets: list[OpenXAsset]) -> str:
+    # IDs identify immutable files; reviewed labels and parser semantics also
+    # affect recall and must invalidate both disk and session caches.
+    content = [
+        (
+            asset.asset_id,
+            asset_text(asset),
+            asset_structure_text(asset),
+            {key: value for key, value in asset.bundle.to_dict().items() if key != "validation"},
+            asset.bundle.validation,
+        )
+        for asset in assets
+    ]
+    return hashlib.sha256(
+        json.dumps(content, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
 
 
 class HashingEncoder:
@@ -95,20 +151,39 @@ class SentenceTransformerEncoder:
             raise RuntimeError(
                 "Semantic retrieval requires: pip install 'openx-scenario-workbench[semantic]'"
             ) from exc
-        self.model = SentenceTransformer(model_name)
+        except OSError as exc:
+            raise RuntimeError(
+                "BGE-M3 runtime could not load. Check the PyTorch installation; see docs/REUSE_ALIGNMENT.md."
+            ) from exc
+        try:
+            self.model = SentenceTransformer(model_name)
+        except (OSError, RuntimeError) as exc:
+            raise RuntimeError("BGE-M3 could not load. Check its local cache or download connection. "
+                               "You can explicitly select the Hashing baseline in retrieval settings.") from exc
         self.encoder_id = f"sentence-transformers:{model_name}"
 
     def encode(self, text: str) -> tuple[float, ...]:
         return self.encode_many([text])[0]
 
     def encode_many(self, texts: list[str]) -> list[tuple[float, ...]]:
-        vectors = self.model.encode(
-            texts,
-            batch_size=64,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-        return [tuple(float(value) for value in vector) for vector in vectors]
+        if not texts:
+            return []
+        unique_texts = list(dict.fromkeys(texts))
+        encoded = {}
+        # M3 pads a batch to its longest input. Real SIM assets can contain
+        # thousands of tokens; keep those out of the short-text batch so one
+        # complex case cannot exhaust desktop memory. Preserve complete text.
+        for lower, upper, batch_size in ((0, 512, 64), (512, 2048, 8), (2048, math.inf, 1)):
+            group = [text for text in unique_texts if lower < len(text) <= upper or (lower == 0 and not text)]
+            if not group:
+                continue
+            vectors = self.model.encode(group, batch_size=batch_size,
+                                        normalize_embeddings=True, show_progress_bar=False)
+            if len(vectors) != len(group):
+                raise ValueError("The embedding model returned an unexpected vector count.")
+            encoded.update({text: tuple(float(value) for value in vector)
+                            for text, vector in zip(group, vectors)})
+        return [encoded[text] for text in texts]
 
 
 def build_encoder(name: str) -> TextEncoder:
@@ -120,47 +195,92 @@ def build_encoder(name: str) -> TextEncoder:
 
 
 class OpenXIndex:
-    def __init__(self, assets: list[OpenXAsset], encoder: TextEncoder | None = None) -> None:
+    def __init__(
+        self, assets: list[OpenXAsset], encoder: TextEncoder | None = None
+    ) -> None:
         self.assets = assets
         self.encoder = encoder or HashingEncoder()
+        self.structures = [asset_structure_query(asset) for asset in assets]
+        self.fingerprint = catalog_fingerprint(assets)
         self.vectors = self.encoder.encode_many([asset_text(asset) for asset in assets])
+        self.structure_vectors = self.encoder.encode_many(
+            [query_structure_text(structure) for structure in self.structures]
+        )
         self._build_recall()
 
     def _build_recall(self) -> None:
-        self._faiss = None
-        self.recall_backend = "exact"
-        if not self.vectors:
-            return
+        if (
+            self.vectors
+            and self.structure_vectors
+            and len(self.vectors[0]) != len(self.structure_vectors[0])
+        ):
+            raise ValueError("Name and structure vector dimensions differ.")
+        self._faiss = self._vector_index(self.vectors)
+        self._structure_faiss = self._vector_index(self.structure_vectors)
+        self.recall_backend = "faiss-flat-ip" if self._faiss is not None else "exact"
+
+    def _vector_index(self, vectors):
+        if not vectors:
+            if self.assets:
+                raise ValueError("The stored vectors do not match the asset catalog.")
+            return None
+        dimensions = len(vectors[0])
+        if (
+            not dimensions
+            or len(vectors) != len(self.assets)
+            or any(
+                len(row) != dimensions or any(not math.isfinite(value) for value in row)
+                for row in vectors
+            )
+        ):
+            raise ValueError("The stored vectors do not match the asset catalog.")
         try:
             import faiss
             import numpy as np
         except ImportError:
-            return
-        matrix = np.asarray(self.vectors, dtype="float32")
+            return None
+        matrix = np.asarray(vectors, dtype="float32")
         if matrix.ndim != 2 or matrix.shape[0] != len(self.assets):
             raise ValueError("The stored vectors do not match the asset catalog.")
         index = faiss.IndexFlatIP(matrix.shape[1])
         index.add(matrix)
-        self._faiss = index
-        self.recall_backend = "faiss-flat-ip"
+        return index
 
-    def _recall(self, query_vector: tuple[float, ...], count: int) -> list[tuple[int, float]]:
-        if self._faiss is not None:
+    def _recall(
+        self, query_vector: tuple[float, ...], count: int, *, structure=False
+    ) -> list[tuple[int, float]]:
+        vectors = self.structure_vectors if structure else self.vectors
+        index = self._structure_faiss if structure else self._faiss
+        if vectors and len(query_vector) != len(vectors[0]):
+            raise ValueError("Query and index vector dimensions differ.")
+        if index is not None:
             import numpy as np
+
             vector = np.asarray([query_vector], dtype="float32")
-            scores, indices = self._faiss.search(vector, count)
-            return [(int(index), float(score)) for index, score in zip(indices[0], scores[0])
-                    if index >= 0]
-        ranked = [(index, sum(left * right for left, right in zip(query_vector, vector)))
-                  for index, vector in enumerate(self.vectors)]
+            scores, indices = index.search(vector, count)
+            return [
+                (int(index), float(score))
+                for index, score in zip(indices[0], scores[0])
+                if index >= 0
+            ]
+        ranked = [
+            (index, sum(left * right for left, right in zip(query_vector, vector)))
+            for index, vector in enumerate(vectors)
+        ]
         return sorted(ranked, key=lambda item: (-item[1], item[0]))[:count]
 
     def save(self, path: Path) -> None:
+        if catalog_fingerprint(self.assets) != self.fingerprint:
+            raise ValueError(
+                "The asset facts or classifications changed; rebuild the index."
+            )
         payload = {
             "schema_version": INDEX_SCHEMA_VERSION,
             "encoder_id": self.encoder.encoder_id,
             "asset_ids": [asset.asset_id for asset in self.assets],
+            "catalog_fingerprint": self.fingerprint,
             "vectors": self.vectors,
+            "structure_vectors": self.structure_vectors,
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
@@ -180,10 +300,21 @@ class OpenXIndex:
             raise ValueError("The saved index uses a different encoder.")
         if payload.get("asset_ids") != [asset.asset_id for asset in assets]:
             raise ValueError("The asset catalog changed; rebuild the index.")
+        if payload.get("catalog_fingerprint") != catalog_fingerprint(assets):
+            raise ValueError(
+                "The asset facts or classifications changed; rebuild the index."
+            )
         index = cls.__new__(cls)
         index.assets = assets
         index.encoder = selected_encoder
-        index.vectors = [tuple(float(value) for value in row) for row in payload["vectors"]]
+        index.fingerprint = payload["catalog_fingerprint"]
+        index.structures = [asset_structure_query(asset) for asset in assets]
+        index.vectors = [
+            tuple(float(value) for value in row) for row in payload["vectors"]
+        ]
+        index.structure_vectors = [
+            tuple(float(value) for value in row) for row in payload["structure_vectors"]
+        ]
         index._build_recall()
         return index
 
@@ -201,25 +332,68 @@ class OpenXIndex:
         if query is not None:
             text = query.text
         query_vector = self.encoder.encode(text)
+        structure_vector = self.encoder.encode(query_structure_text(query)) if query else None
+        return self._search_vectors(query_vector, structure_vector, query, top_k)
+
+    def search_many(self, queries: list[RetrievalQuery], top_k: int = 5) -> list[list[RetrievalResult]]:
+        if top_k <= 0 or not self.assets:
+            return [[] for _ in queries]
+        texts = [text for query in queries for text in (query.text, query_structure_text(query))]
+        vectors = self.encoder.encode_many(texts)
+        if len(vectors) != len(texts):
+            raise ValueError("The embedding model returned an unexpected vector count.")
+        return [self._search_vectors(vectors[2 * i], vectors[2 * i + 1], query, top_k)
+                for i, query in enumerate(queries)]
+
+    def _search_vectors(self, query_vector, structure_vector, query, top_k):
         ranked: list[RetrievalResult] = []
-        recall_size = min(len(self.assets), max(100, top_k * 20)) if query else min(len(self.assets), top_k)
+        recall_size = (
+            min(len(self.assets), max(100, top_k * 20))
+            if query
+            else min(len(self.assets), top_k)
+        )
         recalled = dict(self._recall(query_vector, recall_size))
+        if query:
+            for index, _ in self._recall(
+                structure_vector, min(len(self.assets), 50), structure=True
+            ):
+                if index not in recalled:
+                    recalled[index] = sum(
+                        left * right
+                        for left, right in zip(query_vector, self.vectors[index])
+                    )
         differences_by_index = {}
         if query:
             # Structural compatibility is the primary ordering contract. Include
             # its best buckets even when semantic recall misses them, keeping
             # ties so semantic scores can still decide within a structural bucket.
-            differences_by_index = {index: compare_query_to_asset(query, asset)
-                                    for index, asset in enumerate(self.assets)}
-            structural_keys = {index: (sum(item.blocking for item in differences), change_cost(differences))
-                               for index, differences in differences_by_index.items()}
+            differences_by_index = {
+                index: compare_query_to_asset(
+                    query, asset, candidate_structure=self.structures[index]
+                )
+                for index, asset in enumerate(self.assets)
+            }
+            structural_keys = {
+                index: (
+                    sum(item.blocking for item in differences),
+                    change_cost(differences),
+                )
+                for index, differences in differences_by_index.items()
+            }
             cutoff = sorted(structural_keys.values())[min(top_k, len(self.assets)) - 1]
             for index, key in structural_keys.items():
                 if key <= cutoff and index not in recalled:
-                    recalled[index] = sum(left * right for left, right in zip(query_vector, self.vectors[index]))
+                    recalled[index] = sum(
+                        left * right
+                        for left, right in zip(query_vector, self.vectors[index])
+                    )
         for asset_index, vector_score in recalled.items():
             asset = self.assets[asset_index]
-            scenario_score = _scenario_query_score(query, asset.bundle) if query else 0.0
+            scenario_score = (
+                _scenario_query_score(query, asset.bundle, self.structures[asset_index])
+                if query
+                else 0.0
+            )
             road_score = _road_query_score(query, asset.bundle) if query else 0.0
             if query:
                 score = 0.55 * vector_score + 0.30 * scenario_score + 0.15 * road_score
@@ -227,7 +401,9 @@ class OpenXIndex:
                 score = vector_score
             score = round(max(0.0, min(1.0, score)), 4)
             differences = differences_by_index[asset_index] if query else ()
-            reuse_level = classify_reuse_level(differences) if query is not None else "review"
+            reuse_level = (
+                classify_reuse_level(differences) if query is not None else "review"
+            )
             ranked.append(
                 RetrievalResult(
                     asset=asset,
@@ -236,8 +412,9 @@ class OpenXIndex:
                     scenario_score=round(scenario_score, 4),
                     road_score=round(road_score, 4),
                     reuse_level=reuse_level,
-                    reasons=_reasons(query, asset.bundle),
+                    reasons=_reasons(query, asset.bundle, self.structures[asset_index]),
                     differences=differences,
+                    review_kind=review_kind(query, self.structures[asset_index]) if reuse_level == "review" else "",
                     estimated_change_cost=(
                         change_cost(differences) if query is not None else None
                     ),
@@ -291,7 +468,27 @@ def _overlap(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left)
 
 
-def _scenario_query_score(query: RetrievalQuery, candidate: ParseBundle) -> float:
+def _scenario_query_score(
+    query: RetrievalQuery,
+    candidate: ParseBundle,
+    structure: RetrievalQuery | None = None,
+) -> float:
+    if query.structured and structure is not None:
+        comparisons = [
+            (set(query.participant_signatures), set(structure.participant_signatures)),
+            (set(query.ego_actions), set(structure.ego_actions)),
+            (set(query.trigger_kinds), set(structure.trigger_kinds)),
+            (
+                {query.tested_function} if query.tested_function else set(),
+                {structure.tested_function} if structure.tested_function else set(),
+            ),
+        ]
+        active = [
+            _overlap(requested, actual)
+            for requested, actual in comparisons
+            if requested
+        ]
+        return sum(active) / len(active) if active else 0.0
     entities, actions, triggers, _ = bundle_features(candidate)
     families = bundle_scenario_families(candidate)
     participant_signatures = {
@@ -306,17 +503,21 @@ def _scenario_query_score(query: RetrievalQuery, candidate: ParseBundle) -> floa
         _overlap(set(query.action_kinds), actions),
         _overlap(set(query.trigger_kinds), triggers),
     ]
-    active = [score for requested, score in zip(
-        (
-            query.scenario_families,
-            query.participant_signatures,
-            query.participant_relations,
-            query.entity_kinds,
-            query.action_kinds,
-            query.trigger_kinds,
-        ),
-        comparisons,
-    ) if requested]
+    active = [
+        score
+        for requested, score in zip(
+            (
+                query.scenario_families,
+                query.participant_signatures,
+                query.participant_relations,
+                query.entity_kinds,
+                query.action_kinds,
+                query.trigger_kinds,
+            ),
+            comparisons,
+        )
+        if requested
+    ]
     return sum(active) / len(active) if active else 0.0
 
 
@@ -327,11 +528,15 @@ def _road_query_score(query: RetrievalQuery, candidate: ParseBundle) -> float:
     return _overlap(set(query.road_features), candidate_features)
 
 
-def _reasons(query: RetrievalQuery | None, candidate: ParseBundle) -> tuple[str, ...]:
+def _reasons(
+    query: RetrievalQuery | None,
+    candidate: ParseBundle,
+    structure: RetrievalQuery | None = None,
+) -> tuple[str, ...]:
     if query is None:
         return ("vector_text_match",)
     reasons = []
-    if _scenario_query_score(query, candidate) >= 0.66:
+    if _scenario_query_score(query, candidate, structure) >= 0.66:
         reasons.append("scenario_structure_match")
     if _road_query_score(query, candidate) >= 0.75:
         reasons.append("road_structure_match")

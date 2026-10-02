@@ -1,0 +1,35 @@
+{
+  "encoder": "sentence-transformers:BAAI/bge-m3",
+  "dimensions": 1024,
+  "recall_backend": "faiss-flat-ip",
+  "load_and_build_seconds": 35.399,
+  "batch_seconds": 1.518,
+  "scenes": 3,
+  "counts": {
+    "direct": 1,
+    "partial": 1,
+    "undecidable": 1
+  },
+  "batch_matches_single": true,
+  "saved_snapshot_roundtrip": true,
+  "asset_versions": 1,
+  "network_disabled": true,
+  "private_data_used": false,
+  "test_count": 207,
+  "scope": "Three authored PDF scenes, one authored parser asset; not a production accuracy benchmark",
+  "ui_default": "BAAI/bge-m3",
+  "parameter_expression_scope": "bounded numeric arithmetic and lexical aliases",
+  "model_weights_bundled": false,
+  "ui_checks": {
+    "desktop_width": 1280,
+    "narrow_width": 390,
+    "narrow_document_width": 390,
+    "dark_caption_color": "rgb(167, 187, 205)",
+    "caption_opacity": 1,
+    "verdict_column_visible_first": true,
+    "batch_run_save_reopen_verified": true
+  },
+  "live_service_health": "ok",
+  "existing_assets_preserved": 21,
+  "existing_versions_preserved": 21
+}

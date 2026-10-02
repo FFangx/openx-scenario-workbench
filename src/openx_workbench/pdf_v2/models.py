@@ -58,6 +58,7 @@ class ParsedDocument(BaseModel):
     blocks: tuple[ParsedBlock, ...]
 
     structure_flags: tuple[StructureFlag, ...] = ()
+    preprocessing: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_blocks(self) -> "ParsedDocument":

@@ -1,9 +1,6 @@
 """Adapted ScenarioManager V2 core; see docs/PDF_MIGRATION.md."""
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
 from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field

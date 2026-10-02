@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import subprocess
 import sys
 import threading
@@ -87,6 +86,8 @@ def test_real_service_health_restart_and_stop(tmp_path, monkeypatch):
 
 def test_control_requires_token_and_duplicate_open_reuses_service(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path / "data"))
+    revision = ["authored-v1"]
+    monkeypatch.setattr("openx_workbench.launcher.source_revision", lambda: revision[0])
     launcher = Launcher(tmp_path, no_browser=True)
     thread = threading.Thread(target=launcher.run, kwargs={"headless": True})
     thread.start()
@@ -96,6 +97,14 @@ def test_control_requires_token_and_duplicate_open_reuses_service(tmp_path, monk
             time.sleep(0.1)
         assert launcher.service.ready()
         process = launcher.service.process
+        launcher.open()
+        assert launcher.service.process is process
+        revision[0] = "authored-v2"
+        launcher.open()
+        assert process.poll() is not None
+        assert launcher.service.process is not process
+        process = launcher.service.process
+        assert not launcher.service.needs_restart()
         url = f"http://127.0.0.1:{launcher.server.server_port}/stop"
         with pytest.raises(HTTPError) as error:
             urlopen(Request(url, data=b"", method="POST"), timeout=2)

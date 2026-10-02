@@ -8,7 +8,6 @@ from openx_workbench.llm_service import ModelClient, ModelConfig, ModelError, ba
 
 
 def test_config_roundtrip_without_plaintext_key(tmp_path):
-    import os
     config = ModelConfig("https://example.org/v1/chat/completions", "chosen-model", "secret-test-key")
     save_config(config, tmp_path)
     loaded = load_config(tmp_path)
@@ -51,3 +50,13 @@ def test_service_errors_do_not_echo_secret_or_remote_body():
 def test_http_redirect_cannot_forward_credentials():
     from openx_workbench.llm_service import NoRedirect
     assert NoRedirect().redirect_request(None, None, 302, "", {}, "https://elsewhere.example") is None
+
+
+@pytest.mark.parametrize("response", [{"error": {"message": "secret-key"}}, {},
+                                      {"choices": []}, {"choices": [None]}])
+def test_http_200_error_or_missing_completion_is_a_sanitized_service_failure(response):
+    client = ModelClient(ModelConfig(api_key="secret-key"),
+                         opener=lambda request, timeout: io.BytesIO(json.dumps(response).encode()))
+    with pytest.raises(ModelError, match="completion choices") as error:
+        client.complete({"messages": []})
+    assert "secret-key" not in str(error.value)

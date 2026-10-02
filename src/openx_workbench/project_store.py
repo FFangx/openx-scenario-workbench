@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .asset_store import AssetStore, AssetVersion
+from .store_lock import store_transaction
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,14 +65,39 @@ class ProjectStore:
         candidate = trace.get("candidate") or {}
         if candidate.get("asset_id") != version.asset_id or candidate.get("version_id") != version.version_id:
             raise ValueError("Decision and selected asset version differ.")
+        self._check_direct(trace, version)
+        return self._save_report(project_id, trace, [version],
+                                 asset_id=version.asset_id, version_id=version.version_id)
+
+    def _check_direct(self, trace, version):
+        if trace.get("reuse", {}).get("level") == "direct":
+            from .schema_validation import standard_gate
+            trusted = next((v for v in self.assets.versions()
+                            if v.asset_id == version.asset_id and v.version_id == version.version_id), None)
+            if trusted is None or not standard_gate(self.assets.load_asset(trusted).bundle.validation)["passed"]:
+                raise ValueError("文件标准检查未通过或未完成，不能确认直接复用 / Standard checks must pass before confirming direct reuse.")
+
+    def _save_report(self, project_id, trace, versions, **metadata) -> Path:
         report_id = uuid.uuid4().hex
         report = {"report_id": report_id, "project_id": project_id,
                   "saved_at": datetime.now(timezone.utc).isoformat(),
-                  "asset_id": version.asset_id, "version_id": version.version_id,
-                  "trace": trace}
-        self.assets.pin_version(f"report:{report_id}", version)
+                  **metadata, "trace": trace}
         path = self.root / project_id / "reports" / f"{report_id}.json"
-        self._write_json(path, report)
+        json.dumps(report, allow_nan=False)
+        pinned = []
+        # Pin first under the deletion guard. A crash may conservatively leave
+        # an orphan pin, but never a report referring to a deleted version.
+        with store_transaction(self.assets.root):
+            try:
+                for version in versions:
+                    self.assets.pin_version(f"report:{report_id}", version)
+                    pinned.append(version)
+                self._write_json(path, report)
+            except Exception:
+                if not path.is_file():
+                    for version in pinned:
+                        self.assets.release_reference(f"report:{report_id}", version)
+                raise
         return path
 
     def reports(self, project_id: str) -> list[dict[str, Any]]:
@@ -80,6 +106,29 @@ class ProjectStore:
             raise ValueError("Unknown project ID.")
         return sorted((json.loads(path.read_text(encoding="utf-8")) for path in folder.glob("*.json")),
                       key=lambda item: item["saved_at"], reverse=True)
+
+    def save_batch(self, project_id: str, trace: dict[str, Any]) -> Path:
+        if not any(item.project_id == project_id for item in self.projects()):
+            raise ValueError("Select an existing project before saving.")
+        if trace.get("kind") != "batch_match":
+            raise ValueError("Expected a document-wide assessment.")
+        with store_transaction(self.assets.root):
+            versions = {version.version_id: version for version in self.assets.versions()}
+            selected = {}
+            for entry in trace.get("entries", []):
+                if entry.get("assessment", {}).get("level") == "direct" and not entry.get("candidates"):
+                    raise ValueError("Direct reuse requires a checked asset candidate.")
+                for index, candidate_trace in enumerate(entry.get("candidates", [])):
+                    candidate = candidate_trace["candidate"]
+                    version = versions.get(candidate.get("version_id"))
+                    if version is None or version.asset_id != candidate.get("asset_id") or version.content_sha256 != candidate.get("content_sha256"):
+                        raise ValueError("Batch contains an unavailable or mismatched asset version.")
+                    direct = candidate_trace.get("reuse", {}).get("level") == "direct" or (
+                        index == 0 and entry.get("assessment", {}).get("level") == "direct")
+                    if direct:
+                        self._check_direct({"reuse": {"level": "direct"}}, version)
+                    selected[version.version_id] = version
+            return self._save_report(project_id, trace, list(selected.values()))
 
     @staticmethod
     def _write_json(path: Path, value: dict[str, Any]) -> None:

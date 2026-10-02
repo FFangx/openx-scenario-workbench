@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSCENARIO>
+  <FileHeader revMajor="1" revMinor="2" description="Opaque 005" author="Test"/>
+  <RoadNetwork><LogicFile filepath="minimal.xodr"/></RoadNetwork>
+  <Entities>
+    <ScenarioObject name="Ego"><Vehicle vehicleCategory="car"/></ScenarioObject>
+    <ScenarioObject name="Target"><Vehicle vehicleCategory="car"/></ScenarioObject>
+  </Entities><Environment name="Authored"><TimeOfDay dateTime="2026-01-01T12:00:00"/><Weather cloudState="free"><Precipitation precipitationType="dry" intensity="0"/><Fog visualRange="1200"/></Weather></Environment>
+  <Storyboard>
+    <Init><Actions><Private entityRef="Ego"><PrivateAction><TeleportAction><Position><WorldPosition x="0" y="0" h="0"/></Position></TeleportAction></PrivateAction></Private><Private entityRef="Ego"><PrivateAction><LongitudinalAction><SpeedAction><SpeedActionTarget><AbsoluteTargetSpeed value="10"/></SpeedActionTarget></SpeedAction></LongitudinalAction></PrivateAction></Private>
+    <Private entityRef="Target"><PrivateAction><TeleportAction><Position><WorldPosition x="20" y="0" h="0"/></Position></TeleportAction></PrivateAction><PrivateAction><LongitudinalAction><SpeedAction><SpeedActionTarget><AbsoluteTargetSpeed value="10"/></SpeedActionTarget></SpeedAction></LongitudinalAction></PrivateAction></Private></Actions></Init>
+    <Story name="Story"><Act name="Act"><ManeuverGroup name="Group" maximumExecutionCount="1"><Actors selectTriggeringEntities="false"><EntityRef entityRef="Target"/></Actors><Maneuver name="Maneuver"><Event name="Event" priority="overwrite"><Action name="Accelerate"><PrivateAction><LongitudinalAction><SpeedAction><SpeedActionTarget><AbsoluteTargetSpeed value="10"/></SpeedActionTarget></SpeedAction></LongitudinalAction></PrivateAction></Action><StartTrigger><ConditionGroup><Condition name="start" delay="0" conditionEdge="rising"><ByValueCondition><SimulationTimeCondition value="1" rule="greaterThan"/></ByValueCondition></Condition></ConditionGroup></StartTrigger><Action name="Additional"><PrivateAction><LateralAction><LaneChangeAction/></LateralAction></PrivateAction></Action></Event></Maneuver></ManeuverGroup><StartTrigger/></Act></Story>
+  </Storyboard>
+</OpenSCENARIO>

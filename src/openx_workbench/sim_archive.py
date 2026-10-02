@@ -9,6 +9,9 @@ from xml.etree import ElementTree as ET
 
 from .catalog import AssetFile
 
+SCENARIO_ROOT_ORDER = ("FileHeader", "ParameterDeclarations", "VariableDeclarations",
+                       "CatalogLocations", "RoadNetwork", "Entities", "Storyboard")
+
 
 @dataclass(frozen=True, slots=True)
 class SimImportReport:
@@ -116,8 +119,12 @@ def _logical_road_name(path: PurePosixPath) -> str:
 
 def _osc_json_to_xml(open_scenario: dict, case_title: str) -> bytes:
     root = ET.Element("OpenSCENARIO")
-    for tag, value in open_scenario.items():
-        _append_xml(root, str(tag), value)
+    # JSON object order is not semantic, while the scenario's XML root is an
+    # ordered sequence. Parameter editing in 51sim can append declarations last.
+    order = SCENARIO_ROOT_ORDER
+    for tag in (*order, *(key for key in open_scenario if key not in order)):
+        if tag in open_scenario:
+            _append_xml(root, str(tag), open_scenario[tag])
     header = root.find("FileHeader")
     if header is None:
         header = ET.Element("FileHeader")
@@ -141,6 +148,10 @@ def _append_xml(parent: ET.Element, tag: str, value: object) -> None:
     for key, child in value.items():
         if isinstance(child, (dict, list)):
             _append_xml(node, str(key), child)
+        elif tag == "CustomCommandAction" and key == "content" and child is not None:
+            # The SIM JSON stores command text as a field; OpenSCENARIO's
+            # simpleContent type carries it as element text, not an attribute.
+            node.text = _scalar(child)
         elif child is not None:
             node.set(str(key), _scalar(child))
 

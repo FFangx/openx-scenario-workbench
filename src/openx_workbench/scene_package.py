@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import json
+import math
 from dataclasses import dataclass, field
 
 
@@ -44,6 +46,222 @@ class RetrievalQuery:
     road_features: frozenset[str] = frozenset()
     parameters: tuple[tuple[str, float], ...] = ()
     evidence: tuple[EvidenceRef, ...] = ()
+    structured: bool = False
+    tested_function: str = ""
+    ego_actions: frozenset[str] = frozenset()
+    target_speeds_kph: tuple[float, ...] = ()
+    environment: tuple[tuple[str, str], ...] = ()
+    unverified: tuple[str, ...] = ()
+
+
+STRUCTURE_KINDS = {
+    "乘用车": "vehicle",
+    "卡车": "truck",
+    "客车": "bus",
+    "厢式车": "van",
+    "挂车": "trailer",
+    "摩托车": "motorcycle",
+    "两轮车": "cyclist",
+    "三轮车": "tricycle",
+    "行人": "pedestrian",
+    "障碍物": "obstacle",
+    "未知": "unknown",
+}
+STRUCTURE_ACTIONS = {
+    "静止": "static",
+    "匀速行驶": "cruise",
+    "变速": "speed_change",
+    "刹停": "stop",
+    "变道": "lane_change",
+    "定距跟车": "following",
+    "倒车": "reverse",
+    "被测系统控制": "system_control",
+    "未知": "unknown",
+}
+STRUCTURE_BEARINGS = dict(
+    zip(
+        (
+            "正前方",
+            "正后方",
+            "并排同车道",
+            "左前方",
+            "左后方",
+            "左并排",
+            "右前方",
+            "右后方",
+            "右并排",
+            "未知方位",
+        ),
+        (
+            "front_same_lane",
+            "rear_same_lane",
+            "alongside_same_lane",
+            "front_left",
+            "rear_left",
+            "alongside_left",
+            "front_right",
+            "rear_right",
+            "alongside_right",
+            "unknown",
+        ),
+    )
+)
+STRUCTURE_FACING = {
+    "同向": "same",
+    "对向": "opposite",
+    "横向": "crossing",
+    "未知": "unknown",
+}
+STRUCTURE_ROADS = {
+    "直道": "straight",
+    "弯道": "curve",
+    "交叉口": "junction",
+    "高速路": "motorway",
+}
+STRUCTURE_TRIGGERS = {
+    "TTC": "ttc",
+    "相对距离": "distance",
+    "绝对距离": "distance",
+    "车头时距": "headway",
+}
+
+
+def query_structure_text(query: RetrievalQuery) -> str:
+    """Name-free canonical text shared by requirement and asset recall routes."""
+    return json.dumps(
+        {
+            "function": query.tested_function,
+            "participants": sorted(query.participant_signatures),
+            "ego_actions": sorted(query.ego_actions),
+            "road": sorted(query.road_features),
+            "triggers": sorted(query.trigger_kinds),
+            "params": query.parameters,
+            "target_speeds": query.target_speeds_kph,
+            "environment": query.environment,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def _structured_query(package: ScenePackage) -> RetrievalQuery:
+    from .pdf_v2.scene_schemas import SceneStructure
+
+    structure = SceneStructure.model_validate(package.structure).model_dump(mode="json")
+    params = structure["params"]
+    for key, value in params.items():
+        numbers = value if key == "target_speeds_kph" else [value]
+        if any(
+            isinstance(number, (int, float))
+            and (not math.isfinite(number) or number < 0)
+            for number in numbers
+        ):
+            raise ValueError(f"{key} must contain finite nonnegative values.")
+    participants = structure["participants"]
+    signatures = []
+    unverified = []
+    for participant in participants:
+        actions = sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"])
+        signatures.append(
+            f"{STRUCTURE_KINDS[participant['kind']]}@{STRUCTURE_BEARINGS[participant['bearing']]}:{STRUCTURE_FACING[participant['facing']]}:{'+'.join(actions) or 'unknown'}"
+        )
+        if participant["age"] != "未知":
+            unverified.append("participant age=" + participant["age"])
+    numeric = tuple(
+        (target, float(params[source]))
+        for source, target in (
+            ("ego_speed_kph", "ego_speed_kph"),
+            ("ttc_value", "ttc_s"),
+            ("fog_visibility_m", "fog_visibility_m"),
+        )
+        if params[source] is not None
+    )
+    environment = tuple(
+        (key, mapping[params[key]])
+        for key, mapping in (
+            (
+                "weather",
+                {
+                    "晴天": "dry",
+                    "雨天": "rain",
+                    "雪天": "snow",
+                    "雾天": "fog",
+                    "沙尘": "dust",
+                },
+            ),
+            ("time_of_day", {"日间": "day", "夜间": "night"}),
+        )
+        if params[key] in mapping
+    )
+    # Keep unsupported declared requirements visible in the verdict. They must
+    # never disappear just because the XML reader does not yet understand them.
+    for key in (
+        "relations",
+        "venue_features",
+        "lane_marking",
+        "parking_operation",
+        "test_intent",
+    ):
+        if structure[key] and structure[key] != "未知":
+            unverified.append(f"{key}={structure[key]}")
+    for key in (
+        "lateral_direction",
+        "curve_radius_m",
+        "lane_count",
+        "lane_direction",
+        "end_condition",
+    ):
+        if params[key] is not None and params[key] != "未知":
+            unverified.append(f"{key}={params[key]}")
+    road = structure["road_class"]
+    if road != "未知" and road not in STRUCTURE_ROADS:
+        unverified.append("road_class=" + road)
+    for trigger in structure["semantic_triggers"]:
+        if trigger not in STRUCTURE_TRIGGERS:
+            unverified.append("trigger=" + trigger)
+    query = RetrievalQuery(
+        text=" ".join((package.title, package.preferred_text)),
+        structured=True,
+        participant_signatures=tuple(sorted(signatures)),
+        road_features=frozenset([STRUCTURE_ROADS[road]])
+        if road in STRUCTURE_ROADS
+        else frozenset(),
+        trigger_kinds=frozenset(
+            STRUCTURE_TRIGGERS[item]
+            for item in structure["semantic_triggers"]
+            if item in STRUCTURE_TRIGGERS
+        ),
+        parameters=tuple(sorted(numeric)),
+        evidence=tuple(package.evidence),
+        tested_function=structure["tested_function"]
+        if structure["tested_function"] != "未知"
+        else "",
+        ego_actions=frozenset(
+            STRUCTURE_ACTIONS[item]
+            for item in structure["ego_actions"]
+            if item != "未知"
+        ),
+        target_speeds_kph=tuple(sorted(set(params["target_speeds_kph"]))),
+        environment=environment,
+        unverified=tuple(unverified),
+    )
+    if not any(
+        (
+            query.participant_signatures,
+            query.road_features,
+            query.parameters,
+            query.tested_function,
+            query.ego_actions,
+            query.target_speeds_kph,
+            query.environment,
+            query.trigger_kinds,
+            query.unverified,
+        )
+    ):
+        from dataclasses import replace
+
+        query = replace(query, unverified=("no extracted structural requirements",))
+    return query
 
 
 _ENTITY_TERMS = {
@@ -53,7 +271,15 @@ _ENTITY_TERMS = {
     "cyclist": ("cyclist", "bicycle", "自行车", "骑行者"),
 }
 _ACTION_TERMS = {
-    "lane_change": ("lane change", "lane-change", "lanechange", "cut in", "cut-in", "换道", "切入"),
+    "lane_change": (
+        "lane change",
+        "lane-change",
+        "lanechange",
+        "cut in",
+        "cut-in",
+        "换道",
+        "切入",
+    ),
     "braking": ("brake", "braking", "deceler", "制动", "减速"),
     "speed": ("accelerat", "speed", "加速", "车速", "速度"),
     "crossing": ("crossing", "cross", "横穿", "穿行"),
@@ -90,6 +316,8 @@ _RELATION_TERMS = {
 
 
 def scene_package_to_query(package: ScenePackage) -> RetrievalQuery:
+    if package.structure:
+        return _structured_query(package)
     text = " ".join(
         part
         for part in (
@@ -113,6 +341,43 @@ def scene_package_to_query(package: ScenePackage) -> RetrievalQuery:
         parameters=tuple(sorted(package.parameters.items())),
         evidence=tuple(package.evidence),
     )
+
+
+def synchronize_structure(package: ScenePackage) -> ScenePackage:
+    """Derive compatibility fields from the same facts used by matching."""
+    if not package.structure:
+        return package
+    query = _structured_query(package)
+    package.entities = sorted(
+        {signature.split("@", 1)[0] for signature in query.participant_signatures}
+    )
+    package.actions = sorted(
+        query.ego_actions
+        | {
+            action
+            for signature in query.participant_signatures
+            for action in signature.split(":", 2)[2].split("+")
+        }
+    )
+    package.triggers = sorted(query.trigger_kinds)
+    package.road_types = sorted(query.road_features)
+    package.parameters = dict(query.parameters)
+    package.weather = (
+        [dict(query.environment)["weather"]]
+        if "weather" in dict(query.environment)
+        else []
+    )
+    package.time_of_day = (
+        [dict(query.environment)["time_of_day"]]
+        if "time_of_day" in dict(query.environment)
+        else []
+    )
+    package.classification.update(
+        function=package.structure.get("tested_function", "未知"),
+        road_type=package.structure.get("road_class", "未知"),
+        intent=package.structure.get("test_intent", "未知"),
+    )
+    return package
 
 
 def canonical_scenario_families(text: str) -> set[str]:

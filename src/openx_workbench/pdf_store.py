@@ -15,7 +15,8 @@ from typing import Any
 from .asset_store import AssetStore
 from .pdf_pipeline import extract_scene_packages_from_pdf
 from .project_store import ProjectStore
-from .scene_package import EvidenceRef, ScenePackage
+from .scene_package import EvidenceRef, ScenePackage, synchronize_structure
+from .store_lock import serialized
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,7 @@ class PdfStore:
 
     def __init__(self, assets: AssetStore | None = None):
         self.assets = assets or AssetStore()
+        self.root = self.assets.root
         self.projects = ProjectStore(self.assets)
         self.blobs = self.assets.root / "pdf_blobs"
 
@@ -73,9 +75,12 @@ class PdfStore:
         if engine == "v2":
             from .pdf_extraction import ENGINE_VERSION, PROMPT_VERSION
             from .llm_service import ModelClient, base_url
+            from .pdf_ocr import ocr_identity
+            from .native_layout import layout_identity
             client = client or ModelClient()
             identity = json.dumps([ENGINE_VERSION, PROMPT_VERSION, base_url(client.config.base_url),
-                                   client.config.model, client.config.thinking, client.config.max_tokens])
+                                   client.config.model, client.config.thinking, client.config.max_tokens,
+                                   ocr_identity(self.assets.root), layout_identity(self.assets.root)])
         document_id = hashlib.sha256((digest + "\0" + source_standard + ("\0" + identity if identity else "")).encode()).hexdigest()[:20]
         manifest = root / document_id / "document.json"
         if manifest.is_file():
@@ -116,6 +121,7 @@ class PdfStore:
         path = self._document_root(document.project_id, document.document_id) / "extraction.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
+    @serialized
     def publish_scene(self, scene: StoredScene) -> dict:
         """Explicit review publishes an immutable requirement revision to the shared library."""
         revisions = self.revisions(scene.document.project_id, scene.document.document_id, scene.scene_id)
@@ -185,6 +191,7 @@ class PdfStore:
             result.append(StoredScene(document, scene_id, int(path.stem), ScenePackage(**payload)))
         return result
 
+    @serialized
     def revise_scene(self, project_id: str, document_id: str, scene_id: str,
                      edits: dict[str, Any]) -> StoredScene:
         unknown = set(edits) - self.EDITABLE
@@ -194,6 +201,8 @@ class PdfStore:
         current = next((item for item in scenes if item.scene_id == scene_id), None)
         if current is None:
             raise ValueError("Unknown extracted scene.")
+        if current.package.structure and set(edits) - {"title", "preferred_text", "structure"}:
+            raise ValueError("Edit the typed structure; compatibility fields are derived from it.")
         payload = asdict(current.package)
         for key, value in edits.items():
             if key == "title":
@@ -227,6 +236,10 @@ class PdfStore:
                                          "intent": payload["structure"]["test_intent"]}
         payload["evidence"] = json.loads(original.read_text(encoding="utf-8"))["evidence"]
         payload.setdefault("extraction", {})["review_status"] = "pending"
+        if payload["structure"]:
+            package = ScenePackage(**{**payload, "evidence": []})
+            derived = asdict(synchronize_structure(package))
+            payload.update({key: value for key, value in derived.items() if key != "evidence"})
         revision = current.revision + 1
         path = original.parent / f"{revision:04d}.json"
         self._write_json(path, payload)

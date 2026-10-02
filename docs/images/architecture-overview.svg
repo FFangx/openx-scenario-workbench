@@ -98,7 +98,7 @@
       <text x="22" y="119" fill="#94A3B8" font-size="13">scenario and road constraints.</text>
       <g transform="translate(22 145)">
         <rect width="86" height="30" rx="15" fill="#211D3D"/>
-        <text x="43" y="20" fill="#C4B5FD" font-size="11" text-anchor="middle">hash / BGE</text>
+        <text x="43" y="20" fill="#C4B5FD" font-size="11" text-anchor="middle">BGE-M3</text>
         <rect x="96" width="89" height="30" rx="15" fill="#211D3D"/>
         <text x="140" y="20" fill="#C4B5FD" font-size="11" text-anchor="middle">vector recall</text>
         <rect x="195" width="101" height="30" rx="15" fill="#211D3D"/>
@@ -112,8 +112,8 @@
       <rect width="800" height="235" rx="22" fill="#121A2C" stroke="#27564F"/>
       <rect x="0" y="0" width="7" height="235" rx="3.5" fill="url(#green)"/>
       <text x="30" y="38" fill="#64748B" font-size="11" font-weight="700" letter-spacing="1.4">GROUNDED DECISION</text>
-      <text x="30" y="67" fill="#F8FAFC" font-size="21" font-weight="650">Reuse the closest asset — with differences made explicit</text>
-      <text x="30" y="94" fill="#94A3B8" font-size="13">Candidate facts and PDF evidence meet here with explicit differences.</text>
+      <text x="30" y="67" fill="#F8FAFC" font-size="21" font-weight="650">Assess reuse with explicit evidence and differences</text>
+      <text x="30" y="94" fill="#94A3B8" font-size="13">Direct reuse requires scenario + road XSD checks; decisions pin asset versions.</text>
 
       <g transform="translate(30 119)">
         <rect width="448" height="84" rx="15" fill="#0C1425" stroke="#20384A"/>
@@ -126,18 +126,22 @@
       </g>
 
       <g transform="translate(504 119)">
-        <rect width="78" height="84" rx="15" fill="#0C1425" stroke="#1F5147"/>
-        <circle cx="39" cy="28" r="7" fill="#34D399"/>
-        <text x="39" y="55" fill="#A7F3D0" font-size="11" font-weight="650" text-anchor="middle">Direct</text>
-        <text x="39" y="70" fill="#64748B" font-size="9" text-anchor="middle">reuse</text>
-        <rect x="92" width="92" height="84" rx="15" fill="#201C18" stroke="#6B4E25"/>
-        <circle cx="138" cy="28" r="7" fill="#F59E0B"/>
-        <text x="138" y="55" fill="#FCD34D" font-size="11" font-weight="650" text-anchor="middle">Modify</text>
-        <text x="138" y="70" fill="#64748B" font-size="9" text-anchor="middle">and reuse</text>
-        <rect x="198" width="68" height="84" rx="15" fill="#21191D" stroke="#633343"/>
-        <circle cx="232" cy="28" r="7" fill="#FB7185"/>
-        <text x="232" y="55" fill="#FDA4AF" font-size="11" font-weight="650" text-anchor="middle">New</text>
-        <text x="232" y="70" fill="#64748B" font-size="9" text-anchor="middle">build</text>
+        <rect width="62" height="84" rx="15" fill="#0C1425" stroke="#1F5147"/>
+        <circle cx="31" cy="28" r="7" fill="#34D399"/>
+        <text x="31" y="55" fill="#A7F3D0" font-size="11" font-weight="650" text-anchor="middle">Direct</text>
+        <text x="31" y="70" fill="#64748B" font-size="9" text-anchor="middle">reuse</text>
+        <rect x="68" width="62" height="84" rx="15" fill="#201C18" stroke="#6B4E25"/>
+        <circle cx="99" cy="28" r="7" fill="#F59E0B"/>
+        <text x="99" y="55" fill="#FCD34D" font-size="11" font-weight="650" text-anchor="middle">Modify</text>
+        <text x="99" y="70" fill="#64748B" font-size="9" text-anchor="middle">and reuse</text>
+        <rect x="136" width="62" height="84" rx="15" fill="#21191D" stroke="#633343"/>
+        <circle cx="167" cy="28" r="7" fill="#FB7185"/>
+        <text x="167" y="55" fill="#FDA4AF" font-size="11" font-weight="650" text-anchor="middle">New</text>
+        <text x="167" y="70" fill="#64748B" font-size="9" text-anchor="middle">build</text>
+        <rect x="204" width="62" height="84" rx="15" fill="#172338" stroke="#355578"/>
+        <circle cx="235" cy="28" r="7" fill="#60A5FA"/>
+        <text x="235" y="55" fill="#BFDBFE" font-size="11" font-weight="650" text-anchor="middle">Review</text>
+        <text x="235" y="70" fill="#64748B" font-size="9" text-anchor="middle">required</text>
       </g>
     </g>
 

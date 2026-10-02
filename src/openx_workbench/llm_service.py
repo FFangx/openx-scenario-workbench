@@ -140,7 +140,14 @@ class ModelClient:
             request["thinking"] = {"type": "enabled" if self.config.thinking else "disabled"}
         else:
             request.pop("thinking", None)
-        return self.request("/chat/completions", request)
+        response = self.request("/chat/completions", request)
+        choices = response.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            # Some compatible services return an error envelope with HTTP 200.
+            # Treat it as a service failure, not malformed model-authored JSON
+            # eligible for a second expensive document extraction request.
+            raise ModelError("模型服务未返回有效候选响应 / Model service returned no valid completion choices.")
+        return response
 
     def probe(self) -> str:
         response = self.complete({"messages": [{"role": "user", "content": 'Return only this JSON: {"ok":true}'}],

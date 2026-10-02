@@ -45,7 +45,8 @@ def appearance_css(mode):
 body{--control:light-dark(#ffffff,#223240);--control-border:light-dark(#cbd8e2,#486071);--muted:light-dark(#526b7e,#a7bbcd)}
 [data-testid="stSidebar"]{--ink-1:#e8f0f6;--ink-2:#c5d7e4;--muted:#bdd0de}
 [data-testid="stMarkdownContainer"],[data-testid="stWidgetLabel"],[data-testid="stMetricLabel"]{color:var(--ink-1)}
-[data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{color:var(--muted)!important}
+[data-testid="stText"],[data-testid="stText"] span{color:var(--ink-1)!important;white-space:pre-wrap;overflow-wrap:anywhere}
+[data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{color:var(--muted)!important;opacity:1!important;overflow-wrap:anywhere}
 .stTextInput input,.stTextArea textarea,[role="combobox"],[data-testid="stNumberInput"] input{background:var(--control)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important;caret-color:var(--accent)}
 input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:1}
 [data-testid="stTextInputRootElement"],[data-testid="stTextArea"]>div{background:var(--control)!important;border-color:var(--control-border)!important}
