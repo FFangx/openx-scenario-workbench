@@ -91,7 +91,7 @@ def test_preview_autodetection_keeps_path_settings_collapsed(tmp_path, monkeypat
     assert app.button(key="run_esmini_preview").label == "播放仿真"
     assert app.button(key="stop_esmini_preview").disabled
     assert not next(item for item in app.expander if item.label == "预览高级设置").proto.expanded
-    assert any("预览工具已就绪" in item.value for item in app.caption)
+    assert any("仿真预览已就绪" in item.value for item in app.success)
     assert not any(item.key == "esmini_path" for item in app.text_input)
 
 
@@ -108,11 +108,11 @@ def test_preview_missing_tool_and_manual_folder_persist(tmp_path, monkeypatch):
     app = _select_asset(_open_management(tmp_path, monkeypatch), versions[0])
     assert app.button(key="run_esmini_preview").disabled
     assert next(item for item in app.expander if item.label == "预览高级设置").proto.expanded
-    app.text_input(key="preview_esmini_folder").set_value(str(tmp_path / "missing"))
+    monkeypatch.setattr(shell, "choose_folder", lambda *args: tmp_path / "missing")
     app.button(key="save_preview_settings").click().run()
     assert app.error and app.button(key="run_esmini_preview").disabled
     executable = installation(tmp_path / "chosen install")
-    app.text_input(key="preview_esmini_folder").set_value(str(executable.parent.parent))
+    monkeypatch.setattr(shell, "choose_folder", lambda *args: executable.parent.parent)
     app.button(key="save_preview_settings").click().run()
     assert not app.exception
     assert not app.button(key="run_esmini_preview").disabled
@@ -299,8 +299,8 @@ def test_pdf_workflow_opens_saved_scene_only_after_selection(tmp_path, monkeypat
     app.button(key="nav_" + "pdf_workflow").click().run()
     assert not app.exception
     app.selectbox(key="current_document_id").set_value(record.document_id).run()
-    assert app.button(key=f"scene_{record.document_id}_scene-0001")
-    app.button(key=f"scene_{record.document_id}_scene-0001").click().run()
+    assert next(item for item in app.selectbox if item.label == "选择场景需求")
+    next(item for item in app.selectbox if item.label == "选择场景需求").select((project.project_id, record.document_id, "scene-0001")).run()
     assert not app.exception
     assert app.session_state["selected_stored_scene"].revision == 1
     app.selectbox(key="current_document_id").set_value(other_record.document_id).run()
@@ -325,7 +325,7 @@ def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, m
     app_path = Path(__file__).parents[1] / "src" / "openx_workbench" / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     app.button(key="nav_" + "pdf_workflow").click().run()
-    app.button(key=f"scene_{record.document_id}_scene-0001").click().run()
+    next(item for item in app.selectbox if item.label == "选择场景需求").select((project.project_id, record.document_id, "scene-0001")).run()
     next(item for item in app.text_input if item.label == "场景标题").set_value("Reviewed cut-in")
     next(item for item in app.button if item.label == "保存事实修订").click().run()
     assert not app.exception
@@ -333,6 +333,9 @@ def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, m
     app.selectbox(key="retrieval_encoder").select("hashing").run()
     app.button(key="pdf_search_button").click().run()
     assert not app.exception
+    assert app.session_state["pdf_stage"] == "compare"
+    assert not any(item.label == "场景标题" for item in app.text_input)
+    app.button(key="open_pdf_assessment").click().run()
     app.button(key="view_source_files").click().run()
     assert not app.exception
     assert any("OpenSCENARIO" in item.value for item in app.code)
@@ -358,6 +361,12 @@ def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, m
     assert newer.version_id != version.version_id
     assert projects.reports(project.project_id)[0] == report
     assert assets.references(version)
+    reopened.button(key="continue_saved_review").click().run()
+    assert not reopened.exception
+    assert reopened.session_state["active_page"] == "pdf_workflow"
+    assert reopened.session_state["selected_stored_scene"].revision == 3
+    assert reopened.session_state["selected_stored_scene"].package.title == "Later revision"
+    assert projects.reports(project.project_id)[0] == report
 
 
 def test_typed_structure_edit_changes_live_reuse_and_saved_snapshot(tmp_path, monkeypatch):
@@ -375,24 +384,32 @@ def test_typed_structure_edit_changes_live_reuse_and_saved_snapshot(tmp_path, mo
     scene = store.revise_scene(project.project_id, record.document_id, "scene-0001", {"structure": {"road_class": "直道"}})
     app = AppTest.from_file(str(Path(__file__).parents[1] / "src/openx_workbench/app.py")).run(timeout=10)
     app.button(key="nav_pdf_workflow").click().run()
-    app.button(key=f"scene_{record.document_id}_scene-0001").click().run()
+    next(item for item in app.selectbox if item.label == "选择场景需求").select((project.project_id, record.document_id, "scene-0001")).run()
     assert not app.exception
     assert not any(item.label == "参数 JSON / Parameters JSON" for item in app.text_input)
     app.selectbox(key="retrieval_encoder").select("hashing").run()
     app.button(key="pdf_search_button").click().run()
     assert app.session_state["retrieval_results"][0].reuse_level == "direct"
     assert app.session_state["retrieval_results"][0].confirmation_level == "review"
+    prior_results = app.session_state["retrieval_results"]
+    next(item for item in app.selectbox if item.label == "选择场景需求").select((project.project_id, record.document_id, "scene-0001")).run()
+    assert app.session_state["retrieval_results"] == prior_results
+    app.button(key="open_pdf_assessment").click().run()
     assert app.button(key="save_reuse_decision").disabled
     assert any("文件标准待复核" in item.value for item in app.markdown)
-    editor = next(item for item in app.text_area if item.label == "结构 JSON / Structure JSON")
+    app.radio(key="pdf_stage").set_value("review").run()
+    assert app.session_state["retrieval_results"] == prior_results
+    editor = next(item for item in app.text_area if item.label == "结构 JSON")
     edited = json.loads(editor.value)
     edited["road_class"] = "交叉口"
+    next(item for item in app.checkbox if item.label == "使用 JSON 编辑结果").check()
     editor.set_value(json.dumps(edited, ensure_ascii=False))
     next(item for item in app.button if item.label == "保存事实修订").click().run()
     assert not app.exception
     app.selectbox(key="retrieval_encoder").select("hashing").run()
     app.button(key="pdf_search_button").click().run()
     assert app.session_state["retrieval_results"][0].reuse_level == "modify"
+    app.button(key="open_pdf_assessment").click().run()
     app.button(key="save_reuse_decision").click().run()
     report = projects.reports(project.project_id)[0]["trace"]
     assert report["source"]["structure"]["road_class"] == "交叉口"
@@ -403,6 +420,7 @@ def test_typed_structure_edit_changes_live_reuse_and_saved_snapshot(tmp_path, mo
 
 
 def test_workspace_language_help_and_settings_persist(tmp_path, monkeypatch):
+    import openx_workbench.ui_shell as shell
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
     app_path = Path(__file__).parents[1] / "src" / "openx_workbench" / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
@@ -412,17 +430,37 @@ def test_workspace_language_help_and_settings_persist(tmp_path, monkeypatch):
     assert not app.exception
     assert any("From assets to reports" in item.value for item in app.markdown)
     app.button(key="workspace_settings").click().run()
-    app.text_input(key="settings_esmini").set_value("Z:/missing/esmini.exe")
+    monkeypatch.setattr(shell, "choose_folder", lambda *args: tmp_path / "missing")
     app.button(key="workspace_settings").click()
     app.button(key="save_settings").click().run()
     assert app.error
-    app.text_input(key="settings_esmini").set_value("")
     app.button(key="workspace_settings").click()
-    app.button(key="save_settings").click().run()
+    app.button(key="save_settings_detect").click().run()
     assert not app.exception
     reopened = AppTest.from_file(str(app_path)).run(timeout=10)
     assert reopened.button(key="nav_home").label == "Overview"
     assert reopened.session_state["esmini_path"] == ""
+
+
+def test_folder_browser_cancel_preserves_settings_and_data_folder_opens(tmp_path, monkeypatch):
+    import openx_workbench.ui_shell as shell
+
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    shell.save_preferences(esmini_path="existing choice")
+    monkeypatch.setattr(shell, "choose_folder", lambda *args: None)
+    opened = []
+    monkeypatch.setattr(shell, "open_folder", opened.append)
+    app_path = Path(__file__).parents[1] / "src" / "openx_workbench" / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    app.button(key="workspace_settings").click().run()
+    app.button(key="workspace_settings").click()
+    app.button(key="save_settings").click().run()
+    assert not app.exception
+    assert app.session_state["esmini_path"] == "existing choice"
+    app.button(key="workspace_settings").click()
+    app.button(key="open_data_folder").click().run()
+    assert opened == [tmp_path]
+    assert not app.exception
 
 
 def test_m3_default_and_explicit_baseline_persist_across_pages_and_restart(tmp_path, monkeypatch):
@@ -522,7 +560,7 @@ def test_v2_scene_review_library_and_return_to_source(tmp_path, monkeypatch):
     app_path = Path(__file__).parents[1] / "src" / "openx_workbench" / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     app.button(key="nav_pdf_workflow").click().run()
-    app.button(key=f"scene_{record.document_id}_scene-0001").click().run()
+    next(item for item in app.selectbox if item.label == "选择场景需求").select((project.project_id, record.document_id, "scene-0001")).run()
     assert not app.exception
     app.button(key="publish_pdf_scene").click().run()
     assert len(PdfStore(assets).library()) == 1
@@ -532,3 +570,31 @@ def test_v2_scene_review_library_and_return_to_source(tmp_path, monkeypatch):
     next(button for button in app.button if button.label == "打开源文档").click().run()
     assert not app.exception
     assert app.session_state["selected_scene_key"] == (project.project_id, record.document_id, "scene-0001")
+
+
+def test_native_fact_editor_saves_numeric_speed_and_preserves_evidence_and_topology(tmp_path, monkeypatch):
+    from test_pdf_v2_migration import authored_pdf, fake_client
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    assets = AssetStore(tmp_path)
+    project = ProjectStore(assets).create("Native facts")
+    client, _ = fake_client()
+    store = PdfStore(assets)
+    record = store.import_pdf(project.project_id, "authored.pdf", authored_pdf(), client=client)
+    original = store.scenes(project.project_id, record.document_id)[0]
+    app = AppTest.from_file(str(Path(__file__).parents[1] / "src/openx_workbench/app.py")).run(timeout=10)
+    app.button(key="nav_pdf_workflow").click().run()
+    picker = next(item for item in app.selectbox if item.label == "选择场景需求")
+    picker.select((project.project_id, record.document_id, original.scene_id)).run()
+    next(item for item in app.number_input if item.label == "主车速度（km/h）").set_value(50.0)
+    next(item for item in app.button if item.label == "保存事实修订").click().run()
+    assert not app.exception
+    revised = store.scenes(project.project_id, record.document_id)[0]
+    assert revised.package.parameters["ego_speed_kph"] == 50
+    assert revised.package.structure["params"]["ego_speed_kph"] == 50
+    assert revised.package.structure["participants"] == original.package.structure["participants"]
+    assert revised.package.evidence == original.package.evidence
+    assert app.session_state["selected_stored_scene"].revision == original.revision + 1
+    app.button(key="publish_pdf_scene").click().run()
+    app.run()
+    assert app.button(key="publish_pdf_scene").disabled
+    assert any("当前修订已确认入库" in item.value for item in app.caption)

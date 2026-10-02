@@ -34,14 +34,23 @@ def find_esmini(value: str = "") -> Path | None:
     manual = str(value).strip().strip('"')
     candidates = [manual] if manual else [
         os.environ.get("OPENX_ESMINI_PATH", ""), shutil.which("esmini.exe"), shutil.which("esmini"),
-        managed_esmini_root(), Path(__file__).resolve().parents[2] / "tools" / "esmini",
+        managed_esmini_root(), Path.home() / ".openx" / "tools" / "esmini",
+        Path(__file__).resolve().parents[2] / "tools" / "esmini",
         Path.home() / "Downloads" / "esmini", Path.home() / "Desktop" / "esmini",
     ]
+    if not manual:
+        # Search common install locations one level deep, never entire disks.
+        roots = [Path.home() / "Downloads", Path.home() / "Desktop",
+                 Path.home() / "Documents", Path(os.environ.get("ProgramFiles", "C:/Program Files"))]
+        for root in roots:
+            if root.is_dir():
+                candidates.extend(sorted(root.glob("esmini*")))
     for item in candidates:
         if not item:
             continue
         path = Path(str(item).strip().strip('"')).expanduser()
-        executables = (path / "esmini.exe", path / "bin" / "esmini.exe") if path.is_dir() else (path,)
+        executables = (path / "esmini.exe", path / "bin" / "esmini.exe",
+                       path / "esmini" / "bin" / "esmini.exe") if path.is_dir() else (path,)
         for executable in executables:
             if executable.name.casefold() in {"esmini", "esmini.exe"} and executable.is_file() and (executable.parent / "esminiLib.dll").is_file():
                 return executable.resolve()

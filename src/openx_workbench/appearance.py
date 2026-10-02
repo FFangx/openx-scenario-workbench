@@ -41,21 +41,29 @@ def theme_colors(css):
 def appearance_css(mode):
     mode = mode if mode in {"light", "dark", "system"} else "system"
     scheme = "light dark" if mode == "system" else mode
-    return f"html{{color-scheme:{scheme}!important}}body,.stApp{{color-scheme:inherit!important}}" + """
-body{--control:light-dark(#ffffff,#223240);--control-border:light-dark(#cbd8e2,#486071);--muted:light-dark(#526b7e,#a7bbcd)}
-[data-testid="stSidebar"]{--ink-1:#e8f0f6;--ink-2:#c5d7e4;--muted:#bdd0de}
+    return f'html{{color-scheme:{scheme}!important}}body,.stApp,[data-testid="stSidebar"]{{color-scheme:inherit!important}}' + """
+body{--control:light-dark(#ffffff,#223240);--control-border:light-dark(#cbd8e2,#486071);--muted:light-dark(#526b7e,#a7bbcd);--nav-bg:light-dark(#e8eef4,#143149);--nav-ink:light-dark(#24384a,#e8f0f6);--nav-muted:light-dark(#526b7e,#bdd0de);--nav-border:light-dark(#c5d3df,#355167);--nav-hover:light-dark(#dae5ee,#213f57);--nav-active:light-dark(#d1e6f6,#2b506a);--nav-active-ink:light-dark(#0b4d78,#ffffff);--nav-accent:light-dark(#0876a5,#63cee7)}
+[data-testid="stSidebar"]{--ink-1:var(--nav-ink);--ink-2:var(--nav-muted);--muted:var(--nav-muted)}
 [data-testid="stMarkdownContainer"],[data-testid="stWidgetLabel"],[data-testid="stMetricLabel"]{color:var(--ink-1)}
 [data-testid="stText"],[data-testid="stText"] span{color:var(--ink-1)!important;white-space:pre-wrap;overflow-wrap:anywhere}
 [data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{color:var(--muted)!important;opacity:1!important;overflow-wrap:anywhere}
 .stTextInput input,.stTextArea textarea,[role="combobox"],[data-testid="stNumberInput"] input{background:var(--control)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important;caret-color:var(--accent)}
 input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:1}
 [data-testid="stTextInputRootElement"],[data-testid="stTextArea"]>div{background:var(--control)!important;border-color:var(--control-border)!important}
+[data-testid="stNumberInputContainer"],.stMultiSelect .react-aria-ComboBox>[role="group"]{background:var(--control)!important;border-color:var(--control-border)!important;color:var(--ink-1)!important}
+[data-testid="stNumberInputContainer"] button,.stMultiSelect .react-aria-ComboBox>button{background:var(--control)!important;color:var(--ink-1)!important}
+[data-testid="stNumberInputContainer"] button:disabled{color:var(--muted)!important}
+[data-testid="InputInstructions"],[data-testid="InputInstructions"] span{color:var(--muted)!important}
 [data-testid="stSelectbox"] button{background:var(--control)!important;color:var(--ink-1)!important}
-[data-testid="stSidebar"] [role="combobox"],[data-testid="stSidebar"] [data-testid="stSelectbox"] button{background:#254358!important;color:#e8f0f6!important}
-.stButton button,.stDownloadButton button,[data-testid="stPopoverButton"]{background:var(--control);color:var(--ink-1);border-color:var(--control-border)}
-.stButton button[kind="primary"]{background:var(--accent);color:#fff}
-.stButton button[kind="primary"] [data-testid="stMarkdownContainer"]{color:#fff}
-button:disabled{opacity:.5}
+[data-testid="stSidebar"] [role="combobox"],[data-testid="stSidebar"] [data-testid="stSelectbox"] button{background:var(--nav-hover)!important;color:var(--nav-ink)!important}
+[data-testid^="stBaseButton-"]{background:var(--control);color:var(--ink-1);border-color:var(--control-border)}
+button[kind^="primary"]{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important}
+button[kind^="primary"] [data-testid="stMarkdownContainer"]{color:#fff!important}
+button[kind]:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+button[kind^="primary"]:hover:not(:disabled){color:#fff}
+button:focus-visible{outline:2px solid var(--accent)!important;outline-offset:2px}
+button[kind]:disabled{background:var(--panel-2)!important;color:var(--muted)!important;border-color:var(--control-border)!important;opacity:1}
+button[kind]:disabled [data-testid="stMarkdownContainer"]{color:inherit!important}
 [role="dialog"],[role="listbox"],[data-testid="stPopoverBody"],[data-testid="stPopoverContent"],[data-testid="stSelectboxVirtualDropdown"]{background:var(--bg)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important}
 [role="option"]{color:var(--ink-1)!important;background:var(--bg)}
 [role="option"]:hover,[role="option"][aria-selected="true"]{background:var(--panel-2)!important}
@@ -63,6 +71,11 @@ button:disabled{opacity:.5}
 [data-testid="stExpander"] details,[data-testid="stExpander"] summary{color:var(--ink-1)}
 [data-testid="stExpander"] summary,[data-testid="stExpander"] summary:hover,[data-testid="stExpander"] summary:focus{background:var(--panel-2)!important;color:var(--ink-1)!important}
 [data-testid="stFileUploaderDropzone"],[data-testid="stCode"],pre{background:var(--panel-2)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important}
+[data-testid="stFileUploaderDropzone"] small,[data-testid="stFileUploaderDropzone"] span{color:var(--ink-2)}
+[data-testid="stFileUploader"] [data-testid="stMarkdownContainer"]{color:inherit}
+[data-testid="stTooltipIcon"] button{color:var(--muted)!important}
+[data-testid="stTooltipContent"]{background:var(--bg)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important}
+[data-testid="stCode"] button{background:var(--control)!important;color:var(--ink-1)!important}
 [data-testid="stCode"] code,[data-testid="stCode"] span{color:inherit!important}
 [data-testid="stAlert"]{background:var(--panel-2)!important;color:var(--ink-1)!important}
 [data-testid="stTable"]{background:var(--bg);color:var(--ink-1)}
@@ -71,9 +84,11 @@ button:disabled{opacity:.5}
 .ow-section-title span[style]{color:var(--ink-1)!important}
 .st-key-workspace_header [data-testid="stMarkdownContainer"]{color:inherit}
 .st-key-workspace_nav [data-testid="stMarkdownContainer"]{color:inherit}
+.st-key-workspace_nav button[kind="primary"] [data-testid="stMarkdownContainer"]{color:var(--nav-active-ink)!important}
 [data-testid="stIconMaterial"]{font-size:19px;flex-shrink:0}
-[role="dialog"] button:not([kind="primary"]){color:var(--ink-1)!important}
-[role="dialog"] button svg{fill:currentColor}
+[role="dialog"] button:not([kind^="primary"]){color:var(--ink-1)!important}
+::selection{background:var(--accent);color:#fff}
+[data-testid="stMain"]{scrollbar-color:var(--control-border) var(--bg)}
 """ + (
         '[data-testid="stDataFrame"] canvas{filter:invert(.9) hue-rotate(180deg)}' if mode == "dark" else
         '@media(prefers-color-scheme:dark){[data-testid="stDataFrame"] canvas{filter:invert(.9) hue-rotate(180deg)}}'

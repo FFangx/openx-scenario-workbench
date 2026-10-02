@@ -99,7 +99,7 @@ Open the local URL printed by Streamlit. Use **Asset management → Import asset
 - **BGE-M3 search:** install with `python -m pip install ".[semantic]"`. The UI defaults to BGE-M3; weights are downloaded on first use unless cached and are not included in the repository. Choose the hashing baseline explicitly for an offline smoke check without model weights.
 - **PDF extraction:** configure the model endpoint, key and model in **Settings**. Import sends document text to that service. For scanned PDFs, install and configure local OCR as described in [PDF migration](docs/PDF_MIGRATION.md).
 - **Standard checks:** run `openx-validate --install-schemas` once to download the pinned schema registry; later checks run locally. Both XOSC and XODR must pass before direct reuse can be confirmed.
-- **Simulation:** install esmini separately on Windows. Detection supports `OPENX_ESMINI_PATH`, PATH and the managed folder `%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini`. A custom setting accepts the installation folder, `bin` folder or `esmini.exe`. esmini is not bundled; some extensions and missing dependencies prevent playback.
+- **Simulation:** install esmini separately on Windows. Detection checks `OPENX_ESMINI_PATH`, PATH, managed folders and esmini folders in Downloads, Desktop, Documents and Program Files. In **Settings → Local services**, **Browse installation folder** opens a native folder picker and saves a valid installation automatically; **Auto-detect** restores automatic discovery. esmini is not bundled; some extensions and missing dependencies prevent playback.
 - **Windows desktop entry:** follow [desktop launcher setup](docs/DESKTOP_LAUNCHER.md) for shortcuts and tray controls. Daily use requires no terminal.
 
 ### CLI and offline sample

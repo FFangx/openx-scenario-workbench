@@ -20,7 +20,15 @@ def local_machine(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "machine"))
     monkeypatch.delenv("OPENX_ESMINI_PATH", raising=False)
     monkeypatch.setattr("openx_workbench.esmini_preview.shutil.which", lambda command: None)
+    monkeypatch.setattr("openx_workbench.esmini_preview.Path.home", lambda: tmp_path / "home")
     return tmp_path
+
+
+def test_versioned_download_and_shared_install_are_discovered(local_machine):
+    executable = installation(local_machine / "home" / "Downloads" / "esmini-bin_win_x64-v3.8.2" / "esmini")
+    assert find_esmini() == executable
+    shared = installation(local_machine / "home" / ".openx" / "tools" / "esmini")
+    assert find_esmini() == shared
 
 
 def test_root_bin_executable_and_quoted_paths_are_accepted(local_machine):

@@ -61,16 +61,22 @@ captures rendered frames in memory, and serves a token-protected MJPEG stream on
 `127.0.0.1`. The page displays that stream inline. **Stop** terminates
 the process and removes its temporary staging files. The simulation itself has a
 30-second limit. Detection checks `OPENX_ESMINI_PATH`, PATH and conventional local
-locations, including `%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini` on
-Windows. The tool installation is separate from `OPENX_DATA_DIR`, so selecting a
+locations, including `%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini` and
+`~/.openx/tools/esmini`, plus esmini folders in Downloads, Desktop, Documents and
+Program Files. Versioned download folders are checked one level deep. The tool installation is separate from `OPENX_DATA_DIR`, so selecting a
 different asset store does not require configuring the simulator again. Normal
 playback shows tool readiness and one Play simulation action. Advanced preview
-settings accept the installation root, its `bin` directory or the executable;
-saved choices persist and an empty choice restores automatic detection. An
+settings offer a native folder browser for the installation root or its `bin`
+directory; a valid choice is saved immediately. **Detect automatically** clears
+the saved override. An
 invalid explicit choice is rejected rather than falling back to another engine.
 The executable needs `esminiLib.dll` beside it and its normal `resources`
 directory one level above `bin` for scenarios with catalog/model references.
 Parse facts remain available when preview fails.
+
+Settings display the data directory with an always-visible **Open folder** action.
+The folder browser and folder-opening action operate on the computer running the
+workbench; they are intended for local desktop use.
 
 For a standalone scenario with external catalogs, models, or textures, upload a
 ZIP containing the XOSC, referenced XODR, and dependency files in their original

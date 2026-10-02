@@ -3,11 +3,13 @@ import html
 import json
 from pathlib import Path
 import tempfile
+from subprocess import TimeoutExpired
 
 import streamlit as st
 
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
+from .local_folders import choose_folder, open_folder
 from .pdf_store import PdfStore
 from .project_store import ProjectStore
 
@@ -51,34 +53,53 @@ def toggle_language():
     st.session_state.language = label
 
 
+def _folder_location(path, language, *, key):
+    st.markdown(f'<div class="ox-location">{html.escape(str(path))}</div>', unsafe_allow_html=True)
+    if st.button("打开文件夹" if language == "zh" else "Open folder", key=key, icon=":material/folder_open:"):
+        try:
+            open_folder(Path(path))
+        except OSError:
+            st.error("无法打开此文件夹，请检查它是否仍然存在。" if language == "zh" else "Could not open this folder. Check that it still exists.")
+
+
 def preview_settings(language, *, input_key="preview_esmini_folder", save_key="save_preview_settings"):
     """One setup flow shared by the selected asset and workspace settings."""
     zh = language == "zh"
     configured = st.session_state.get("esmini_path", "")
     detected = find_esmini(configured)
     if detected:
-        st.caption("预览工具已就绪" if zh else "Preview tool ready")
+        st.success("仿真预览已就绪，已找到 esmini。" if zh else "Simulation preview ready. esmini was found.")
     else:
-        st.warning("未找到预览工具，请在下方设置安装文件夹。" if zh else "Preview tool not found. Set its installation folder below.")
+        st.info("尚未找到 esmini。已自动检查常用安装位置；如果已安装，请选择安装文件夹。" if zh else
+                "esmini was not found in common installation locations. If installed, browse to its folder.")
     with st.expander("预览高级设置" if zh else "Advanced preview settings", expanded=detected is None):
         if detected:
-            st.caption("当前使用的位置" if zh else "Current installation")
-            st.code(str(detected), language=None)
-        with st.form(f"{input_key}_form"):
-            folder = st.text_input("安装文件夹（可选）" if zh else "Installation folder (optional)",
-                                   value=configured, key=input_key,
-                                   help="可填写 esmini 文件夹、bin 文件夹或 esmini.exe。留空时自动查找。" if zh else
-                                   "Accepts the esmini folder, bin folder or esmini.exe. Leave empty to detect automatically.")
-            saved = st.form_submit_button("保存预览设置" if zh else "Save preview settings", key=save_key)
-        if saved:
-            resolved = find_esmini(folder)
-            if folder.strip() and resolved is None:
-                st.error("此位置没有完整的预览工具。请选择包含 esmini.exe 和 esminiLib.dll 的 bin 文件夹，或它的上一级。" if zh else
-                         "This location has no complete preview tool. Choose the bin folder containing esmini.exe and esminiLib.dll, or its parent.")
-            else:
-                selected = str(resolved) if folder.strip() else ""
-                save_preferences(esmini_path=selected)
-                st.session_state.esmini_path = selected
+            st.caption("安装位置" if zh else "Installation")
+            _folder_location(detected.parent, language, key=f"{input_key}_open")
+        browse, automatic = st.columns(2)
+        with browse:
+            if st.button("浏览安装文件夹" if zh else "Browse installation folder", key=save_key,
+                         icon=":material/folder_open:", width="stretch"):
+                try:
+                    folder = choose_folder("选择 esmini 安装文件夹" if zh else "Select esmini installation folder",
+                                           detected.parent if detected else Path.home())
+                    if folder is not None:
+                        resolved = find_esmini(str(folder))
+                        if resolved is None:
+                            st.error("此文件夹没有完整的 esmini。请选择含 esmini.exe 和 esminiLib.dll 的 bin 文件夹，或安装根目录。" if zh else
+                                     "Choose the esmini installation or bin folder containing esmini.exe and esminiLib.dll.")
+                        else:
+                            save_preferences(esmini_path=str(resolved))
+                            st.session_state.esmini_path = str(resolved)
+                            st.rerun()
+                except (OSError, ValueError, TimeoutExpired):
+                    st.error("无法打开文件夹选择窗口，请在本机桌面使用工作台。" if zh else
+                             "Could not open the folder browser. Use the workbench on this computer's desktop.")
+        with automatic:
+            if st.button("自动查找" if zh else "Detect automatically", key=f"{save_key}_detect",
+                         icon=":material/search:", width="stretch"):
+                save_preferences(esmini_path="")
+                st.session_state.esmini_path = ""
                 st.rerun()
     return detected
 
@@ -94,7 +115,7 @@ def settings(language):
     with service_tab:
         preview_settings(language, input_key="settings_esmini", save_key="save_settings")
         st.write("数据位置" if zh else "Data location")
-        st.code(str(AssetStore().root), language=None)
+        _folder_location(AssetStore().root, language, key="open_data_folder")
 
 
 @st.dialog("OpenX · 使用帮助 / Help")
@@ -148,7 +169,7 @@ def sidebar(tx):
     projects = ProjectStore()
     with st.sidebar:
         st.markdown('<div class="ox-sidebar-brand">Open<span>X</span></div>'
-                    '<div class="ox-sidebar-description">Scenario Workbench</div>', unsafe_allow_html=True)
+                    f'<div class="ox-sidebar-description">{"场景工作台" if language == "zh" else "Scenario Workbench"}</div>', unsafe_allow_html=True)
         with st.container(key="workspace_nav"):
             for page, symbol in (("home", "space_dashboard"), ("text_search", "search"),
                                  ("pdf_workflow", "description"), ("asset_management", "inventory_2")):

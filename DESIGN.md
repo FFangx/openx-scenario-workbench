@@ -68,3 +68,43 @@ or stopping controls. Expand pairing reports and error details when requested.
 Preserve the established typography, coordinated appearance modes and native
 accessible controls. Avoid adding decorative cards or repeating full asset
 details under every list row.
+
+## Theme and setup refinements (2026-10-02)
+
+The light theme uses a slate-blue navigation surface with dark text and a pale
+blue selected row. The dark theme retains the established navy navigation.
+Use shared surface and foreground tokens for native buttons, uploads, submit
+controls, help icons and code actions. Preserve outline SVG icons without a
+global fill override. Header and workflow bars share the same outer boundaries.
+Data and installation paths have explicit, always-visible Open folder actions.
+Preview setup discovers common installations and uses a native folder browser
+for manual selection. Primary copy describes user tasks; engine versions and
+prompt metadata belong in downloadable technical records.
+
+## PDF workflow remediation (2026-10-02)
+
+The user walkthrough exposed a 67-row scene list, mixed-language controls,
+JSON-only fact edits, false checkbox affordances and reports without a return
+path. The PDF workspace now has a compact document/scene selection region on the
+left and the current requirement on the right, with a maximum content width.
+The right region switches between fact review, candidates/preview and reuse
+assessment. Candidates and preview have separate side-by-side regions on wide
+screens. Each action stays with its task. Narrow screens stack the regions.
+Import, encoder configuration and extraction records are secondary disclosures.
+
+Use a searchable requirement selector with counts after filtering. Fact edits
+use labeled native fields and units; narrative does not silently set numeric
+parameters. Advanced JSON is an explicit override. Saving creates a revision;
+publishing confirms that exact project/document/scene/revision. Preserve original
+evidence and fields outside the editor. Save edits before navigating away.
+
+Candidates use native row selection synchronized with the accessible selector.
+Retain selection through navigation and repeated selection of the same scene.
+Show parsed facts and real simulation playback; remove the fixed candidate
+schematic. Relative change costs have an explicit explanation. Review states
+use warning colors and actionable guidance, without success checkmarks.
+
+Saved reports can reopen the latest source revision without changing their
+snapshot. Human-facing report headings and controlled verdict vocabulary follow
+the interface language; exact source filenames, identifiers and raw diagnostics
+remain inspectable. Group repeated file diagnostics before exposing raw details.
