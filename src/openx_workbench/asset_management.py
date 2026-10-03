@@ -131,7 +131,7 @@ def _delete(store, version, language, busy):
                 st.error(str(exc))
 
 
-def _detail(store, version, versions, language, busy, preview_controls, road_schematic, source_files):
+def _detail(store, version, versions, language, busy, preview_controls, source_files):
     with st.container(key="asset_detail"):
         title, close = st.columns([5, 1])
         with title:
@@ -151,8 +151,6 @@ def _detail(store, version, versions, language, busy, preview_controls, road_sch
                 st.write(asset.title or version.xosc_name)
                 st.caption(label(language, f"{len(asset.bundle.scenario.entities)} 个参与者 · 道路总长 {road.total_length:g} m · {road.lane_count} 个车道记录",
                                  f"{len(asset.bundle.scenario.entities)} entities · {road.total_length:g} m road · {road.lane_count} lane entries"))
-                st.markdown(road_schematic(asset, scenario=True), unsafe_allow_html=True)
-                st.caption(label(language, "示意图来自已解析的场景与道路，不代表仿真结果。", "Schematic derived from parsed scenario and road data; it is not a simulation result."))
                 preview_controls(version, language, show_identity=False)
                 from .validation_ui import validation_details
                 validation_details(asset.bundle, language)
@@ -280,7 +278,7 @@ def _requirements(language):
         st.rerun()
 
 
-def render(language, *, import_controls, import_progress, preview_controls, road_schematic, source_files):
+def render(language, *, import_controls, import_progress, preview_controls, source_files):
     store = AssetStore()
     versions = store.versions()
     with st.container(key="asset_management"):
@@ -371,6 +369,6 @@ def render(language, *, import_controls, import_progress, preview_controls, road
                     st.info(label(language, "资产库为空。点击“导入资产”，上传成对的 XOSC/XODR、SIM 或 ZIP。", "Your library is empty. Choose Import assets to add paired XOSC/XODR, SIM or ZIP files."))
             if detail is not None:
                 with detail:
-                    _detail(store, lookup[selected], versions, language, busy, preview_controls, road_schematic, source_files)
+                    _detail(store, lookup[selected], versions, language, busy, preview_controls, source_files)
         with requirements:
             _requirements(language)

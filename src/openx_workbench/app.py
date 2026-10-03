@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import html
+import base64
+import csv
 import hashlib
+import io
 import json
 from pathlib import Path
 from dataclasses import asdict, replace
@@ -11,11 +14,14 @@ import streamlit as st
 
 from openx_workbench.appearance import appearance_css, theme_colors
 from openx_workbench.asset_management import label as localized
-from openx_workbench.ui_shell import initialize, sidebar, header_controls, source_files, save_preferences, preview_settings
+from openx_workbench.ui_shell import initialize, workspace_navigation, header_controls, source_files, save_preferences, preview_settings
 from openx_workbench.catalog import AssetFile, OpenXAsset
 from openx_workbench.asset_store import AssetStore, AssetVersion
 from openx_workbench.demo import fetch_public_demo
 from openx_workbench.esmini_preview import PreviewProcess, start_preview
+from openx_workbench.preview_frames import read_frame
+from openx_workbench.candidate_table import candidate_table
+from openx_workbench.overview_table import recent_imports_table
 from openx_workbench.grounding import deterministic_explanation, model_explanation
 from openx_workbench.pdf_store import PdfStore, StoredScene
 from openx_workbench.project_store import ProjectStore
@@ -34,7 +40,7 @@ st.set_page_config(
     page_title="OpenX 场景工作台",
     page_icon="🛣️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -126,7 +132,15 @@ def _pdf_page(data: bytes, number: int) -> bytes:
 
     with pymupdf.open(stream=data, filetype="pdf") as document:
         page = document[max(0, min(number - 1, len(document) - 1))]
-        return page.get_pixmap(matrix=pymupdf.Matrix(1.15, 1.15), alpha=False).tobytes("png")
+        return page.get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False).tobytes("png")
+
+
+@st.dialog("PDF 原文 / Source document", width="large")
+def _source_reader(selected: StoredScene, page_number: int, language: str) -> None:
+    """Read the same immutable source page at a larger, legible width."""
+    st.caption(f"{selected.document.filename} · {tx(language, 'pages')} {page_number}")
+    with st.container(height=650, key="source_reader_page"):
+        st.image(_pdf_page(PdfStore().pdf_bytes(selected.document), page_number), width="stretch")
 
 
 @st.cache_data(show_spinner=False)
@@ -181,8 +195,8 @@ def _theme() -> None:
     st.markdown(
         theme_colors("""
 <style>
-/* finesse · register=product · A=cool-slate+cobalt · B=system-sans · C=evidence-triptych
- * D=feedback-only · E=safety-case-workstation · SOUL=5 SPECTACLE=2 DENSITY=9 */
+/* Engineering workspace base styles. The approved reference and workflow.css
+ * define the current visual treatment. */
 :root{--page:#edf1f5;--bg:#fbfcfe;--panel-2:#f3f6f9;--border:rgba(18,42,66,.12);--ink-1:#10243a;--ink-2:#3e5267;--ink-3:#68798b;--accent:#0876d9;--accent-2:#0a9fc0;--accent-soft:rgba(8,118,217,.10);--on-accent:#f8fbff;--up:#128044;--up-soft:#e9f8ee;--down:#bd3e35;--warn:#a36d00;--navy:#143149;--shadow:0 1px 3px rgba(20,49,73,.05)}
 html,body{overflow-x:clip;color-scheme:light}body,.stApp,[data-testid="stAppViewContainer"]{background:var(--page);color:var(--ink-1);font-size:13px}
 [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stDecoration"],#MainMenu,footer{display:none!important}
@@ -353,42 +367,43 @@ def _document_matching(document, scenes, language: str):
 
 def _pdf_scene_library(language: str) -> StoredScene | None:
     project_id = st.session_state.get("active_project_id")
-    st.subheader(localized(language, "场景需求", "Requirements"))
+    _panel(1, localized(language, "场景需求与原文", "Requirements and evidence"))
     if not project_id:
         with st.expander(tx(language, "encoder")):
             _encoder_control(language)
-        st.info("请先在左侧创建或选择项目。" if language == "zh" else "Create or select a project in the sidebar first.")
+        st.info("请先在顶栏创建或选择项目。" if language == "zh" else "Create or select a project in the top navigation first.")
         st.session_state.selected_stored_scene = None
         return None
     store = PdfStore()
     documents = store.documents(project_id)
-    with st.expander("导入 PDF 与设置" if language == "zh" else "Import PDFs and settings", expanded=not documents):
-        _encoder_control(language)
-        uploads = st.file_uploader("选择 PDF 文件" if language == "zh" else "Choose PDF files", type=["pdf"], accept_multiple_files=True,
-                                   key=f"project_pdfs_{project_id}")
-        standard = st.text_input(tx(language, "standard"), placeholder=tx(language, "standard_hint"),
-                                 key="pdf_standard")
-        st.caption("识别场景需求、核对原文证据，再由你复核入库。导入时会向已配置的模型发送 PDF 文字。" if language == "zh" else
-                   "Extract requirements, check source evidence, then review and publish. Import sends PDF text to your configured model.")
-        if not uploads:
-            st.caption("请先点击文件选择按钮添加 PDF，然后导入。" if language == "zh" else
-                       "Choose a PDF using the file selection button, then import it.")
-        if st.button("导入 PDF" if language == "zh" else "Import PDFs",
-                     disabled=not uploads, key="import_project_pdfs", type="primary", icon=":material/description:"):
-            try:
-                imported = []
-                with st.status("正在提取 PDF 场景…" if language == "zh" else "Extracting PDF scenes…", expanded=True) as status:
-                    for item in uploads:
-                        st.write(item.name)
-                        imported.append(store.import_pdf(project_id, item.name, item.getvalue(), standard.strip(), progress=st.write))
-                    status.update(label=localized(language, "提取完成", "Extraction complete"), state="complete")
-                st.session_state.current_document_id = imported[-1].document_id
-                st.session_state.selected_scene_key = None
-                st.session_state.selected_stored_scene = None
-                st.session_state.retrieval_results = []
-                st.rerun()
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"PDF: {exc}")
+    with st.container(key="pdf_import"):
+        with st.expander("导入 PDF 与设置" if language == "zh" else "Import PDFs and settings", expanded=not documents):
+            _encoder_control(language)
+            uploads = st.file_uploader("选择 PDF 文件" if language == "zh" else "Choose PDF files", type=["pdf"], accept_multiple_files=True,
+                                       key=f"project_pdfs_{project_id}")
+            standard = st.text_input(tx(language, "standard"), placeholder=tx(language, "standard_hint"),
+                                     key="pdf_standard")
+            st.caption("识别场景需求、核对原文证据，再由你复核入库。导入时会向已配置的模型发送 PDF 文字。" if language == "zh" else
+                       "Extract requirements, check source evidence, then review and publish. Import sends PDF text to your configured model.")
+            if not uploads:
+                st.caption("请先点击文件选择按钮添加 PDF，然后导入。" if language == "zh" else
+                           "Choose a PDF using the file selection button, then import it.")
+            if st.button("导入 PDF" if language == "zh" else "Import PDFs",
+                         disabled=not uploads, key="import_project_pdfs", type="primary", icon=":material/description:"):
+                try:
+                    imported = []
+                    with st.status("正在提取 PDF 场景…" if language == "zh" else "Extracting PDF scenes…", expanded=True) as status:
+                        for item in uploads:
+                            st.write(item.name)
+                            imported.append(store.import_pdf(project_id, item.name, item.getvalue(), standard.strip(), progress=st.write))
+                        status.update(label=localized(language, "提取完成", "Extraction complete"), state="complete")
+                    st.session_state.current_document_id = imported[-1].document_id
+                    st.session_state.selected_scene_key = None
+                    st.session_state.selected_stored_scene = None
+                    st.session_state.retrieval_results = []
+                    st.rerun()
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"PDF: {exc}")
     if not documents:
         _empty(tx(language, "no_pdf"), tx(language, "no_pdf_detail"))
         st.session_state.selected_stored_scene = None
@@ -409,6 +424,69 @@ def _pdf_scene_library(language: str) -> StoredScene | None:
                                     format_func=lambda item: f"{document_by_id[item].filename} · {document_by_id[item].scene_count} " + localized(language, "个场景", "scenes"))
         scenes = store.scenes(project_id, selected_doc)
         document = document_by_id[selected_doc]
+    else:
+        scenes = store.all_scenes(project_id)
+    all_visible_scenes = scenes
+    functions = sorted({scene.package.classification.get("function", "未知") for scene in scenes})
+    filters = [st.container(), st.expander(localized(language, "筛选与快速跳转", "Filters and quick jump"))]
+    with filters[0]:
+        phrase = st.text_input("查找场景" if language == "zh" else "Find a scene", key="pdf_scene_search",
+                               placeholder="标题、条款或页码" if language == "zh" else "Title, clause or page")
+    with filters[1]:
+        function_filter = st.selectbox("功能分类" if language == "zh" else "Function category", ["全部 / All", *functions],
+                                        key="pdf_function_filter", format_func=lambda v: localized(language, "全部", "All") if v == "全部 / All" else v)
+    if function_filter != "全部 / All":
+        scenes = [item for item in scenes if item.package.classification.get("function", "未知") == function_filter]
+    if phrase.strip():
+        scenes = [item for item in scenes if phrase.strip().casefold() in
+                  (item.package.title + " " + " ".join(f"{e.section_id} {e.page_start} {e.page_end}" for e in item.package.evidence)).casefold()]
+    st.caption(f"筛选结果 {len(scenes)} / {len(all_visible_scenes)} 个场景 · 选择后在右侧核对" if language == "zh" else
+               f"{len(scenes)} / {len(all_visible_scenes)} scenes · Select one to review")
+    selected_key = st.session_state.get("selected_scene_key")
+    keys = [(project_id, item.document.document_id, item.scene_id) for item in scenes]
+    st.session_state.pdf_queue_keys = keys
+    by_key = dict(zip(keys, scenes))
+    def scene_label(key):
+        item = by_key[key]
+        evidence = item.package.evidence[0] if item.package.evidence else None
+        pages = f"{evidence.page_start}–{evidence.page_end}" if evidence else "—"
+        return f"{item.package.title} · {tx(language, 'pages')} {pages} · v{item.revision}"
+    # A searchable native control bounds the list regardless of document size.
+    signature = hashlib.sha256(repr([(key, by_key[key].revision) for key in keys]).encode()).hexdigest()[:12]
+    picker_key = "scene_picker_" + signature
+    external = st.session_state.pop("scene_picker_target", None)
+    if external in keys:
+        st.session_state[picker_key] = external
+    elif selected_key is None and keys:
+        # Open a real requirement on entry; an empty document/filter stays empty.
+        st.session_state[picker_key] = keys[0]
+    with filters[1]:
+        choice = st.selectbox("选择场景需求" if language == "zh" else "Select a requirement", keys,
+                              index=keys.index(selected_key) if selected_key in keys else None,
+                              format_func=scene_label, key=picker_key,
+                              placeholder="选择一个场景…" if language == "zh" else "Choose a scene…")
+    if choice is not None and choice != selected_key:
+        st.session_state.selected_scene_key = choice
+        st.session_state.pdf_stage = "review"
+        st.session_state.retrieval_results = []
+        st.rerun()
+    published = {(item["document_id"], item["scene_id"], item["revision"]) for item in store.library() if item["project_id"] == project_id}
+    evaluated = {(source.get("document_id"), source.get("scene_id"), source.get("revision"))
+                 for report in ProjectStore().reports(project_id) for source in [report.get("trace", {}).get("source", {})]}
+    with st.container(height=350, border=False, key="requirement_queue"):
+        for queue_key, item in by_key.items():
+            evidence = item.package.evidence[0] if item.package.evidence else None
+            page = f"P{evidence.page_start}" if evidence else localized(language, "无页码", "No page")
+            confirmed = (item.document.document_id, item.scene_id, item.revision) in published
+            state = localized(language, "已确认" if confirmed else "待核对", "Confirmed" if confirmed else "To review")
+            if (item.document.document_id, item.scene_id, item.revision) in evaluated:
+                state = localized(language, "已保存评估", "Assessment saved")
+            label = f"**{item.package.title}**\n\n{page} · v{item.revision} · {state}"
+            if st.button(label, key="queue_" + hashlib.sha256(repr(queue_key).encode()).hexdigest()[:16],
+                         type="primary" if queue_key == selected_key else "secondary", width="stretch"):
+                st.session_state.scene_picker_target = queue_key
+                st.rerun()
+    if mode == "by_pdf":
         with st.expander("文档批量评估与解析记录" if language == "zh" else "Document assessment and extraction record"):
             _document_matching(document, scenes, language)
             from openx_workbench.pdf_extraction import ENGINE_VERSION
@@ -439,47 +517,6 @@ def _pdf_scene_library(language: str) -> StoredScene | None:
                 if not scenes:
                     st.info("模型已完成提取，此文档没有识别到场景。可下载解析记录核查。" if language == "zh" else
                             "Extraction completed with no scenes. Download the record to inspect the result.")
-    else:
-        scenes = store.all_scenes(project_id)
-    all_visible_scenes = scenes
-    functions = sorted({scene.package.classification.get("function", "未知") for scene in scenes})
-    filters = [st.container(), st.container()]
-    with filters[0]:
-        phrase = st.text_input("查找场景" if language == "zh" else "Find a scene", key="pdf_scene_search",
-                               placeholder="标题、条款或页码" if language == "zh" else "Title, clause or page")
-    with filters[1]:
-        function_filter = st.selectbox("功能分类" if language == "zh" else "Function category", ["全部 / All", *functions],
-                                        key="pdf_function_filter", format_func=lambda v: localized(language, "全部", "All") if v == "全部 / All" else v)
-    if function_filter != "全部 / All":
-        scenes = [item for item in scenes if item.package.classification.get("function", "未知") == function_filter]
-    if phrase.strip():
-        scenes = [item for item in scenes if phrase.strip().casefold() in
-                  (item.package.title + " " + " ".join(f"{e.section_id} {e.page_start} {e.page_end}" for e in item.package.evidence)).casefold()]
-    st.caption(f"筛选结果 {len(scenes)} / {len(all_visible_scenes)} 个场景 · 选择后在右侧核对" if language == "zh" else
-               f"{len(scenes)} / {len(all_visible_scenes)} scenes · Select one to review")
-    selected_key = st.session_state.get("selected_scene_key")
-    keys = [(project_id, item.document.document_id, item.scene_id) for item in scenes]
-    by_key = dict(zip(keys, scenes))
-    def scene_label(key):
-        item = by_key[key]
-        evidence = item.package.evidence[0] if item.package.evidence else None
-        pages = f"{evidence.page_start}–{evidence.page_end}" if evidence else "—"
-        return f"{item.package.title} · {tx(language, 'pages')} {pages} · v{item.revision}"
-    # A searchable native control bounds the list regardless of document size.
-    signature = hashlib.sha256(repr([(key, by_key[key].revision) for key in keys]).encode()).hexdigest()[:12]
-    picker_key = "scene_picker_" + signature
-    external = st.session_state.pop("scene_picker_target", None)
-    if external in keys:
-        st.session_state[picker_key] = external
-    choice = st.selectbox("选择场景需求" if language == "zh" else "Select a requirement", keys,
-                          index=keys.index(selected_key) if selected_key in keys else None,
-                          format_func=scene_label, key=picker_key,
-                          placeholder="选择一个场景…" if language == "zh" else "Choose a scene…")
-    if choice is not None and choice != selected_key:
-        st.session_state.selected_scene_key = choice
-        st.session_state.pdf_stage = "review"
-        st.session_state.retrieval_results = []
-        st.rerun()
     if not scenes:
         st.info("没有符合筛选条件的场景。清空关键词或选择全部功能。" if language == "zh" else
                 "No scenes match. Clear your search or choose all functions.")
@@ -498,79 +535,169 @@ def _pdf_scene_library(language: str) -> StoredScene | None:
     return selected
 
 
+def _requirement_fact_sheet(package: ScenePackage, language: str) -> None:
+    """Show saved values without inference, preserving zero and missing states."""
+    zh = language == "zh"
+    unknown = localized(language, "未明确", "Not specified")
+
+    def value(item):
+        if item is None or item == "" or item == [] or item == {} or item in ("未知", "unknown", "未知方位", "未知朝向"):
+            return f'<span class="ox-fact-unknown">{unknown}</span>'
+        if isinstance(item, (int, float)) and not isinstance(item, bool):
+            return safe(format(item, ".15g"))
+        if isinstance(item, (list, tuple)):
+            return " · ".join(safe(display(part, language)) for part in item)
+        if isinstance(item, dict):
+            return safe(json.dumps(item, ensure_ascii=False))
+        return safe(display(item, language))
+
+    if package.structure:
+        structure = package.structure
+        rows = [(localized(language, "道路类型", "Road type"), structure.get("road_class")),
+                (localized(language, "被测功能", "Tested function"), structure.get("tested_function")),
+                (localized(language, "试验目的", "Test intent"), structure.get("test_intent")),
+                (localized(language, "主车动作", "Ego actions"), structure.get("ego_actions")),
+                (localized(language, "触发条件", "Trigger types"), structure.get("semantic_triggers"))]
+        params = structure.get("params") or {}
+    else:
+        rows = [(localized(language, "道路类型", "Road types"), package.road_types),
+                (localized(language, "参与者", "Participants"), package.entities),
+                (localized(language, "动作", "Actions"), package.actions),
+                (localized(language, "触发条件", "Triggers"), package.triggers)]
+        params = dict(package.parameters)
+        if "ttc_value" not in params and "ttc_s" in params:
+            params["ttc_value"] = params.pop("ttc_s")
+    labels = {"ego_speed_kph": localized(language, "主车速度（km/h）", "Ego speed (km/h)"),
+              "ttc_value": "TTC (s)", "lane_count": localized(language, "车道数", "Lane count"),
+              "curve_radius_m": localized(language, "弯道半径（m）", "Curve radius (m)"),
+              "fog_visibility_m": localized(language, "能见度（m）", "Visibility (m)"),
+              "target_speeds_kph": localized(language, "目标速度（km/h）", "Target speeds (km/h)"),
+              "lateral_direction": localized(language, "横向方向", "Lateral direction"),
+              "lane_direction": localized(language, "车道方向", "Lane direction"),
+              "weather": localized(language, "天气", "Weather"),
+              "time_of_day": localized(language, "时段", "Time of day"),
+              "end_condition": localized(language, "结束条件", "End condition")}
+    primary_params = ("ego_speed_kph", "target_speeds_kph", "ttc_value", "lane_count", "weather", "time_of_day") if package.structure else ("ego_speed_kph", "ttc_value", "lane_count")
+    for key in primary_params:
+        rows.append((labels[key], params.get(key)))
+    for key, item in params.items():
+        if key not in primary_params and item is not None:
+            rows.append((labels.get(key, display(key, language)), item))
+    if not package.structure:
+        rows.extend([(labels["weather"], package.weather), (labels["time_of_day"], package.time_of_day)])
+    table = "".join(f'<tr><th scope="row">{safe(label)}</th><td>{value(item)}</td></tr>' for label, item in rows)
+    description = f'<p class="ox-saved-description">{safe(package.preferred_text)}</p>' if package.preferred_text else ""
+    st.markdown(f'<section class="ox-fact-sheet"><div class="ox-sheet-heading">{safe(localized(language, "已保存的需求事实", "Saved requirement facts"))}</div>'
+                f'{description}<table><tbody>{table}</tbody></table></section>', unsafe_allow_html=True)
+    participants = package.structure.get("participants", [])
+    if participants:
+        headings = ("参与者类型", "方位", "朝向", "动作") if zh else ("Participant", "Bearing", "Facing", "Actions")
+        actor_rows = "".join('<tr>' + "".join(f'<td>{value(actor.get(key))}</td>' for key in ("kind", "bearing", "facing", "actions")) + '</tr>' for actor in participants)
+        st.markdown('<section class="ox-fact-sheet"><div class="ox-sheet-heading">' + localized(language, "其他参与者", "Other participants") +
+                    '</div><div class="ox-actor-scroll"><table><thead><tr>' + "".join(f'<th scope="col">{heading}</th>' for heading in headings) +
+                    f'</tr></thead><tbody>{actor_rows}</tbody></table></div></section>', unsafe_allow_html=True)
+
+
 def _requirement_details(selected: StoredScene, language: str) -> None:
     store = PdfStore()
     project_id = selected.document.project_id
     package = selected.package
-    st.write(package.preferred_text)
-    st.caption(localized(language, "先核对需求事实，再检索资产。需要修改时展开编辑区；原文证据保持只读。", "Review the requirement before searching assets. Expand the editor to make changes; source evidence remains read-only."))
-    with st.expander("核对并编辑事实" if language == "zh" else "Review and edit facts", expanded=st.session_state.pop("requirement_edit_open", False)):
-        st.caption(localized(language, "编辑后先保存事实修订，再切换场景或页面。匹配会使用已保存的事实。", "Save fact edits before changing scenes or pages. Matching uses saved facts."))
-        with st.form(key=f"edit_scene_{selected.document.document_id}_{selected.scene_id}_{selected.revision}"):
-            title = st.text_input("场景标题" if language == "zh" else "Scene title", value=package.title)
-            preferred_text = st.text_area("场景说明" if language == "zh" else "Extracted facts / interpretation",
-                                          value=package.preferred_text, height=115)
-            fields = {}
-            if package.structure:
-                structured_draft = edit_structure(package.structure, language)
-                with st.expander("高级结构编辑" if language == "zh" else "Advanced structure editor"):
-                    st.caption("复杂参与者、关系和目标速度会保留。勾选后以 JSON 替换完整结构。" if language == "zh" else
-                               "Participants, relations and target speeds are preserved. Enable JSON to replace the entire structure.")
-                    use_json = st.checkbox("使用 JSON 编辑结果" if language == "zh" else "Use JSON edits")
-                    structured_json = st.text_area("结构 JSON" if language == "zh" else "Structure JSON", value=json.dumps(package.structure, ensure_ascii=False, indent=2), height=180)
-            else:
-                for key, label in (("entities", localized(language, "参与者", "Participants")), ("actions", localized(language, "动作", "Actions")),
-                                   ("triggers", localized(language, "触发条件", "Triggers")), ("road_types", localized(language, "道路", "Road types")),
-                                   ("weather", localized(language, "天气", "Weather")), ("time_of_day", localized(language, "时段", "Time of day"))):
-                    fields[key] = st.text_input(label, value=", ".join(getattr(package, key)))
-                parameters = st.text_input(localized(language, "高级参数（JSON）", "Advanced parameters (JSON)"),
-                                           value=json.dumps(package.parameters, ensure_ascii=False))
-            save = st.form_submit_button("保存事实修订" if language == "zh" else "Save fact revision")
-    if save:
-        try:
-            edits = {"title": title, "preferred_text": preferred_text}
-            if package.structure:
-                edits.update(structure=json.loads(structured_json) if use_json else structured_draft)
-            else:
-                edits.update({key: [part.strip() for part in value.split(",") if part.strip()]
-                              for key, value in fields.items()})
-                edits["parameters"] = json.loads(parameters)
-            store.revise_scene(project_id, selected.document.document_id, selected.scene_id, edits)
-            st.session_state.retrieval_results = []
-            st.rerun()
-        except Exception as exc:  # noqa: BLE001
-            st.error(localized(language, "修订未保存。请检查数值和结构格式；你的输入仍保留在表单中。", "Revision was not saved. Check values and structure; your inputs remain in the form."))
-            with st.expander(localized(language, "查看错误详情", "Error details")):
-                st.code(str(exc), language=None)
-    with st.expander("结构与分类" if language == "zh" else "Structure and classification"):
-        st.json({"structure": package.structure, "classification": package.classification})
-        for issue in package.extraction.get("validation", {}).get("issues", []):
-            st.warning(issue.get("detail", issue.get("code", "")))
-        for flag in package.extraction.get("structure_flags", []):
-            st.warning(flag["detail"])
-        if any(block.get("source") == "ocr" for block in package.extraction.get("source_blocks", [])):
-            st.caption("包含本机 OCR 识别的证据，请对照原文复核。" if language == "zh" else
-                       "Includes locally recognized OCR evidence; review against the source.")
-    with st.expander("对照 PDF 原文" if language == "zh" else "Check PDF evidence"):
-        evidence = package.evidence[0] if package.evidence else None
-        if len(package.evidence) > 1:
-            evidence_index = st.selectbox("原文条款" if language == "zh" else "Source clause", range(len(package.evidence)),
-                                          format_func=lambda index: f"{package.evidence[index].section_id} · {package.evidence[index].page_start}–{package.evidence[index].page_end}",
-                                          key=f"evidence_{selected.document.document_id}_{selected.scene_id}")
-            evidence = package.evidence[evidence_index]
-        if evidence:
-            st.markdown(f'<div class="ow-label">{safe(tx(language,"evidence"))} · {safe(localized(language, "原文只读", "Read-only source"))}</div>', unsafe_allow_html=True)
-            image_col, text_col = st.columns([1, 2])
-            with image_col:
+    source_column, facts_column = st.columns([1.12, 1], gap="large")
+    with source_column:
+        with st.container(key="source_evidence"):
+            st.markdown("**" + localized(language, "PDF 原文", "PDF evidence") + "**")
+            evidence = package.evidence[0] if package.evidence else None
+            if len(package.evidence) > 1:
+                evidence_index = st.selectbox("原文条款" if language == "zh" else "Source clause", range(len(package.evidence)),
+                                              format_func=lambda index: f"{package.evidence[index].section_id} · {package.evidence[index].page_start}–{package.evidence[index].page_end}",
+                                              key=f"evidence_{selected.document.document_id}_{selected.scene_id}")
+                evidence = package.evidence[evidence_index]
+            if evidence:
+                page_number = evidence.page_start
+                if evidence.page_end > evidence.page_start:
+                    page_number = st.selectbox(localized(language, "证据页码", "Evidence page"),
+                                               range(evidence.page_start, evidence.page_end + 1),
+                                               key=f"source_page_{selected.document.document_id}_{selected.scene_id}")
+                page_image = None
                 try:
-                    st.image(_pdf_page(store.pdf_bytes(selected.document), evidence.page_start),
-                             caption=f"{selected.document.filename} · {tx(language, 'pages')} {evidence.page_start}",
-                             use_container_width=True)
+                    page_image = _pdf_page(store.pdf_bytes(selected.document), page_number)
                 except Exception:
-                    st.caption(f"{selected.document.filename} · {tx(language, 'pages')} {evidence.page_start}–{evidence.page_end}")
-            with text_col:
-                st.markdown(f'<div class="ow-evidence"><strong>{safe(evidence.section_id)} · {safe(selected.document.filename)}</strong>'
-                            f'<p>{safe(evidence.source_text)}</p></div>', unsafe_allow_html=True)
+                    st.warning(localized(language, "原页暂时无法显示，可下载原始 PDF 核对。", "Source page unavailable. Download the original PDF to review it."))
+                if page_image:
+                    with st.container(height=510, border=False, key="source_page_view"):
+                        st.image(page_image, width="stretch")
+                source_actions, source_status = st.columns([1, 1.5])
+                with source_actions:
+                    if st.button(localized(language, "放大阅读", "Enlarge page"), key="enlarge_source_page",
+                                 icon=":material/open_in_full:", disabled=page_image is None):
+                        _source_reader(selected, page_number, language)
+                with source_status:
+                    st.caption(localized(language, f"原始 PDF · 第 {page_number} 页 · 只读", f"Original PDF · Page {page_number} · Read-only"))
+                if evidence.source_text.strip():
+                    with st.expander(localized(language, "查看证据文本", "Evidence text")):
+                        st.markdown(f'<div class="ow-evidence"><strong>{safe(evidence.section_id)}</strong>'
+                                    f'<p>{safe(evidence.source_text)}</p></div>', unsafe_allow_html=True)
+            else:
+                st.info(localized(language, "此需求尚未关联原文证据。", "No source evidence is linked to this requirement."))
+    with facts_column:
+        with st.container(height=620, border=False, key="requirement_facts"):
+            _requirement_fact_sheet(package, language)
+            with st.expander("编辑事实" if language == "zh" else "Edit facts", expanded=st.session_state.pop("requirement_edit_open", False)):
+                st.caption(localized(language, "编辑后先保存事实修订，再切换场景或页面。匹配会使用已保存的事实。", "Save fact edits before changing scenes or pages. Matching uses saved facts."))
+                with st.form(key=f"edit_scene_{selected.document.document_id}_{selected.scene_id}_{selected.revision}"):
+                    title = st.text_input("场景标题" if language == "zh" else "Scene title", value=package.title)
+                    preferred_text = st.text_area("场景说明" if language == "zh" else "Extracted facts / interpretation",
+                                                  value=package.preferred_text, height=115)
+                    fields = {}
+                    if package.structure:
+                        structured_draft = edit_structure(package.structure, language)
+                        with st.expander("高级结构编辑" if language == "zh" else "Advanced structure editor"):
+                            st.caption("复杂参与者、关系和目标速度会保留。勾选后以 JSON 替换完整结构。" if language == "zh" else
+                                       "Participants, relations and target speeds are preserved. Enable JSON to replace the entire structure.")
+                            use_json = st.checkbox("使用 JSON 编辑结果" if language == "zh" else "Use JSON edits")
+                            structured_json = st.text_area("结构 JSON" if language == "zh" else "Structure JSON", value=json.dumps(package.structure, ensure_ascii=False, indent=2), height=180)
+                    else:
+                        fact_columns = st.columns(2)
+                        for field_index, (key, label) in enumerate((("entities", localized(language, "参与者", "Participants")), ("actions", localized(language, "动作", "Actions")),
+                                           ("triggers", localized(language, "触发条件", "Triggers")), ("road_types", localized(language, "道路", "Road types")),
+                                           ("weather", localized(language, "天气", "Weather")), ("time_of_day", localized(language, "时段", "Time of day")))):
+                            with fact_columns[field_index % 2]:
+                                fields[key] = st.text_input(label, value=", ".join(getattr(package, key)))
+                        parameters = st.text_input(localized(language, "高级参数（JSON）", "Advanced parameters (JSON)"),
+                                                   value=json.dumps(package.parameters, ensure_ascii=False))
+                    save = st.form_submit_button("保存事实修订" if language == "zh" else "Save fact revision")
+            if save:
+                try:
+                    edits = {"title": title, "preferred_text": preferred_text}
+                    if package.structure:
+                        edits.update(structure=json.loads(structured_json) if use_json else structured_draft)
+                    else:
+                        edits.update({key: [part.strip() for part in value.split(",") if part.strip()]
+                                      for key, value in fields.items()})
+                        edits["parameters"] = json.loads(parameters)
+                    store.revise_scene(project_id, selected.document.document_id, selected.scene_id, edits)
+                    st.session_state.retrieval_results = []
+                    st.rerun()
+                except Exception as exc:  # noqa: BLE001
+                    st.error(localized(language, "修订未保存。请检查数值和结构格式；你的输入仍保留在表单中。", "Revision was not saved. Check values and structure; your inputs remain in the form."))
+                    with st.expander(localized(language, "查看错误详情", "Error details")):
+                        st.code(str(exc), language=None)
+            with st.expander("结构与分类" if language == "zh" else "Structure and classification"):
+                st.json({"structure": package.structure, "classification": package.classification})
+                for issue in package.extraction.get("validation", {}).get("issues", []):
+                    st.warning(issue.get("detail", issue.get("code", "")))
+                for flag in package.extraction.get("structure_flags", []):
+                    st.warning(flag["detail"])
+                if any(block.get("source") == "ocr" for block in package.extraction.get("source_blocks", [])):
+                    st.caption("包含本机 OCR 识别的证据，请对照原文复核。" if language == "zh" else
+                               "Includes locally recognized OCR evidence; review against the source.")
+            _publication_details(selected, language)
+
+
+def _publication_details(selected: StoredScene, language: str) -> None:
+    store = PdfStore()
+    project_id = selected.document.project_id
+    package = selected.package
     with st.expander(localized(language, "入库与修订记录", "Publication and revisions")):
         confirmed = any(item["project_id"] == project_id and item["document_id"] == selected.document.document_id and item["scene_id"] == selected.scene_id and item["revision"] == selected.revision for item in store.library())
         st.caption(localized(language, "当前修订已确认入库" if confirmed else "当前修订尚未确认入库；保存事实和确认入库是两个步骤。", "Current revision published" if confirmed else "Current revision is not published. Save facts before confirming publication."))
@@ -590,31 +717,14 @@ def _requirement_details(selected: StoredScene, language: str) -> None:
 
 
 def _rows(results: list[RetrievalResult], language: str) -> list[dict[str, Any]]:
-    return [{"#": i, tx(language,"scenario"): asset_display_title(r.asset, language), tx(language,"score"): round(r.score, 2),
+    rows = [{"#": i, tx(language,"scenario"): asset_display_title(r.asset, language), tx(language,"score"): round(r.score, 2),
              tx(language,"decision"): _verdict_label(language, r.confirmation_level, r.confirmation_review_kind),
              tx(language,"cost"): r.estimated_change_cost} for i, r in enumerate(results, 1)]
-
-
-def _road_schematic(asset: OpenXAsset, *, scenario: bool) -> str:
-    lanes = max(2, min(6, asset.bundle.road.lane_count or 2))
-    lane_lines = "".join(
-        f'<line x1="{20 + i * 160 / lanes:.1f}" y1="0" x2="{20 + i * 160 / lanes:.1f}" y2="112" stroke="#dce4e5" stroke-width="1" stroke-dasharray="8 7"/>'
-        for i in range(1, lanes)
-    )
-    vehicles = ""
-    if scenario:
-        vehicles = (
-            '<rect x="72" y="72" width="21" height="34" rx="5" fill="#0876d9" stroke="#d9f1ff"/>'
-            '<rect x="118" y="38" width="21" height="34" rx="5" fill="#eef2f4" stroke="#334b5d"/>'
-            '<path d="M128 78 C117 88 105 89 96 89" fill="none" stroke="#f8fbff" stroke-width="2" stroke-dasharray="4 3"/>'
-        )
-    return (
-        '<div class="ow-schematic"><svg viewBox="0 0 200 112" role="img" aria-label="Parsed OpenX schematic">'
-        '<rect width="200" height="112" fill="#536864"/><path d="M0 0h18v112H0zM182 0h18v112h-18z" fill="#728e6e"/>'
-        '<line x1="20" y1="0" x2="20" y2="112" stroke="#f1f5f5" stroke-width="2"/>'
-        '<line x1="180" y1="0" x2="180" y2="112" stroke="#f1f5f5" stroke-width="2"/>'
-        f'{lane_lines}{vehicles}</svg></div>'
-    )
+    for row, result in zip(rows, results):
+        version = st.session_state.get("asset_versions", {}).get(result.asset.asset_id)
+        cached = read_frame(AssetStore(), version) if version else None
+        row[localized(language, "真实帧", "Frame")] = "data:image/jpeg;base64," + base64.b64encode(cached[0]).decode("ascii") if cached else ""
+    return rows
 
 
 def _asset_summary(asset: OpenXAsset, language: str) -> None:
@@ -634,6 +744,8 @@ def _asset_summary(asset: OpenXAsset, language: str) -> None:
 
 def _preview_live(preview: PreviewProcess, version: AssetVersion, language: str, status: dict) -> None:
     store = AssetStore()
+    if status.get("snapshot_error"):
+        st.warning(localized(language, "仿真画面已生成，但缩略图未能保存。请检查本机数据目录的写入权限。", "Simulation rendered, but its still frame could not be saved. Check data-folder write access."))
     current = next((item for item in store.versions()
                     if item.asset_id == version.asset_id and item.version_id == version.version_id), version)
     if status["state"] == "failed":
@@ -656,9 +768,10 @@ def _preview_live(preview: PreviewProcess, version: AssetVersion, language: str,
         if status["frames"]:
             if current.compatibility != "playable":
                 store.set_compatibility(version, "playable")
-            st.markdown(
-                f'<img src="{safe(preview.url)}/stream?token={safe(preview.token)}" '
-                f'alt="{safe(localized(language, "实时仿真画面", "Live esmini simulation"))}" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;display:block;background:#17242e">',
+            if status["state"] == "running":
+                st.markdown(
+                    f'<img src="{safe(preview.url)}/stream?token={safe(preview.token)}" '
+                    f'alt="{safe(localized(language, "实时仿真画面", "Live esmini simulation"))}" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;display:block;background:#17242e">',
                 unsafe_allow_html=True,
             )
         st.caption(localized(language, "预览已结束，可以重新播放。", "Preview finished. You can play it again.")
@@ -673,7 +786,13 @@ def _preview_controls(version: AssetVersion, language: str, *, show_identity: bo
         st.caption(localized(language, f"资产 {version.asset_id[:10]} · 版本 {version.version_number} · {display(version.compatibility, language)}", f"Asset {version.asset_id[:10]} · version {version.version_number} · {version.compatibility}"))
     if version.compatibility_detail:
         st.caption(version.compatibility_detail)
-    _preview_playback(version, language, preview_settings(language))
+    playback = st.container()
+    with st.expander(localized(language, "仿真工具设置", "Simulation tool settings")):
+        executable = preview_settings(language)
+    with playback:
+        if executable is None:
+            st.caption(localized(language, "请展开下方仿真工具设置，选择 esmini 安装位置。", "Open Simulation tool settings below to locate esmini."))
+        _preview_playback(version, language, executable)
 
 
 @st.fragment(run_every="1s")
@@ -681,8 +800,8 @@ def _preview_playback(version: AssetVersion, language: str, executable: Path | N
     preview = st.session_state.get("preview_process")
     selected_preview = preview is not None and (preview.asset_id, preview.version_id) == (version.asset_id, version.version_id)
     status = preview.status() if selected_preview else None
-    active = selected_preview and preview.process.poll() is None and status["state"] != "finished"
-    run_col, stop_col = st.columns(2)
+    active = selected_preview and preview.process.poll() is None and status["state"] in {"starting", "running"}
+    run_col, stop_col, frame_col = st.columns([1.2, .8, 1])
     with run_col:
         if st.button(tx(language, "run_preview"), width="stretch", key="run_esmini_preview", icon=":material/play_arrow:",
                      type="primary", disabled=executable is None):
@@ -703,9 +822,36 @@ def _preview_playback(version: AssetVersion, language: str, executable: Path | N
             previous = st.session_state.pop("preview_process", None)
             if previous:
                 previous.stop()
+    with frame_col:
+        if st.button(localized(language, "生成缩略图", "Capture frame"), key="capture_esmini_frame",
+                     width="stretch", disabled=executable is None or active, icon=":material/photo_camera:"):
+            previous = st.session_state.pop("preview_process", None)
+            if previous:
+                previous.stop()
+            try:
+                with st.spinner(localized(language, "正在渲染真实画面…", "Rendering a real frame…")):
+                    st.session_state.preview_process = start_preview(AssetStore(), version, executable, duration=2)
+            except Exception as exc:
+                st.error(localized(language, "缩略图生成失败：", "Frame capture failed: ") + str(exc))
     preview = st.session_state.get("preview_process")
-    if preview and (preview.asset_id, preview.version_id) == (version.asset_id, version.version_id):
+    matching = preview and (preview.asset_id, preview.version_id) == (version.asset_id, version.version_id)
+    status = preview.status() if matching else None
+    if matching:
         _preview_live(preview, version, language, status)
+        if status["state"] in {"finished", "failed"} and st.session_state.get("preview_terminal_token") != preview.token:
+            st.session_state.preview_terminal_token = preview.token
+            # Refresh version status and candidate thumbnails outside this fragment.
+            st.rerun()
+    if not matching or status["state"] not in {"starting", "running"}:
+        cached = read_frame(AssetStore(), version)
+        if cached:
+            jpeg, metadata = cached
+            st.image(jpeg, use_container_width=True)
+            st.caption(localized(language,
+                f"esmini 真实帧 · {metadata['simulation_seconds']:g} s · 资产版本 {version.version_number} · 静态预览",
+                f"esmini frame · {metadata['simulation_seconds']:g} s · asset version {version.version_number} · Still preview"))
+        else:
+            st.info(localized(language, "还没有这个版本的画面。生成缩略图，或直接播放仿真。", "No frame for this version yet. Capture a frame or play the simulation."))
 
 
 @st.fragment(run_every="1s")
@@ -872,16 +1018,17 @@ def _library_controls(language: str, *, expanded: bool, show_progress: bool = Tr
 def _asset_panel(language: str, package: ScenePackage | None) -> None:
     catalog: list[OpenXAsset] = st.session_state.get("catalog", [])
     st.subheader(localized(language, "比较候选资产", "Compare candidates"))
-    search_row = st.columns([4.5, 1.15, .9])
-    with search_row[0]:
-        query_text = st.text_input(tx(language, "query"), placeholder=tx(language, "query_hint"), label_visibility="collapsed")
-    with search_row[1]:
-        search_clicked = st.button(tx(language, "search"), type="primary", use_container_width=True,
-                                   key="pdf_search_button", icon=":material/search:", disabled=not catalog or (package is None and not query_text.strip()))
-    with search_row[2]:
-        if st.button(localized(language, "清空结果", "Clear results"), use_container_width=True):
-            st.session_state.retrieval_results = []
-            st.rerun()
+    with st.container(key="candidate_search"):
+        search_row = st.columns([3.5, 1.7, 1.1])
+        with search_row[0]:
+            query_text = st.text_input(tx(language, "query"), placeholder=tx(language, "query_hint"), label_visibility="collapsed")
+        with search_row[1]:
+            search_clicked = st.button(tx(language, "search"), type="primary", use_container_width=True,
+                                       key="pdf_search_button", icon=":material/search:", disabled=not catalog or (package is None and not query_text.strip()))
+        with search_row[2]:
+            if st.button(localized(language, "清空结果", "Clear results"), use_container_width=True):
+                st.session_state.retrieval_results = []
+                st.rerun()
     encoder_name = st.session_state.get("retrieval_encoder", "bge")
     st.caption(localized(language, f"在 {len(catalog)} 个资产中匹配 · ", f"Search {len(catalog)} assets · ") + tx(language, encoder_name))
     if not catalog:
@@ -922,34 +1069,52 @@ def _asset_panel(language: str, package: ScenePackage | None) -> None:
     st.caption(localized(language, "相似度越高越相似；修改成本是相对分值，不代表工时。复用结论请查看“复用评估”。", "Higher similarity means closer matches. Change cost is a relative score, not working hours. See Reuse assessment for the conclusion."))
     if "result_index" not in st.session_state:
         st.session_state.result_index = min(st.session_state.get("selected_candidate_index", 0), len(results) - 1)
-    choices, preview = st.columns([1.2, 1], gap="large")
+    choices, preview = st.container(), st.container()
     with choices:
         index = min(st.session_state.get("result_index", 0), len(results) - 1)
         signature = hashlib.sha256(repr([(r.asset.asset_id, r.score, r.confirmation_level) for r in results]).encode()).hexdigest()[:12]
         table_key = f"candidate_rows_{signature}_{index}"
-        selection = st.dataframe(_rows(results, language), hide_index=True, height=300, width="stretch",
-                                 key=table_key, on_select="rerun", selection_mode="single-row",
-                                 selection_default={"selection": {"rows": [index]}},
-                                 column_config={"#": st.column_config.NumberColumn(width=35),
-                                                tx(language, "scenario"): st.column_config.TextColumn(width=185),
-                                                tx(language, "decision"): st.column_config.TextColumn(width=130),
-                                                tx(language, "score"): st.column_config.NumberColumn(width=65),
-                                                tx(language, "cost"): st.column_config.NumberColumn(width=65)})
-        selected_rows = selection.selection.rows
-        if selected_rows and selected_rows[0] != index:
-            st.session_state.result_index = selected_rows[0]
-            st.session_state.selected_candidate_index = selected_rows[0]
+        rows = _rows(results, language)
+        selected_row = candidate_table(rows, index, language, key=table_key)
+        if selected_row != index:
+            st.session_state.result_index = selected_row
+            st.session_state.selected_candidate_index = selected_row
             st.rerun()
-        index = st.selectbox(tx(language, "candidate"), range(len(results)),
-                             format_func=lambda i: f"{i+1}. {asset_display_title(results[i].asset, language)}",
-                             key="result_index")
+        selector_tools, export_tools = st.columns(2)
+        with selector_tools, st.expander(localized(language, "按名称选择候选", "Select candidate by name")):
+            index = st.selectbox(tx(language, "candidate"), range(len(results)),
+                                format_func=lambda i: f"{i+1}. {asset_display_title(results[i].asset, language)}",
+                                key="result_index")
+        with export_tools, st.expander(localized(language, "表格工具与导出", "Table tools and export")):
+            st.dataframe(rows, hide_index=True, width="stretch", height=260,
+                         column_config={localized(language, "真实帧", "Frame"): st.column_config.ImageColumn(width=86)})
         st.markdown('<div class="ow-section-rule"></div>', unsafe_allow_html=True)
         st.session_state.selected_candidate_index = index
     with preview:
-        _asset_summary(results[index].asset, language)
-        version = st.session_state.get("asset_versions", {}).get(results[index].asset.asset_id)
-        if version:
-            _preview_controls(version, language)
+        image_column, difference_column = st.columns([1, 1.1], gap="large")
+        with image_column:
+            _asset_summary(results[index].asset, language)
+            version = st.session_state.get("asset_versions", {}).get(results[index].asset.asset_id)
+            if version:
+                _preview_controls(version, language)
+        with difference_column:
+            st.markdown("**" + localized(language, "需求与候选的差异", "Requirement / candidate differences") + "**")
+            differences = results[index].differences
+            st.caption(_verdict_label(language, results[index].confirmation_level, results[index].confirmation_review_kind))
+            if differences:
+                difference_rows = []
+                for difference in differences:
+                    state = localized(language, "待核实" if not difference.verified else "阻断复用" if difference.blocking else "需调整",
+                                      "Unverified" if not difference.verified else "Blocking" if difference.blocking else "Change needed")
+                    difference_rows.append(f'<tr><th scope="row">{safe(display(difference.category, language))}</th>'
+                                           f'<td>{safe(display(difference.requested, language))}</td>'
+                                           f'<td>{safe(display(difference.candidate, language))}</td><td>{safe(state)}</td></tr>')
+                headings = ("字段", "需求", "候选", "状态") if language == "zh" else ("Field", "Required", "Candidate", "Status")
+                st.markdown('<div class="ox-comparison-scroll"><table class="ox-comparison-table"><thead><tr>' +
+                            ''.join(f'<th scope="col">{label}</th>' for label in headings) + '</tr></thead><tbody>' +
+                            ''.join(difference_rows) + '</tbody></table></div>', unsafe_allow_html=True)
+            else:
+                st.caption(localized(language, "已检查字段没有发现差异；完整结论和证据请在复用评估中核对。", "No differences in checked fields. Review the complete conclusion and evidence in Reuse assessment."))
     _library_controls(language, expanded=False, show_progress=False)
 
 
@@ -1003,15 +1168,14 @@ def _decision_panel(language: str, package: ScenePackage | None) -> None:
             f'<ul class="ow-list">{"".join(f"<li>{safe(difference_text(d, language))}</li>" for d in blocking)}</ul>'
             if blocking else f'<span class="ow-status good">{safe(tx(language,"none"))}</span>'
         )
-        st.markdown(f'<div class="ow-section"><div class="ow-section-title">{safe(tx(language,"blocking"))} <span>{len(blocking)}</span></div>{blocking_body}</div>', unsafe_allow_html=True)
-    with st.expander(localized(language, "查看匹配依据", "Matching evidence")):
-        st.markdown(f'<div class="ow-section"><div class="ow-section-title">{safe(tx(language,"matched"))}<span>{len(result.reasons)}</span></div>{_chips([display(reason, language) for reason in result.reasons])}</div>', unsafe_allow_html=True)
-    if result.confirmation_level != "review":
         edits_body = (
             f'<ul class="ow-list">{"".join(f"<li>{safe(difference_text(d, language))}</li>" for d in edits)}</ul>'
             if edits else f'<span class="ow-status good">{safe(tx(language,"none"))}</span>'
         )
-        st.markdown(f'<div class="ow-section"><div class="ow-section-title">{safe(tx(language,"edits"))}<span>{len(edits)}</span></div>{edits_body}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="ox-assessment-grid"><section class="ow-section"><div class="ow-section-title">{safe(tx(language,"blocking"))} <span>{len(blocking)}</span></div>{blocking_body}</section>'
+                    f'<section class="ow-section"><div class="ow-section-title">{safe(tx(language,"edits"))}<span>{len(edits)}</span></div>{edits_body}</section></div>', unsafe_allow_html=True)
+    with st.expander(localized(language, "查看匹配依据", "Matching evidence")):
+        st.markdown(f'<div class="ow-section"><div class="ow-section-title">{safe(tx(language,"matched"))}<span>{len(result.reasons)}</span></div>{_chips([display(reason, language) for reason in result.reasons])}</div>', unsafe_allow_html=True)
     payload = _trace(result, package)
     if package:
         version = st.session_state.get("asset_versions", {}).get(result.asset.asset_id)
@@ -1068,10 +1232,20 @@ def _decision_panel(language: str, package: ScenePackage | None) -> None:
                            localized(language, "需完成事实与文件标准复核后才能保存为复用决策；当前可下载评估快照。", "Complete fact and file-standard review before saving a reuse decision. You can download the current assessment snapshot."))) :
             try:
                 ProjectStore().save_decision(project_id, version, payload)
+                st.session_state.last_saved_requirement = (project_id, payload["source"].get("document_id"),
+                                                           payload["source"].get("scene_id"), payload["source"].get("revision"))
                 st.success("Decision saved to this project and pinned to the selected asset version."
                            if language == "en" else "决策已保存到项目，并绑定当前资产版本。")
             except Exception as exc:  # noqa: BLE001
                 st.error(str(exc))
+        current = st.session_state.get("selected_stored_scene")
+        current_key = st.session_state.get("selected_scene_key")
+        queue = st.session_state.get("pdf_queue_keys", [])
+        if current and current_key and st.session_state.get("last_saved_requirement") == (*current_key, current.revision):
+            position = queue.index(current_key) if current_key in queue else len(queue)
+            if position + 1 < len(queue) and st.button(localized(language, "继续下一条需求", "Review next requirement"), key="next_requirement", icon=":material/arrow_forward:"):
+                st.session_state.scene_picker_target = queue[position + 1]
+                st.rerun()
     with st.expander(tx(language, "details")):
         st.json(payload)
 
@@ -1162,29 +1336,45 @@ def _home_page(language: str) -> None:
         "unavailable": sum(item.compatibility in {"unsupported", "failed", "timeout"} for item in latest),
         "untested": sum(item.compatibility == "not_tested" for item in latest),
     }
-    cols = st.columns(4)
-    for col, label, value in zip(cols, (("资产", "版本", "可播放", "未检测") if language == "zh" else ("Assets", "Versions", "Playable", "Not tested")),
-                                 (len(latest), len(versions), counts["playable"], counts["untested"])):
-        col.metric(label, value)
+    with st.container(key="overview_metrics"):
+        cols = st.columns(4)
+        for col, label, value in zip(cols, (("资产", "版本", "可播放", "未检测") if language == "zh" else ("Assets", "Versions", "Playable", "Not tested")),
+                                     (len(latest), len(versions), counts["playable"], counts["untested"])):
+            col.metric(label, value)
     if not latest:
         st.info(tx(language, "no_assets"))
         st.caption("Recent imports: none" if language == "en" else "最近导入：暂无")
         return
     tested = len(latest) - counts["untested"]
-    st.caption("Preview test coverage" if language == "en" else "预览检测覆盖率")
-    st.progress(tested / len(latest), text=f"已检测 {tested}/{len(latest)} 个资产" if language == "zh" else f"{tested}/{len(latest)} assets tested")
-    if tested:
-        st.caption("Playable among tested assets" if language == "en" else "已检测资产的可播放比例")
-        st.progress(counts["playable"] / tested, text=f"{counts['playable']}/{tested} 可播放" if language == "zh" else f"{counts['playable']}/{tested} playable")
+    with st.container(key="overview_coverage"):
+        coverage, playable = st.columns(2)
+        with coverage:
+            st.caption("Preview test coverage" if language == "en" else "预览检测覆盖率")
+            st.progress(tested / len(latest), text=f"已检测 {tested}/{len(latest)} 个资产" if language == "zh" else f"{tested}/{len(latest)} assets tested")
+        with playable:
+            st.caption("Playable among tested assets" if language == "en" else "已检测资产的可播放比例")
+            if tested:
+                st.progress(counts["playable"] / tested, text=f"{counts['playable']}/{tested} 可播放" if language == "zh" else f"{counts['playable']}/{tested} playable")
+            else:
+                st.caption("尚未检测" if language == "zh" else "No assets tested yet")
     st.caption(f"预览失败 {counts['unavailable']} 个 · 状态仅代表已检测的版本。" if language == "zh" else f"Preview failures: {counts['unavailable']} · Status reflects tested versions only.")
-    st.subheader("Recent imports" if language == "en" else "最近导入")
     recent = sorted(versions, key=lambda item: item.created_at, reverse=True)[:8]
     from openx_workbench.asset_management import value_label
     headings = ("资产", "来源", "版本", "预览状态", "导入时间") if language == "zh" else (
         "Asset", "Source", "Version", "Preview", "Imported")
-    st.dataframe([dict(zip(headings, (item.title, item.source_name, item.version_number,
-                                     value_label(item.compatibility, language), item.created_at[:19]))) for item in recent],
-                 use_container_width=True, hide_index=True)
+    rows = [{"values": [item.title, item.source_name, item.version_number,
+                         value_label(item.compatibility, language), item.created_at[:19].replace("T", " ")],
+             "status": item.compatibility} for item in recent]
+    export = io.StringIO()
+    writer = csv.writer(export)
+    writer.writerow(headings)
+    writer.writerows(row["values"] for row in rows)
+    with st.container(key="recent_import_heading"):
+        title, download = st.columns([1, .15])
+        title.subheader("Recent imports" if language == "en" else "最近导入")
+        download.download_button("导出 CSV" if language == "zh" else "Export CSV", export.getvalue().encode("utf-8-sig"),
+                                 "openx-recent-imports.csv", "text/csv", key="recent_imports_csv", icon=":material/download:")
+    recent_imports_table(headings, rows, language)
 
 
 def _text_search_page(language: str) -> None:
@@ -1224,7 +1414,7 @@ def _text_search_page(language: str) -> None:
 def _management_page(language: str) -> None:
     from openx_workbench.asset_management import render
     render(language, import_controls=_library_controls, import_progress=_import_progress,
-           preview_controls=_preview_controls, road_schematic=_road_schematic, source_files=source_files)
+           preview_controls=_preview_controls, source_files=source_files)
 
 
 def main() -> None:
@@ -1233,7 +1423,7 @@ def main() -> None:
         catalog, versions = AssetStore().catalog()
         st.session_state.update(catalog=catalog, asset_versions=versions, asset_files=[], sim_reports=[])
     _theme()
-    st.markdown("<style>" + theme_colors(Path(__file__).with_name("shell.css").read_text(encoding="utf-8")) + appearance_css(st.session_state.appearance) + "</style>", unsafe_allow_html=True)
+    st.markdown("<style>" + theme_colors(Path(__file__).with_name("shell.css").read_text(encoding="utf-8")) + appearance_css(st.session_state.appearance) + Path(__file__).with_name("workflow.css").read_text(encoding="utf-8") + "</style>", unsafe_allow_html=True)
     projects = ProjectStore()
     if "active_project_id" not in st.session_state:
         last = projects.last()
@@ -1241,7 +1431,7 @@ def main() -> None:
     pending_project = st.session_state.pop("project_to_select", None)
     if pending_project:
         st.session_state.active_project_id = pending_project
-    page = sidebar(tx)
+    page = workspace_navigation(tx)
     if st.session_state.get("pdf_active_project") != st.session_state.get("active_project_id"):
         st.session_state.pdf_active_project = st.session_state.get("active_project_id")
         st.session_state.selected_scene_key = None
@@ -1260,7 +1450,7 @@ def main() -> None:
     next_stage = st.session_state.pop("pdf_next_stage", None)
     if next_stage:
         st.session_state.pdf_stage = next_stage
-    language = _header(show_steps=False)
+    language = "zh" if st.session_state.language == "中文" else "en"
     native_locale(language)
     if page == "home":
         _home_page(language)
@@ -1296,16 +1486,17 @@ def main() -> None:
                     if stage == "review":
                         with st.container(key="evidence_panel"):
                             _requirement_details(selected, language)
-                        actions, context = st.columns([1, 2])
-                        with actions:
-                            if st.button(localized(language, "检索并比较资产", "Search and compare assets"),
-                                         key="pdf_search_button", type="primary", icon=":material/search:",
-                                         disabled=not st.session_state.get("catalog")):
-                                st.session_state.pdf_next_stage = "compare"
-                                st.session_state.pdf_auto_search = True
-                                st.rerun()
-                        with context:
-                            st.caption(localized(language, f"资产库已就绪 · {len(st.session_state.get('catalog', []))} 个资产", f"Library ready · {len(st.session_state.get('catalog', []))} assets"))
+                        with st.container(key="task_actions"):
+                            actions, context = st.columns([1, 2])
+                            with actions:
+                                if st.button(localized(language, "检索并比较资产", "Search and compare assets"),
+                                             key="pdf_search_button", type="primary", icon=":material/search:",
+                                             disabled=not st.session_state.get("catalog")):
+                                    st.session_state.pdf_next_stage = "compare"
+                                    st.session_state.pdf_auto_search = True
+                                    st.rerun()
+                            with context:
+                                st.caption(localized(language, f"资产库已就绪 · {len(st.session_state.get('catalog', []))} 个资产", f"Library ready · {len(st.session_state.get('catalog', []))} assets"))
                     elif stage == "compare":
                         with st.container(key="asset_panel"):
                             _asset_panel(language, package)

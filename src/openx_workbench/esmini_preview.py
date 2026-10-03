@@ -21,6 +21,7 @@ from xml.etree import ElementTree as ET
 
 from .asset_store import AssetStore, AssetVersion
 from .dependency_package import stage_package
+from .preview_frames import frame_path, save_frame
 
 
 def managed_esmini_root() -> Path:
@@ -125,7 +126,7 @@ def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
         token = os.urandom(16).hex()
         command = [sys.executable, "-m", "openx_workbench.esmini_preview", "--worker",
                    str(executable), str(scenario_path), str(root), str(port), token,
-                   str(min(max(duration, 1), 120))]
+                   str(min(max(duration, 1), 120)), str(frame_path(store, version))]
         env = os.environ.copy()
         package_root = str(Path(__file__).resolve().parents[1])
         env["PYTHONPATH"] = package_root + os.pathsep + env.get("PYTHONPATH", "")
@@ -163,9 +164,11 @@ class _State:
         self.frames = 0
         self.state = "starting"
         self.error = ""
+        self.snapshot_error = ""
 
 
-def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state: _State) -> None:
+def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state: _State,
+              snapshot: Path | None = None) -> None:
     try:
         from PIL import Image
         dll_dir = os.add_dll_directory(str(executable.parent)) if hasattr(os, "add_dll_directory") else None
@@ -214,6 +217,13 @@ def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state
                     state.frame = output.getvalue()
                     state.frames += 1
                     state.condition.notify_all()
+                if snapshot is not None and state.frames in (1, 10):
+                    # Keep an early frame even when the scenario ends before 1 s.
+                    try:
+                        save_frame(snapshot, state.frame, state.frames)
+                        state.snapshot_error = ""
+                    except OSError as exc:
+                        state.snapshot_error = str(exc)
                 time.sleep(0.1)
         finally:
             lib.SE_Close()
@@ -235,7 +245,8 @@ def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state
             state.condition.notify_all()
 
 
-def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, duration: int) -> None:
+def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, duration: int,
+           snapshot: Path | None = None) -> None:
     state = _State()
 
     class Handler(BaseHTTPRequestHandler):
@@ -247,7 +258,7 @@ def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, 
                 return
             if parsed.path == "/status":
                 body = json.dumps({"state": state.state, "frames": state.frames,
-                                   "error": state.error}).encode()
+                                   "error": state.error, "snapshot_error": state.snapshot_error}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -281,7 +292,7 @@ def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, 
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
-    threading.Thread(target=_simulate, args=(executable, scenario, root, duration, state), daemon=True).start()
+    threading.Thread(target=_simulate, args=(executable, scenario, root, duration, state, snapshot), daemon=True).start()
     timer = threading.Timer(duration + 20, server.shutdown)
     timer.daemon = True
     timer.start()
@@ -294,4 +305,4 @@ def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, 
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--worker"]:
     _serve(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]),
-           int(sys.argv[5]), sys.argv[6], int(sys.argv[7]))
+           int(sys.argv[5]), sys.argv[6], int(sys.argv[7]), Path(sys.argv[8]) if len(sys.argv) > 8 else None)

@@ -1,0 +1,26 @@
+{
+  "name": "openx-workspace-design",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-aria-components": "^1.0.0",
+    "@untitledui/icons": "latest",
+    "tailwind-merge": "^3.0.0",
+    "tailwindcss": "^4.0.0",
+    "tailwindcss-react-aria-components": "latest",
+    "tailwindcss-animate": "^1.0.7",
+    "@tailwindcss/typography": "latest"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "typescript": "latest"
+  }
+}

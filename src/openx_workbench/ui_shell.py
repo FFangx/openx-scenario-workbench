@@ -164,43 +164,45 @@ def source_files(version, language):
                 st.info("文件较大，请下载查看。" if language == "zh" else "Download this large file to inspect it.")
 
 
-def sidebar(tx):
+def workspace_navigation(tx):
+    """Keep global navigation above the task, leaving the queue its full width."""
     language = "zh" if st.session_state.language == "中文" else "en"
     projects = ProjectStore()
-    with st.sidebar:
-        st.markdown('<div class="ox-sidebar-brand">Open<span>X</span></div>'
-                    f'<div class="ox-sidebar-description">{"场景工作台" if language == "zh" else "Scenario Workbench"}</div>', unsafe_allow_html=True)
-        with st.container(key="workspace_nav"):
-            for page, symbol in (("home", "space_dashboard"), ("text_search", "search"),
-                                 ("pdf_workflow", "description"), ("asset_management", "inventory_2")):
+    header_controls(language)
+    with st.container(key="workspace_navigation"):
+        columns = st.columns([1, 1.25, 1.45, 1.25, 1.7, 1.9, 1.2], vertical_alignment="center")
+        for column, (page, symbol) in zip(columns, (("home", "space_dashboard"), ("text_search", "search"),
+                                                   ("pdf_workflow", "description"), ("asset_management", "inventory_2"))):
+            with column:
                 st.button(tx(language, page), key=f"nav_{page}", icon=f":material/{symbol}:",
                           type="primary" if st.session_state.active_page == page else "tertiary",
-                          use_container_width=True, on_click=lambda value=page: st.session_state.update(active_page=value))
-        st.divider()
+                          width="stretch", on_click=lambda value=page: st.session_state.update(active_page=value))
+        with columns[4]:
+            st.markdown(f'<div class="ox-workspace-location" lang="{language}">' +
+                        ("本机工作区" if language == "zh" else "Local workspace") + '</div>', unsafe_allow_html=True)
         project_list = projects.projects()
-        if project_list:
-            ids = [item.project_id for item in project_list]
-            if st.session_state.get("active_project_id") not in ids:
-                st.session_state.active_project_id = ids[-1]
-            selected_id = st.selectbox("当前项目" if language == "zh" else "Current project", ids,
-                                      format_func=lambda item: next(p.name for p in project_list if p.project_id == item),
-                                      key="active_project_id")
-            if not projects.last() or projects.last().project_id != selected_id:
-                projects.set_last(selected_id)
-        else:
-            st.caption("创建项目以保存法规与决策" if language == "zh" else "Create a project to save evidence and decisions")
-        with st.popover("新建项目" if language == "zh" else "New project", icon=":material/add:", use_container_width=True):
-            name = st.text_input("项目名称" if language == "zh" else "Project name", key="new_project_name")
-            if st.button("创建项目" if language == "zh" else "Create project", key="create_project", type="primary"):
-                if not name.strip():
-                    st.warning("请输入项目名称。" if language == "zh" else "Enter a project name.")
-                else:
-                    project = projects.create(name)
-                    st.session_state.project_to_select = project.project_id
-                    st.rerun()
-        st.markdown('<div class="ox-local-status">' +
-                    ("本机工作区 · 数据保存在此电脑" if language == "zh" else "Local workspace · stored on this computer") +
-                    '</div>', unsafe_allow_html=True)
+        with columns[5]:
+            if project_list:
+                ids = [item.project_id for item in project_list]
+                if st.session_state.get("active_project_id") not in ids:
+                    st.session_state.active_project_id = ids[-1]
+                selected_id = st.selectbox("当前项目" if language == "zh" else "Current project", ids,
+                                          format_func=lambda item: next(p.name for p in project_list if p.project_id == item),
+                                          key="active_project_id", label_visibility="collapsed")
+                if not projects.last() or projects.last().project_id != selected_id:
+                    projects.set_last(selected_id)
+            else:
+                st.caption("尚无项目" if language == "zh" else "No projects")
+        with columns[6]:
+            with st.popover("新建项目" if language == "zh" else "New project", icon=":material/add:", width="stretch"):
+                name = st.text_input("项目名称" if language == "zh" else "Project name", key="new_project_name")
+                if st.button("创建项目" if language == "zh" else "Create project", key="create_project", type="primary"):
+                    if not name.strip():
+                        st.warning("请输入项目名称。" if language == "zh" else "Enter a project name.")
+                    else:
+                        project = projects.create(name)
+                        st.session_state.project_to_select = project.project_id
+                        st.rerun()
     return st.session_state.active_page
 
 
@@ -210,9 +212,8 @@ def header_controls(language):
     with st.container(key="workspace_header"):
         context, files, history, help_col, settings_col, appearance, locale = st.columns([4, 1.2, 1.2, 1, 1, 1, .9])
         with context:
-            name = project.name if project else ("未选择项目" if zh else "No project selected")
-            st.markdown(f'<div class="ox-context"><strong>{html.escape(name)}</strong><span>' +
-                        ("本机工作区" if zh else "Local workspace") + '</span></div>', unsafe_allow_html=True)
+            st.markdown('<div class="ox-product-brand"><strong class="notranslate" translate="no">Open<span>X</span></strong><span>' +
+                        ("场景工作台" if zh else "Scenario Workbench") + '</span></div>', unsafe_allow_html=True)
         with files:
             with st.popover("文件" if zh else "Files", icon=":material/folder_open:", use_container_width=True):
                 documents = PdfStore().documents(project.project_id) if project else []

@@ -67,7 +67,8 @@ button[kind]:disabled [data-testid="stMarkdownContainer"]{color:inherit!importan
 [role="dialog"],[role="listbox"],[data-testid="stPopoverBody"],[data-testid="stPopoverContent"],[data-testid="stSelectboxVirtualDropdown"]{background:var(--bg)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important}
 [role="option"]{color:var(--ink-1)!important;background:var(--bg)}
 [role="option"]:hover,[role="option"][aria-selected="true"]{background:var(--panel-2)!important}
-[data-testid="stExpander"]{background:var(--bg);border-color:var(--control-border)!important}
+[data-testid="stExpander"]{background:transparent!important;border-radius:8px;border-color:var(--control-border)!important}
+[data-testid="stExpander"] details{border-radius:8px!important;overflow:hidden;background:var(--bg);border-color:var(--control-border)!important}
 [data-testid="stExpander"] details,[data-testid="stExpander"] summary{color:var(--ink-1)}
 [data-testid="stExpander"] summary,[data-testid="stExpander"] summary:hover,[data-testid="stExpander"] summary:focus{background:var(--panel-2)!important;color:var(--ink-1)!important}
 [data-testid="stFileUploaderDropzone"],[data-testid="stCode"],pre{background:var(--panel-2)!important;color:var(--ink-1)!important;border-color:var(--control-border)!important}
@@ -80,7 +81,7 @@ button[kind]:disabled [data-testid="stMarkdownContainer"]{color:inherit!importan
 [data-testid="stAlert"]{background:var(--panel-2)!important;color:var(--ink-1)!important}
 [data-testid="stTable"]{background:var(--bg);color:var(--ink-1)}
 [data-testid="stTable"] td,[data-testid="stTable"] th{border-color:var(--control-border)!important}
-[data-testid="stProgressBar"]>div{background:var(--panel-2)}
+[data-testid="stProgressBarTrack"]{background:var(--control-border)!important}
 .ow-section-title span[style]{color:var(--ink-1)!important}
 .st-key-workspace_header [data-testid="stMarkdownContainer"]{color:inherit}
 .st-key-workspace_nav [data-testid="stMarkdownContainer"]{color:inherit}
@@ -89,8 +90,4 @@ button[kind]:disabled [data-testid="stMarkdownContainer"]{color:inherit!importan
 [role="dialog"] button:not([kind^="primary"]){color:var(--ink-1)!important}
 ::selection{background:var(--accent);color:#fff}
 [data-testid="stMain"]{scrollbar-color:var(--control-border) var(--bg)}
-""" + (
-        '[data-testid="stDataFrame"] canvas{filter:invert(.9) hue-rotate(180deg)}' if mode == "dark" else
-        '@media(prefers-color-scheme:dark){[data-testid="stDataFrame"] canvas{filter:invert(.9) hue-rotate(180deg)}}'
-        if mode == "system" else ""
-    )
+"""

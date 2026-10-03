@@ -281,7 +281,7 @@ def test_classification_and_deletion_locked_during_background_import(tmp_path, m
         release.set()
 
 
-def test_pdf_workflow_opens_saved_scene_only_after_selection(tmp_path, monkeypatch):
+def test_pdf_workflow_opens_first_scene_and_switches_document_without_stale_results(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
     assets = AssetStore(tmp_path)
     project = ProjectStore(assets).create("PDF review")
@@ -299,13 +299,25 @@ def test_pdf_workflow_opens_saved_scene_only_after_selection(tmp_path, monkeypat
     app.button(key="nav_" + "pdf_workflow").click().run()
     assert not app.exception
     app.selectbox(key="current_document_id").set_value(record.document_id).run()
+    assert app.session_state["selected_stored_scene"].document.document_id == record.document_id
     assert next(item for item in app.selectbox if item.label == "选择场景需求")
     next(item for item in app.selectbox if item.label == "选择场景需求").select((project.project_id, record.document_id, "scene-0001")).run()
     assert not app.exception
     assert app.session_state["selected_stored_scene"].revision == 1
     app.selectbox(key="current_document_id").set_value(other_record.document_id).run()
     assert not app.exception
-    assert app.session_state["selected_stored_scene"] is None
+    assert app.session_state["selected_stored_scene"].document.document_id == other_record.document_id
+    assert app.session_state["retrieval_results"] == []
+    app.text_input(key="pdf_scene_search").set_value("no matching requirement").run()
+    assert not app.exception
+    assert app.session_state["pdf_queue_keys"] == []
+    assert app.session_state["selected_stored_scene"].document.document_id == other_record.document_id
+    empty = AppTest.from_file(str(app_path)).run(timeout=10)
+    empty.session_state["pdf_scene_search"] = "no matching requirement"
+    empty.button(key="nav_pdf_workflow").click().run()
+    assert not empty.exception
+    assert empty.session_state["selected_stored_scene"] is None
+    assert empty.session_state["pdf_queue_keys"] == []
 
 
 def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, monkeypatch):
@@ -367,6 +379,43 @@ def test_pdf_decision_survives_revision_asset_update_and_app_restart(tmp_path, m
     assert reopened.session_state["selected_stored_scene"].revision == 3
     assert reopened.session_state["selected_stored_scene"].package.title == "Later revision"
     assert projects.reports(project.project_id)[0] == report
+
+
+def test_queue_save_and_continue_preserves_report_and_resets_candidates(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    assets = AssetStore(tmp_path)
+    projects = ProjectStore(assets)
+    project = projects.create("Queue acceptance")
+    fixtures = Path(__file__).parent / "fixtures"
+    assets.import_files([AssetFile(name, (fixtures / name).read_bytes()) for name in ("minimal.xosc", "minimal.xodr")])
+    with pymupdf.open() as document:
+        document.new_page().insert_text((72, 72), "7.4.1 Cut-in scenario\nTarget vehicle cuts in on a straight road. TTC = 3.0 s.")
+        document.new_page().insert_text((72, 72), "7.4.2 Braking scenario\nTarget vehicle brakes on a straight road.")
+        document.new_page().insert_text((72, 72), "7.4.3 Lane keeping\nEgo follows a straight lane.")
+        record = PdfStore(assets).import_pdf(project.project_id, "queue.pdf", document.tobytes(), engine="legacy")
+    scenes = PdfStore(assets).scenes(project.project_id, record.document_id)
+    assert len(scenes) >= 2
+    app = AppTest.from_file(str(Path(__file__).parents[1] / "src/openx_workbench/app.py")).run(timeout=15)
+    app.button(key="nav_pdf_workflow").click().run()
+    buttons = [b for b in app.button if b.key and b.key.startswith("queue_")]
+    buttons[0].click().run()
+    assert app.session_state["selected_stored_scene"].scene_id == scenes[0].scene_id
+    fact_sheet = next(item.value for item in app.markdown if '<section class="ox-fact-sheet">' in item.value)
+    assert '<th scope="row">TTC (s)</th><td>3</td>' in fact_sheet
+    assert fact_sheet.count("TTC") == 2  # One narrative value and one parameter row.
+    app.selectbox(key="retrieval_encoder").select("hashing").run()
+    app.button(key="pdf_search_button").click().run()
+    app.button(key="open_pdf_assessment").click().run()
+    app.button(key="save_reuse_decision").click().run()
+    assert not app.exception
+    report = projects.reports(project.project_id)[0]
+    app.button(key="next_requirement").click().run()
+    assert not app.exception
+    assert app.session_state["selected_stored_scene"].scene_id == scenes[1].scene_id
+    assert app.session_state["pdf_stage"] == "review"
+    assert app.session_state["retrieval_results"] == []
+    assert projects.reports(project.project_id)[0] == report
+    assert any("已保存评估" in b.label for b in app.button if b.key and b.key.startswith("queue_"))
 
 
 def test_typed_structure_edit_changes_live_reuse_and_saved_snapshot(tmp_path, monkeypatch):
@@ -480,7 +529,7 @@ def test_m3_default_and_explicit_baseline_persist_across_pages_and_restart(tmp_p
     assert reopened.session_state["retrieval_encoder"] == "hashing"
 
 
-def test_document_batch_can_match_without_selecting_scene_and_reopen_saved_report(tmp_path, monkeypatch):
+def test_document_batch_can_match_from_default_scene_and_reopen_saved_report(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
     assets = AssetStore(tmp_path)
     projects = ProjectStore(assets)
@@ -497,7 +546,7 @@ def test_document_batch_can_match_without_selecting_scene_and_reopen_saved_repor
     app.selectbox(key="retrieval_encoder").select("hashing").run()
     app.button(key="match_document").click().run()
     assert not app.exception
-    assert app.session_state["selected_stored_scene"] is None
+    assert app.session_state["selected_stored_scene"].scene_id == "scene-0001"
     assert app.session_state["batch_assessment"][1]["scene_count"] == 1
     app.button(key="save_batch_report").click().run()
     assert projects.reports(project.project_id)[0]["trace"]["kind"] == "batch_match"
@@ -585,6 +634,9 @@ def test_native_fact_editor_saves_numeric_speed_and_preserves_evidence_and_topol
     app.button(key="nav_pdf_workflow").click().run()
     picker = next(item for item in app.selectbox if item.label == "选择场景需求")
     picker.select((project.project_id, record.document_id, original.scene_id)).run()
+    fact_sheet = next(item.value for item in app.markdown if '<section class="ox-fact-sheet">' in item.value)
+    assert "target_speeds_kph" not in fact_sheet
+    assert "目标速度（km/h）" in fact_sheet
     next(item for item in app.number_input if item.label == "主车速度（km/h）").set_value(50.0)
     next(item for item in app.button if item.label == "保存事实修订").click().run()
     assert not app.exception
@@ -594,6 +646,14 @@ def test_native_fact_editor_saves_numeric_speed_and_preserves_evidence_and_topol
     assert revised.package.structure["participants"] == original.package.structure["participants"]
     assert revised.package.evidence == original.package.evidence
     assert app.session_state["selected_stored_scene"].revision == original.revision + 1
+    fact_sheet = next(item.value for item in app.markdown if '<section class="ox-fact-sheet">' in item.value)
+    assert '<th scope="row">主车速度（km/h）</th><td>50</td>' in fact_sheet
+    next(item for item in app.number_input if item.label == "主车速度（km/h）").set_value(0.0)
+    next(item for item in app.button if item.label == "保存事实修订").click().run()
+    assert not app.exception
+    fact_sheet = next(item.value for item in app.markdown if '<section class="ox-fact-sheet">' in item.value)
+    assert '<th scope="row">主车速度（km/h）</th><td>0</td>' in fact_sheet
+    assert store.scenes(project.project_id, record.document_id)[0].package.evidence == original.package.evidence
     app.button(key="publish_pdf_scene").click().run()
     app.run()
     assert app.button(key="publish_pdf_scene").disabled

@@ -20,3 +20,7 @@ adaptation scope and limitations are described in `docs/PDF_MIGRATION.md`.
 The adaptation contains generic source algorithms only. ScenarioManager assets,
 private L2 scenarios, PDFs, evaluation datasets, extracted document content,
 model responses and machine configuration are not included.
+
+## Untitled UI review prototype
+
+`prototypes/openx-redesign/vendor/untitled/` contains the free MIT components and supporting styles used by the local React review prototype, from [Untitled UI React](https://github.com/untitleduico/react). Copyright (c) 2025 Untitled UI. The full upstream license is retained in that directory. Only the imported components and their local dependencies are included; no paid PRO components, private documents, simulation frames or browser screenshots are included.
