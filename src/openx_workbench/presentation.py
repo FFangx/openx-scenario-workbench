@@ -31,7 +31,7 @@ LABELS = {
     "modify start trigger": "修改开始触发条件", "set target initial speeds": "设置目标初始速度",
     "verify or change environment": "核对或修改环境",
     "verify and set parameter in XOSC": "核对并设置场景参数", "set parameter in XOSC": "设置场景参数",
-    "relations": "参与者关系", "venue_features": "场地特征", "lane_marking": "车道线",
+    "relations": "参与者关系", "participant_signature": "参与者", "venue_features": "场地特征", "lane_marking": "车道线",
     "parking_operation": "泊车操作", "test_intent": "试验目的", "road_class": "道路类型",
     "lateral_direction": "横向方向", "fog_visibility_m": "能见度（m）", "ttc_s": "TTC（s）", "distance_m": "距离（m）",
     "car": "乘用车", "truck": "卡车", "pedestrian": "行人", "bicycle": "两轮车",

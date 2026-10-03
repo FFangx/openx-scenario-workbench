@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { App, Button, Dropdown, Space } from "antd";
+import { useState } from "react";
+import { App, Button, Dropdown, Empty, Space, Spin, Tooltip } from "antd";
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -7,24 +7,30 @@ import {
   DownloadOutlined,
   ExclamationCircleFilled,
   LinkOutlined,
-  PlusCircleOutlined,
+  QuestionCircleFilled,
   SafetyCertificateOutlined,
+  SaveOutlined,
 } from "@ant-design/icons";
-import { REQ_FACTS, type Candidate, type FactStatus, type Scene } from "../data/mock";
-import { MATCH_CLASS } from "./SearchPanel";
+import { api, basename, categoryLabel, LEVEL, urls, type Candidate, type Difference, type Lang } from "../api";
+import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
 
-const STATUS: Record<FactStatus, { label: string; icon: ReactNode }> = {
-  ok: { label: "Matched", icon: <CheckCircleFilled /> },
-  warn: { label: "Adjust", icon: <ExclamationCircleFilled /> },
-  bad: { label: "Conflict", icon: <CloseCircleFilled /> },
+const SUB: Record<string, string> = {
+  direct: "The candidate scenario can be reused without modification.",
+  modify: "The candidate can be reused after the changes listed below.",
+  new_build: "Blocking differences prevent reuse. Build a new scenario.",
+  standards: "Structure matches, but the scenario or road standard checks have not passed yet.",
+  partial: "Part of the structure was compared. Resolve the unverified items before confirming reuse.",
+  undecidable: "Key participant or ego-action facts are missing, so reuse cannot be assessed.",
+  recall: "Text-only match. Select a PDF scene to assess reuse structurally.",
 };
 
-const SUB = {
-  direct: "The candidate scenario can be reused without modification.",
-  modify: "The candidate can be reused after the adjustments listed below.",
-  not: "Blocking differences prevent reuse. Build a new scenario.",
-};
+const STATUS = (d: Difference) =>
+  !d.verified
+    ? { label: "Unverified", cls: "warn", icon: <QuestionCircleFilled /> }
+    : d.blocking
+      ? { label: "Blocking", cls: "bad", icon: <CloseCircleFilled /> }
+      : { label: "Change", cls: "warn", icon: <ExclamationCircleFilled /> };
 
 function download(name: string, text: string, type: string) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -33,35 +39,90 @@ function download(name: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export function DecisionPanel({ scene, cand }: { scene: Scene; cand: Candidate }) {
+const csvCell = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+
+interface Props {
+  sceneRef: SceneRef | null;
+  cand: Candidate | null;
+  searching: boolean;
+  query: string;
+  lang: Lang;
+}
+
+export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props) {
   const { message } = App.useApp();
-  const kind = MATCH_CLASS[cand.match];
-  const facts = REQ_FACTS.map((r, i) => ({ key: r, req: r, cand: cand.facts[i][0], st: cand.facts[i][1] }));
-  const okCount = facts.filter((f) => f.st === "ok").length;
-  const blocking = facts.filter((f) => f.st === "bad");
-  const adjust = facts.filter((f) => f.st === "warn");
+  const [busy, setBusy] = useState(false);
 
-  const result = {
-    requirement: scene.req,
-    pages: scene.pages,
-    scenario: cand.xosc,
-    road: cand.xodr,
-    decision: cand.match,
-    confidence: cand.conf,
-    change_cost: cand.cost,
-    facts: facts.map(({ req, cand: c, st }) => ({ requirement: req, candidate: c, status: st })),
+  if (!cand) {
+    return (
+      <section className="panel decide">
+        <div className="ph">
+          <span className="n">3</span>Reuse decision and traceability
+        </div>
+        <div className="box decide-empty">
+          {searching ? <Spin /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Search and pick a candidate to see the reuse assessment" />}
+        </div>
+      </section>
+    );
+  }
+
+  const level = LEVEL[cand.level];
+  const blocking = cand.differences.filter((d) => d.blocking);
+  const say = (d: Difference) => (lang === "zh" ? d.text : `${categoryLabel(d, lang)}: ${d.requested_label} → ${d.action}`);
+  const scene = sceneRef?.scene;
+  const request = {
+    project_id: sceneRef?.projectId ?? "",
+    document_id: sceneRef?.doc.document_id,
+    scene_id: scene?.scene_id,
+    revision: scene?.revision,
+    text: query,
+    lang,
+    asset_id: cand.asset_id,
+    version_id: cand.version_id ?? "",
   };
-  const exportAs = (fmt: "json" | "csv") => {
-    if (fmt === "json") download(`reuse_${scene.req}_${cand.xosc}.json`, JSON.stringify(result, null, 2), "application/json");
-    else
-      download(
-        `reuse_${scene.req}_${cand.xosc}.csv`,
-        "requirement,candidate,status\n" + result.facts.map((f) => `"${f.requirement}","${f.candidate}",${f.status}`).join("\n"),
-        "text/csv",
+  const stem = `reuse_${scene?.section_id || "search"}_${basename(cand.xosc).replace(/\.xosc$/i, "")}`;
+
+  const exportAs = async (fmt: "json" | "csv") => {
+    if (fmt === "csv") {
+      const lines = [["field", "requirement", "candidate", "status", "action"].join(",")].concat(
+        cand.differences.map((d) => [categoryLabel(d, lang), d.requested_label, d.candidate_label, STATUS(d).label, d.action].map(csvCell).join(",")),
       );
+      download(`${stem}.csv`, lines.join("\n"), "text/csv");
+      return;
+    }
+    setBusy(true);
+    try {
+      download(`${stem}.json`, JSON.stringify(await api.trace(request), null, 2), "application/json");
+    } catch (e) {
+      message.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const DecisionIcon = { direct: CheckCircleFilled, modify: ExclamationCircleFilled, not: CloseCircleFilled }[kind];
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.saveDecision(request);
+      message.success("Decision saved to this project and pinned to the selected asset version.");
+    } catch (e) {
+      message.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveBlocked = !scene
+    ? "Select a PDF scene before saving a decision."
+    : cand.level === "review"
+      ? "Resolve the review items before saving. You can still export the assessment."
+      : !cand.version_id
+        ? "This asset has no stored version."
+        : null;
+
+  const DecisionIcon = { direct: CheckCircleFilled, modify: ExclamationCircleFilled, review: QuestionCircleFilled, not: CloseCircleFilled }[level.cls];
+  const std = cand.standard_checks;
+  const page = scene?.pages?.[0];
 
   return (
     <section className="panel decide">
@@ -69,48 +130,48 @@ export function DecisionPanel({ scene, cand }: { scene: Scene; cand: Candidate }
         <span className="n">3</span>Reuse decision and traceability
       </div>
 
-      <div className={`decision ${kind}`}>
+      <div className={`decision ${level.cls}`}>
         <div className="hd">
           <DecisionIcon /> Reuse decision
-          <span className="cf">
-            Confidence <b>{cand.conf.toFixed(2)}</b>
-          </span>
+          <Tooltip title="Combined similarity: 55% semantic, 30% scenario structure, 15% road">
+            <span className="cf">
+              Match score <b>{cand.scores.combined.toFixed(2)}</b>
+            </span>
+          </Tooltip>
         </div>
-        <div className="big">{cand.match}</div>
-        <div className="sub">{SUB[kind]}</div>
+        <div className="big">{level.label}</div>
+        <div className="sub">{SUB[cand.level === "review" ? cand.review_kind || "partial" : cand.level]}</div>
       </div>
 
       <div className="box flush sel-item">
         <div className="top">
-          <div>
+          <div className="sel-name">
             <div className="sec-title">
               <SafetyCertificateOutlined /> Selected item
             </div>
-            <div className="name">
-              <a>{cand.xosc}</a>
-              <span className="plus">+</span>
-              <a>{cand.xodr}</a>
+            <div className="name" title={cand.title}>
+              {cand.display_title}
             </div>
           </div>
-          <Button onClick={() => message.info(`Opens ${cand.xosc} in the scenario editor`)}>
+          <Button href={urls.file(cand, "scenario")} target="_blank">
             <span style={{ color: "var(--link)" }}>
-              Open in editor <ArrowUpRight />
+              Open XOSC <ArrowUpRight />
             </span>
           </Button>
         </div>
         <div className="kvt">
-          <span>Scenario type</span>
-          <span>Lane support – Cut-in</span>
-          <span>Standard</span>
-          <span>Euro NCAP 2025</span>
+          <span>Function</span>
+          <span>{[cand.classification.function_type].flat().join(", ") || "—"}</span>
+          <span>Road / target</span>
+          <span>{[cand.classification.label_road_type, ...[cand.classification.label_target_type].flat()].filter(Boolean).join(" · ") || "—"}</span>
           <span>Source requirement</span>
-          <span>
-            Pages {scene.pages} ({scene.req})
-          </span>
+          <span>{scene ? `${scene.section_id} · pages ${scene.pages?.join("–") ?? "—"}` : "Text search"}</span>
           <span>Estimated change cost</span>
-          <span className={`cost-${cand.cost}`}>{cand.cost}</span>
-          <span>Rationale</span>
-          <span>{cand.rationale}</span>
+          <span>{cand.change_cost == null ? "—" : `${cand.change_cost.toFixed(1)} (relative)`}</span>
+          <span>Standard checks</span>
+          <span className={std.passed ? "cost-Low" : "cost-Medium"}>
+            {std.passed ? "Passed" : `Pending: ${Object.entries(std.pending).map(([k, v]) => `${k} ${v}`).join(", ")}`}
+          </span>
         </div>
       </div>
 
@@ -120,19 +181,14 @@ export function DecisionPanel({ scene, cand }: { scene: Scene; cand: Candidate }
           Blocking differences ({blocking.length})
         </div>
         <div className="note">
-          {blocking.length === 0 && "No blocking differences found."}
-          {(blocking.length > 0 || adjust.length > 0) && (
+          {blocking.length === 0 ? (
+            "No blocking differences found."
+          ) : (
             <ul>
-              {blocking.map((f) => (
-                <li key={f.req}>
-                  <b>{f.req}</b> → {f.cand}
-                </li>
+              {blocking.slice(0, 2).map((d, i) => (
+                <li key={i} title={say(d)}>{say(d)}</li>
               ))}
-              {adjust.map((f) => (
-                <li key={f.req}>
-                  Adjust <b>{f.req}</b> → {f.cand}
-                </li>
-              ))}
+              {blocking.length > 2 && <li className="muted">+{blocking.length - 2} more in the table below</li>}
             </ul>
           )}
         </div>
@@ -140,62 +196,81 @@ export function DecisionPanel({ scene, cand }: { scene: Scene; cand: Candidate }
 
       <div className="box flush facts-wrap">
         <div className="card-h">
-          <SafetyCertificateOutlined /> Key matched facts
+          <SafetyCertificateOutlined /> Requirement vs candidate
           <span className="r">
-            {okCount === 5 ? <CheckCircleFilled className="ic-ok" /> : <ExclamationCircleFilled className="ic-warn" />}
-            {okCount} / 5 matched
+            {cand.differences.length ? <ExclamationCircleFilled className="ic-warn" /> : <CheckCircleFilled className="ic-ok" />}
+            {cand.differences.length ? `${cand.differences.length} differences` : "All checked fields match"}
           </span>
         </div>
-        <table className="facts-t">
-          <colgroup>
-            <col style={{ width: 137 }} />
-            <col />
-            <col style={{ width: 82 }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Requirement fact</th>
-              <th>Candidate fact</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {facts.map((f) => (
-              <tr key={f.key}>
-                <td title={f.req}>{f.req}</td>
-                <td title={f.cand}>{f.cand}</td>
-                <td>
-                  <span className={`st ${f.st}`}>
-                    {STATUS[f.st].icon}
-                    {STATUS[f.st].label}
-                  </span>
-                </td>
+        <div className="facts-scroll">
+          <table className="facts-t">
+            <colgroup>
+              <col style={{ width: 96 }} />
+              <col />
+              <col style={{ width: 82 }} />
+              <col style={{ width: 82 }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Requirement</th>
+                <th>Candidate</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {cand.differences.map((d, i) => {
+                const s = STATUS(d);
+                return (
+                  <tr key={i} title={say(d)}>
+                    <td>{categoryLabel(d, lang)}</td>
+                    <td>{d.requested_label}</td>
+                    <td>{d.candidate_label}</td>
+                    <td>
+                      <span className={`st ${s.cls}`}>
+                        {s.icon}
+                        {s.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!cand.differences.length && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    {cand.reasons.map((r) => r.label).join(" · ")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="box flush">
         <div className="card-h">
-          <LinkOutlined /> Traceability links <span className="r">3 links</span>
+          <LinkOutlined /> Traceability links <span className="r">{scene ? 3 : 2} links</span>
         </div>
         <div className="trace">
-          <span>Requirement</span>
-          <span><a>Euro NCAP 2025 – p.{scene.p0} ({scene.req})</a></span>
-          <span><a>Open <ArrowUpRight /></a></span>
+          {scene && sceneRef && (
+            <>
+              <span>Requirement</span>
+              <span className="ell" title={sceneRef.doc.filename}>{sceneRef.doc.filename.replace(/\.pdf$/i, "")} – p.{page} ({scene.section_id})</span>
+              <span><a href={urls.pdf(sceneRef.projectId, sceneRef.doc.document_id, page)} target="_blank" rel="noreferrer">Open <ArrowUpRight /></a></span>
+            </>
+          )}
           <span>Scenario</span>
-          <span><a>{cand.xosc}</a></span>
-          <span><a>Open <ArrowUpRight /></a></span>
+          <span className="ell" title={cand.xosc}>{basename(cand.xosc)}</span>
+          <span><a href={urls.file(cand, "scenario")} target="_blank" rel="noreferrer">Open <ArrowUpRight /></a></span>
           <span>Road</span>
-          <span><a>{cand.xodr}</a></span>
-          <span><a>Open <ArrowUpRight /></a></span>
+          <span className="ell" title={cand.xodr}>{basename(cand.xodr)}</span>
+          <span><a href={urls.file(cand, "road")} target="_blank" rel="noreferrer">Open <ArrowUpRight /></a></span>
         </div>
       </div>
 
       <div className="actions">
         <Space.Compact>
-          <Button type="primary" size="large" icon={<DownloadOutlined />} onClick={() => exportAs("json")}>
+          <Button type="primary" size="large" icon={<DownloadOutlined />} loading={busy} onClick={() => exportAs("json")}>
             Export reuse result
           </Button>
           <Dropdown
@@ -203,8 +278,8 @@ export function DecisionPanel({ scene, cand }: { scene: Scene; cand: Candidate }
             placement="bottomRight"
             menu={{
               items: [
-                { key: "json", label: "Export as JSON" },
-                { key: "csv", label: "Export facts as CSV" },
+                { key: "json", label: "Export trace as JSON" },
+                { key: "csv", label: "Export differences as CSV" },
               ],
               onClick: ({ key }) => exportAs(key as "json" | "csv"),
             }}
@@ -212,9 +287,11 @@ export function DecisionPanel({ scene, cand }: { scene: Scene; cand: Candidate }
             <Button type="primary" size="large" icon={<DownOutlined />} aria-label="More export options" />
           </Dropdown>
         </Space.Compact>
-        <Button size="large" icon={<PlusCircleOutlined />} onClick={() => message.success(`Added ${cand.xosc} → ${scene.req} to worklist`)}>
-          Add to worklist
-        </Button>
+        <Tooltip title={saveBlocked}>
+          <Button size="large" icon={<SaveOutlined />} disabled={!!saveBlocked || busy} onClick={save}>
+            Save decision
+          </Button>
+        </Tooltip>
       </div>
     </section>
   );

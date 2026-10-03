@@ -288,3 +288,67 @@ a { color: var(--link); }
 .actions .ant-space-compact > .ant-btn:first-child { flex: 1; }
 .actions .ant-btn { height: 40px; font-size: 13px; }
 .actions > .ant-btn { flex: 163; }
+
+/* ---------- live data (phase 2) ---------- */
+:root { --review-bg: #e3edfb; --review-ink: #1d4f9a; --review-line: #9dbbe8; }
+:root[data-theme="dark"] { --review-bg: #1a2c47; --review-ink: #9cc2ff; --review-line: #2f5591; }
+.center-pad { display: flex; justify-content: center; padding: 24px 0; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* left */
+.panel.req .left-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.panel.req .left-tabs > .ant-tabs-body-holder { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 -7px; padding: 0 7px 2px; }
+.panel.req .evi { flex: none; height: 233px; }
+.pdf-meta { min-width: 0; flex: 1; }
+.pdfcard .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scene img { object-position: left top; background: #fff; border: 1px solid var(--line); }
+.thumb-empty { width: 76px; height: 64px; flex: none; border-radius: 1px; background: var(--soft); border: 1px dashed var(--line2); }
+.scene .d { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scene .c.confirmed { color: var(--green-ink); background: var(--green-bg); }
+:root[data-theme="dark"] .scene img, :root[data-theme="dark"] .docview img { filter: brightness(.82); }
+.evi .x { overflow-y: auto; min-height: 0; padding-right: 4px; }
+.evi .x .src { margin: 0 0 6px; }
+.page-empty { width: 126px; height: 172px; flex: none; border: 1px dashed var(--line2); background: var(--soft); }
+
+/* middle */
+.chips-empty { font-size: 11.5px; color: var(--muted); line-height: 32px; }
+.chips-empty a { margin-left: 4px; }
+.ph .meta .online.off { color: #c03030; }
+.results-note { font-size: 11.5px; padding: 6px 0 4px; }
+.search-error { margin: -2px 0 0; }
+.pair a { max-width: 100%; }
+.cand-table .desc.clamp2 { display: -webkit-box; word-break: break-all; }
+.pv-link { display: flex; align-items: baseline; min-width: 0; white-space: nowrap; }
+.pv-link a { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pv-road .hd { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mtag.review { background: var(--review-bg); color: var(--review-ink); }
+.cand-table .ant-table-body { overflow-y: auto !important; }
+.cand-table .ant-table-placeholder td { height: 140px !important; }
+.pv-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+.img-empty { height: 133px; border: 1px dashed var(--line2); border-radius: 3px; background: var(--soft); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; padding: 0 12px; font-size: 11px; color: var(--muted); }
+.img-empty b { color: var(--text-2); font-weight: 600; font-size: 11.5px; }
+.img-empty.road { height: 85px; }
+.preview .grid > * { min-width: 0; }
+.kv > span { min-width: 0; overflow-wrap: anywhere; }
+
+/* right */
+.decision.review { background: var(--review-bg); border-color: var(--review-line); }
+.decision.review .hd, .decision.review .big, .decision.review .hd .anticon, .decision.review .cf b { color: var(--review-ink); }
+.decide-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+.sel-name { min-width: 0; flex: 1; }
+.sel-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
+.sel-item .top .ant-btn { flex: none; }
+.note li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note ul { margin-left: 16px; }
+.facts-scroll { max-height: 148px; overflow-y: auto; }
+.facts-t thead th { position: sticky; top: 0; z-index: 1; }
+.trace { grid-template-columns: 86px minmax(0, 1fr) auto; }
+
+/* step bar popovers */
+.pop-list { display: flex; flex-direction: column; gap: 2px; max-width: 360px; max-height: 320px; overflow-y: auto; }
+.pop-list > button, .pop-list > .row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: none; border: 0; border-radius: 4px; padding: 6px 8px; font: inherit; color: inherit; cursor: default; }
+.pop-list > button { cursor: pointer; }
+.pop-list > button:hover, .pop-list > button.on { background: var(--blue-bg); }
+.pop-list span { color: var(--muted); font-size: 11px; }

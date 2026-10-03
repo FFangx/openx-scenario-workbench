@@ -33,6 +33,14 @@
    - 深色模式下不出现白底块或看不清的文字
 5. 视觉通过后提交，再进入阶段 2：用 FastAPI 包装现有模块（`retrieval.py`、`reuse.py`、`project_store.py`、`pdf_store.py`），vite 已把 `/api` 代理到 127.0.0.1:8765
 
+## 阶段 2 现状（已接真实数据）
+- 后端：`src/openx_workbench/api.py`，只包装现有的 `PdfStore`、`ProjectStore`、`OpenXIndex`、`build_trace`，不改存储格式
+- 运行：`uv pip install -e ".[web]"` 后，`python -m openx_workbench.api`（127.0.0.1:8765）；另开 `cd web && npm run dev`
+- `npm run build` 后，`python -m openx_workbench.api` 会同时托管 `web/dist`，单进程即可使用
+- 没有账号系统：界面不出现头像、登录或用户菜单
+- 空状态而不是造假：未生成的 esmini 帧、未提取的道路图、未完成的标准检查都明确显示为未完成
+- 测试：`tests/test_api.py`
+
 ## 注意
 - 不要自己发挥设计：以效果图为唯一标准，不要套用其他设计规范或审美类 skill
 - 不要在界面上造假：接真实数据后，缺失的值（比如未生成的仿真帧）要做成明确的空状态
