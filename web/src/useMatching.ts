@@ -35,7 +35,7 @@ function reduce(state: Search, action: Action): Search {
 }
 
 /** Search text, filters and the ranked candidates for the selected scene (or free text without one). */
-export function useMatching({ projectId, scene, lang }: { projectId: string | null; scene: Scene | null; lang: Lang }) {
+export function useMatching({ projectId, scene, lang, topK }: { projectId: string | null; scene: Scene | null; lang: Lang; topK?: number }) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [search, dispatch] = useReducer(reduce, IDLE);
@@ -56,11 +56,12 @@ export function useMatching({ projectId, scene, lang }: { projectId: string | nu
           text: opts.text ?? query,
           filters: opts.filters ?? filters,
           lang,
+          top_k: topK,
         })
         .then((result) => seq === searchSeq.current && dispatch({ type: "done", result }))
         .catch((e: Error) => seq === searchSeq.current && dispatch({ type: "failed", error: e.message }));
     },
-    [projectId, scene, query, filters, lang],
+    [projectId, scene, query, filters, lang, topK],
   );
 
   return {

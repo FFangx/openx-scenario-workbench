@@ -21,8 +21,8 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 
 | Page or action | What to do |
 | --- | --- |
-| **Workbench** | Create a project from the project menu, configure the language model in **Settings**, and import a PDF from the PDF card's **⋯** menu. Pick a requirement: its source evidence, the ranked candidates and the reuse assessment appear side by side. Review and edit its typed facts under **Requirement facts**, publish the revision, then save the decision. |
-| **Free-text search** | Close the scene chip above the candidates and describe a scenario. Results are text recall only; no reuse decision is made. |
+| **Workbench** | Opens on a start page: describe a scenario, import a PDF, or continue with one of the project's PDFs (the logo returns here). Create a project from the project menu and configure the language model in **Settings** before importing. In a PDF's workflow, pick a requirement: its source evidence, the ranked candidates and the reuse assessment appear side by side. Review and edit its typed facts under **Requirement facts**, publish the revision, then save the decision. |
+| **Free-text search** | Describe a scenario on the start page (or close the scene chip in a PDF's workflow). Similar assets appear as cards on their own page; open one for its details. Text search makes no reuse decision. |
 | **Play simulation** | Use **Play**, **Stop** or **Capture frame** in the candidate preview or the asset detail. An installed Windows esmini is detected automatically; choose a custom installation under **Settings → Local service**. |
 | **Match entire PDF** | From the PDF card's **⋯** menu, match all scenes of the document and download or save a version-pinned JSON/HTML summary. |
 | **Overview** | Library statistics, recent imports, and saved decisions and summaries with their downloads; reopen a requirement to continue its review. |

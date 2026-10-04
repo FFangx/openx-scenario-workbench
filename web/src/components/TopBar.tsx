@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { App, Button, Dropdown, Empty, Form, Input, Modal, Popover, Tooltip, type MenuProps } from "antd";
 import {
   CheckOutlined,
@@ -25,11 +25,13 @@ interface TopBarProps {
   onCreated: (p: Project) => void;
   onHelp: () => void;
   onSettings: () => void;
+  /** Back to the workbench start page. */
+  onHome: () => void;
 }
 
 const check = (on: boolean) => (on ? <CheckOutlined /> : <span style={{ width: 14 }} />);
 
-export function TopBar({ page, onPage, onLang, projects, projectId, onProject, onCreated, onHelp, onSettings }: TopBarProps) {
+export function TopBar({ page, onPage, onLang, projects, projectId, onProject, onCreated, onHelp, onSettings, onHome }: TopBarProps) {
   const { t, lang } = useT();
   const [creating, setCreating] = useState(false);
   const project = projects.find((p) => p.project_id === projectId);
@@ -51,10 +53,12 @@ export function TopBar({ page, onPage, onLang, projects, projectId, onProject, o
 
   return (
     <header className="ox-top">
-      <span className="ox-brand" translate="no">
-        Open<b>X</b>
-      </span>
-      <span className="ox-app">{t("场景工作台", "Scenario Workbench")}</span>
+      <button className="ox-home" onClick={onHome} aria-label={t("回到起始页", "Back to start")}>
+        <span className="ox-brand" translate="no">
+          Open<b>X</b>
+        </span>
+        <span className="ox-app">{t("场景工作台", "Scenario Workbench")}</span>
+      </button>
       <span className="ox-sep" />
       <nav className="ox-nav" aria-label={t("页面", "Pages")}>
         {pages.map(([key, label]) => (
@@ -155,6 +159,12 @@ export function StepBar({ active, projectId, docs, docId, onDoc, onAllDecisions 
   const { t, lang } = useT();
   const [reports, setReports] = useState<Report[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Links start empty and fill up to the active step after the first paint, so entering the workflow animates them.
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setFilled(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const steps = [t("从 PDF 提取", "Extract from PDF"), t("检索资产库", "Search asset library"), t("评估复用", "Assess reuse"), t("导出与追溯", "Export & trace")];
 
   const openHistory = (open: boolean) => {
@@ -212,10 +222,9 @@ export function StepBar({ active, projectId, docs, docId, onDoc, onAllDecisions 
     <nav className="ox-steps">
       {steps.map((s, i) => (
         <Fragment key={i}>
-          {i === 1 && <span className="ox-step-gap" />}
-          {i > 1 && <span className="ox-step-arrow" />}
-          <span className={`ox-step${i === active ? " on" : ""}`}>
-            <span className="n">{i + 1}</span>
+          {i > 0 && <span className={`ox-step-link${i <= active && filled ? " done" : ""}`} style={{ "--i": i } as React.CSSProperties}><i /></span>}
+          <span className={`ox-step${i === active ? " on" : i < active ? " done" : ""}`}>
+            <span className="n">{i < active ? <CheckOutlined /> : i + 1}</span>
             {s}
           </span>
         </Fragment>

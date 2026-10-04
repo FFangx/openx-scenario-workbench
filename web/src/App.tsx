@@ -15,6 +15,8 @@ import { AssetsPage } from "./components/AssetsPage";
 import { RequirementsPanel } from "./components/RequirementsPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { DecisionPanel } from "./components/DecisionPanel";
+import { StartPage } from "./components/StartPage";
+import { SearchPage } from "./components/SearchPage";
 
 function useSystemDark() {
   const q = "(prefers-color-scheme: dark)";
@@ -90,12 +92,16 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const [online, setOnline] = useState<boolean | null>(null);
   const [esmini, setEsmini] = useState<boolean>(false);
   const [libraryStamp, setLibraryStamp] = useState(0);
+  // The workbench opens on the start page; free-text search and the PDF workflow are entered from it.
+  const [mode, setMode] = useState<"start" | "search" | "pdf">("start");
+  const [searchFrom, setSearchFrom] = useState<DOMRect | null>(null);
 
   // Entering another scene puts its title in the search box; the matching hook owns that box.
   const enterQuery = useRef<(title: string) => void>(() => undefined);
   const req = useRequirements({ onEnter: (s) => enterQuery.current(s.title), onError: (text) => message.error(text) });
   const { projectId, docId, scope, scenes, scene, doc } = req;
   const match = useMatching({ projectId, scene, lang });
+  const textSearch = useMatching({ projectId, scene: null, lang, topK: 24 });
   enterQuery.current = match.setQuery;
   const { result, runSearch } = match;
   const cand = result?.results.find((c) => c.asset_id === match.activeKey) ?? null;
@@ -137,10 +143,19 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     match.setQuery(s.title);
   };
   /** Free text search: matching without a requirement gives text recall only, never a reuse decision. */
-  const clearScene = () => {
-    req.select(null);
-    match.clear();
-    match.setQuery("");
+  const startSearch = (text: string, from: DOMRect | null) => {
+    textSearch.setQuery(text);
+    setSearchFrom(from);
+    setMode("search");
+    if (text.trim()) textSearch.runSearch({ text });
+  };
+  const enterWorkflow = (documentId?: string) => {
+    if (documentId) req.chooseDoc(documentId);
+    setMode("pdf");
+  };
+  const goHome = () => {
+    setPage("workbench");
+    setMode("start");
   };
   const changeFilters = (f: Record<string, string>) => {
     match.setFilters(f);
@@ -153,6 +168,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   };
   const pickProject = (id: string) => {
     switchProject(id);
+    setMode("start");
     api.selectProject(id).catch(() => undefined);
   };
   /** After imports, deletions or relabelling: refresh facets and re-rank, so no stale candidate stays on screen. */
@@ -160,6 +176,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     loadLibrary();
     setLibraryStamp((n) => n + 1);
     match.clear();
+    textSearch.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadLibrary]);
   const openSceneIn = (pid: string, documentId: string, sceneId: string) => {
@@ -168,6 +185,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
       return;
     }
     setPage("workbench");
+    setMode("pdf");
     setLeftTab("facts");
     switchProject(pid);
     req.openLater(`${documentId}/${sceneId}`, documentId);
@@ -175,6 +193,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   };
   const openScene = (documentId: string, sceneId: string) => {
     setPage("workbench");
+    setMode("pdf");
     setLeftTab("facts");
     const key = `${documentId}/${sceneId}`;
     if (scenes.some((s) => sceneKey(s) === key)) {
@@ -186,6 +205,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   };
   const projectCreated = (p: Project) => {
     req.projectCreated(p);
+    setMode("start");
     match.clear();
     match.setQuery("");
   };
@@ -210,10 +230,19 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
         onCreated={projectCreated}
         onHelp={() => setDialog("help")}
         onSettings={() => setDialog("settings")}
+        onHome={goHome}
       />
       <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />
       <SettingsDialog open={dialog === "settings"} onClose={() => { setDialog(null); loadTools(); }} preferences={prefs} onPreferences={onPrefs} />
-      {page === "workbench" && (<>
+      {page === "workbench" && mode === "start" && (
+        <StartPage projectId={projectId} docs={req.docs} library={library} onSearch={startSearch} onOpenDoc={enterWorkflow}
+          onImported={(ids) => { if (projectId) req.loadDocs(projectId, ids[ids.length - 1]); setMode("pdf"); }} />
+      )}
+      {page === "workbench" && mode === "search" && (
+        <SearchPage search={textSearch} library={library} from={searchFrom} esmini={esmini} onBack={goHome}
+          onSettings={() => setDialog("settings")} onLibraryChanged={libraryChanged} />
+      )}
+      {page === "workbench" && mode === "pdf" && (<>
       <StepBar active={step} projectId={projectId} docs={req.docs} docId={docId} onDoc={req.chooseDoc} onAllDecisions={() => setPage("overview")} />
       <main className="ox-main">
         <RequirementsPanel
@@ -252,7 +281,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
           error={match.error}
           canSearch={!!projectId && (!!scene || !!match.query.trim())}
           scene={scene}
-          onClearScene={clearScene}
+          onClearScene={() => startSearch(textSearch.query, null)}
           activeKey={match.activeKey}
           onActivate={match.activate}
           checked={match.checked}

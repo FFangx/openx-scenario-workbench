@@ -31,6 +31,10 @@ try {
     await page.waitForTimeout(400);
   };
   await page.goto(demo.base + "/", { waitUntil: "networkidle" });
+  // The workbench opens on the start page; hold it briefly, then enter the protocol's workflow.
+  await page.locator(".start-doc").filter({ hasText: PDF[0] }).waitFor();
+  await page.waitForTimeout(1200);
+  await page.locator(".start-doc").filter({ hasText: PDF[0] }).click();
   await page.locator(".cand-table tbody tr.ant-table-row").first().waitFor({ timeout: 120000 });
   if (!(await page.locator(".pdfcard").innerText()).includes(PDF[0])) {
     await page.locator(".pdfcard .doc-switch").click();

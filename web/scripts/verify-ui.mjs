@@ -33,11 +33,17 @@ try {
   };
 
   await p.goto(BASE + "/", { waitUntil: "networkidle" });
+  // the workbench opens on the start page: text search, PDF import, and the project's PDFs
+  await p.locator(".start-doc").first().waitFor();
+  check("the workbench opens on the start page", (await p.locator(".start-search input").count()) === 1 && (await p.locator(".start-doc").count()) === 2
+    && (await p.locator(".ox-steps").count()) === 0);
+  await p.locator(".start-doc").first().click();
   await rows().first().waitFor({ timeout: 120000 });
   await idle();
   check("scenes load from API", (await p.locator(".scene").count()) === 4, `${await p.locator(".scene").count()} scenes`);
   check("candidates load from API", (await rows().count()) === 6, `${await rows().count()} rows`);
   check("evidence shows source text", (await p.locator(".evi .src").count()) > 0);
+  check("the step track marks the steps already done", (await p.locator(".ox-step.done").count()) === 2 && (await p.locator(".ox-step.on").innerText()).includes("Assess reuse"));
   check("interface follows the saved English preference", (await p.locator(".ox-nav button.on").innerText()) === "Workbench");
 
   // scene -> query + new search + evidence
@@ -118,17 +124,18 @@ try {
   const ep = path.join(OUT, "explained.json"); await dl.saveAs(ep);
   check("the explanation travels with the export", JSON.parse(fs.readFileSync(ep, "utf8")).explanation?.method === "structural");
 
-  // free text search: no requirement, so text recall only
+  // free text search: no requirement, so similar assets only, on its own page
   const sceneQuery = await p.locator(".search-row input").inputValue();
   await p.locator(".scene-chip .ant-tag-close-icon").click();
-  await p.locator(".search-row input").fill("pedestrian crossing the road");
-  await p.locator(".search-row .ant-btn-primary").click();
+  await p.locator(".sresults-bar input").fill("pedestrian crossing the road");
+  await p.locator(".sresults-bar .ant-btn-primary").click();
+  await p.locator(".rcard").first().waitFor();
+  check("free text search lists similar assets", (await p.locator(".rcard").count()) > 0, `${await p.locator(".rcard").count()} cards`);
+  check("free text search makes no reuse decision", (await p.locator(".decision").count()) === 0 && (await p.locator(".actions").count()) === 0);
+  await p.locator(".sresults-bar button[aria-label='Back to start']").click();
+  await p.locator(".start-doc").first().click();
   await idle();
-  check("free text search gives text recall only", (await p.locator(".decision .big").innerText()) === "Text recall · verify structure", await p.locator(".decision .big").innerText());
-  check("free text search cannot save a decision", await p.locator(".actions > .ant-btn").isDisabled());
-  await p.locator(".scene").first().click();
-  await idle();
-  check("picking a scene leaves free text search", (await p.locator(".scene-chip").count()) === 1 && (await p.locator(".search-row input").inputValue()) !== "pedestrian crossing the road", sceneQuery);
+  check("back in the PDF workflow the requirement is still selected", (await p.locator(".scene-chip").count()) === 1 && (await p.locator(".search-row input").inputValue()) === sceneQuery, sceneQuery);
 
   // file links resolve
   const xosc = await p.locator(".pair a").first().getAttribute("href");
@@ -297,6 +304,8 @@ try {
   check("中文 shows Chinese assessment vocabulary", /[一-鿿]/.test(zh), zh);
   await p.reload({ waitUntil: "networkidle" });
   check("language preference survives a reload", (await p.locator(".ox-nav button.on").innerText()) === "工作台");
+  await p.locator(".start-doc").first().click();
+  await idle();
   await p.locator(".lang button").filter({ hasText: "EN" }).click();
   await idle();
 
