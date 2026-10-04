@@ -47,15 +47,20 @@ export function StandardChecksDialog({ cand, open, onClose }: { cand: Candidate;
   );
 }
 
+/** Check status → [Chinese, English, verdict tag class]. */
+export const CHECK_LABELS: Record<string, [string, string, string]> = {
+  valid: ["通过", "Passed", "direct"], invalid: ["未通过", "Failed", "not"],
+  unsupported: ["此版本未支持", "Version unsupported", "review"], unavailable: ["未完成检查", "Check unavailable", "review"],
+};
+
 export function StandardChecks({ checks }: { checks: Record<string, StandardCheck> }) {
   const { t } = useT();
-  const labels: Record<string, [string, string, string]> = {
-    valid: ["通过", "Passed", "direct"], invalid: ["未通过", "Failed", "not"],
-    unsupported: ["此版本未支持", "Version unsupported", "review"], unavailable: ["未完成检查", "Check unavailable", "review"],
-  };
+  const labels = CHECK_LABELS;
+  const missing = Object.values(checks).some((record) => record.detail === "No local XSD registry installed");
   return (
     <>
       <p className="muted">{t("按文件声明的版本检查 XML 结构；仿真可运行性需另行预览验证。", "Checks XML structure against the declared version. Verify execution separately with preview.")}</p>
+      {missing && <Alert type="info" showIcon title={t("尚未安装文件标准规范。可在“工作区设置 › 文件标准”中下载安装。", "No schema registry is installed. Install one under Workspace settings › File standards.")} />}
       {Object.entries(checks).map(([role, record]) => {
         const grouped = new Map<string, (number | null | undefined)[]>();
         (record.issues ?? []).forEach((i) => grouped.set(i.message, [...(grouped.get(i.message) ?? []), i.line]));

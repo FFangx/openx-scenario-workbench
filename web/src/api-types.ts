@@ -1017,6 +1017,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/schemas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Schema Status */
+        get: operations["schema_status_api_settings_schemas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/schemas/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schema Apply */
+        post: operations["schema_apply_api_settings_schemas_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/schemas/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Schema Check
+         * @description Compares the newest esmini schema folder with the installed registry; reads GitHub, changes nothing.
+         */
+        post: operations["schema_check_api_settings_schemas_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/schemas/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Schema Preview
+         * @description Downloads `revision` beside the active registry and lists the library verdicts it would change.
+         */
+        post: operations["schema_preview_api_settings_schemas_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/schemas/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schema Rollback */
+        post: operations["schema_rollback_api_settings_schemas_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/schemas/staged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Schema Discard */
+        delete: operations["schema_discard_api_settings_schemas_staged_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trace": {
         parameters: {
             query?: never;
@@ -1622,7 +1730,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "pdf_import" | "asset_import";
+            kind: "pdf_import" | "asset_import" | "schema_update";
             /** Messages */
             messages: string[];
             /** Reports */
@@ -2436,6 +2544,100 @@ export interface components {
              */
             venue_features: ("隧道" | "收费站" | "服务区")[];
         };
+        /** SchemaCheck */
+        SchemaCheck: {
+            /** Added */
+            added: string[];
+            /** Changed */
+            changed: string[];
+            /** Date */
+            date: string;
+            /** Dropped Versions */
+            dropped_versions: string[];
+            /** Installed */
+            installed: boolean;
+            /** Message */
+            message: string;
+            /** New Versions */
+            new_versions: string[];
+            /** Removed */
+            removed: string[];
+            /** Revision */
+            revision: string;
+            /** Unmapped */
+            unmapped: {
+                [key: string]: string;
+            };
+            /** Up To Date */
+            up_to_date: boolean;
+        };
+        /**
+         * SchemaPreview
+         * @description Library verdicts a staged registry would change; nothing is switched until the user applies it.
+         */
+        SchemaPreview: {
+            /** Changes */
+            changes: components["schemas"]["SchemaVerdictChange"][];
+            /** Compared */
+            compared: number;
+            /** Created At */
+            created_at: string;
+            /** Date */
+            date: string;
+            /** Message */
+            message: string;
+            /** Revision */
+            revision: string;
+        };
+        /** SchemaRegistry */
+        SchemaRegistry: {
+            /** Commit Date */
+            commit_date?: string | null;
+            /** Installed At */
+            installed_at: string;
+            /** Revision */
+            revision: string;
+            /** Skipped */
+            skipped: {
+                [key: string]: string;
+            };
+            /** Versions */
+            versions: string[];
+        };
+        /** SchemaRevision */
+        SchemaRevision: {
+            /** Revision */
+            revision: string;
+        };
+        /** SchemaStatus */
+        SchemaStatus: {
+            active: components["schemas"]["SchemaRegistry"] | null;
+            job?: components["schemas"]["Job"] | null;
+            /** Pinned */
+            pinned: string;
+            previous: components["schemas"]["SchemaRegistry"] | null;
+            staged: components["schemas"]["StagedSchemaRegistry"] | null;
+        };
+        /** SchemaVerdictChange */
+        SchemaVerdictChange: {
+            after: components["schemas"]["VerdictCount"];
+            /** Asset Id */
+            asset_id: string;
+            before: components["schemas"]["VerdictCount"];
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "scenario" | "road";
+            /** Standard */
+            standard?: string | null;
+            /** Title */
+            title: string;
+            /** Version */
+            version?: string | null;
+            /** Version Id */
+            version_id: string;
+        };
         /** Scores */
         Scores: {
             /** Combined */
@@ -2496,6 +2698,22 @@ export interface components {
             ];
             /** Page */
             page: number;
+        };
+        /** StagedSchemaRegistry */
+        StagedSchemaRegistry: {
+            /** Commit Date */
+            commit_date?: string | null;
+            /** Installed At */
+            installed_at: string;
+            preview?: components["schemas"]["SchemaPreview"] | null;
+            /** Revision */
+            revision: string;
+            /** Skipped */
+            skipped: {
+                [key: string]: string;
+            };
+            /** Versions */
+            versions: string[];
         };
         /** StandardCheck */
         StandardCheck: {
@@ -2678,6 +2896,13 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VerdictCount */
+        VerdictCount: {
+            /** Issues */
+            issues: number;
+            /** Status */
+            status: string;
         };
         /** VersionHistory */
         VersionHistory: {
@@ -4484,6 +4709,152 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewSettings"];
+                };
+            };
+        };
+    };
+    schema_status_api_settings_schemas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchemaStatus"];
+                };
+            };
+        };
+    };
+    schema_apply_api_settings_schemas_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchemaRevision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchemaStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schema_check_api_settings_schemas_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchemaCheck"];
+                };
+            };
+        };
+    };
+    schema_preview_api_settings_schemas_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchemaRevision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schema_rollback_api_settings_schemas_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchemaStatus"];
+                };
+            };
+        };
+    };
+    schema_discard_api_settings_schemas_staged_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchemaStatus"];
                 };
             };
         };

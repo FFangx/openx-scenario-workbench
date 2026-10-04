@@ -9,14 +9,14 @@ from functools import lru_cache
 from itertools import islice
 from pathlib import Path
 from urllib.parse import urlsplit
-from urllib.request import urlopen, url2pathname
+from urllib.request import url2pathname
 from xml.etree import ElementTree as ET
 
-from .atomic_write import write_json
 from .asset_store import default_store_root
 
 # Published ASAM schemas mirrored by esmini. Installation is explicit and local;
-# no schema or network request is introduced into normal asset parsing.
+# no schema or network request is introduced into normal asset parsing. The pin is
+# what the command line installs; the settings page can move to a newer revision.
 SCHEMA_REVISION = "61b44a717d2ade513b4d66d1348b35c5d3dbdc3b"
 ENTRIES = {
     **{f"OpenSCENARIO:{version}": f"OpenSCENARIOv{filename}.xsd" for version, filename in
@@ -31,6 +31,15 @@ ENTRIES = {
 
 def schema_root():
     return Path(os.environ.get("OPENX_SCHEMA_DIR") or default_store_root() / "schemas")
+
+
+def registry_stamp(root=None):
+    """Changes whenever a registry is installed, switched or rolled back; parsed assets carry its verdicts."""
+    try:
+        stat = ((Path(root) if root is not None else schema_root()) / "registry.json").stat()
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size, stat.st_ino
 
 
 def standard_gate(validation):
@@ -147,34 +156,9 @@ def validate_xml(data: bytes | str, *, root=None):
 
 
 def install_schemas(root=None):
-    """Download a pinned registry to machine-local storage, including all includes."""
-    root = Path(root) if root is not None else schema_root()
-    base = f"https://raw.githubusercontent.com/esmini/esmini/{SCHEMA_REVISION}/resources/schema/"
-    names = set(ENTRIES.values())
-    for prefix, stem in (("OpenDRIVE_1.6/", "opendrive_16_"), ("OpenDRIVE_1.7/localSchema/", "opendrive_17_"),
-                         ("OpenDRIVE_1.8/local_schema/", "OpenDRIVE_")):
-        names.update(prefix + stem + part + ".xsd" for part in
-                     ([p.capitalize() for p in ("core", "junction", "lane", "object", "railroad", "road", "signal")] if "1.8" in prefix
-                      else ("core", "junction", "lane", "object", "railroad", "road", "signal")))
-    digests = {}
-    root.mkdir(parents=True, exist_ok=True)
-    for name in sorted(names):
-        with urlopen(base + name, timeout=30) as response:
-            data = response.read(4 * 1024 * 1024 + 1)
-        if len(data) > 4 * 1024 * 1024:
-            raise ValueError("Schema exceeds size limit")
-        path = _local_path(root, name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        digests[name] = hashlib.sha256(data).hexdigest()
-    xsd_versions = {"OpenDRIVE:1.8": "1.1"}
-    # Publish a registry only after every installed standard compiles.
-    checksum = hashlib.sha256("".join(digests[name] for name in sorted(digests)).encode()).hexdigest()
-    for key, name in ENTRIES.items():
-        _load_schema(str(_local_path(root, name)), checksum, xsd_versions.get(key, "1.0"))
-    registry = {"revision": SCHEMA_REVISION, "source": base, "entries": ENTRIES, "sha256": digests, "xsd_versions": xsd_versions}
-    write_json(root / "registry.json", registry, indent=2)
-    return registry
+    """Install the pinned registry: staged, compiled, then switched in; the replaced one is kept for rollback."""
+    from .schema_updates import install_pinned
+    return install_pinned(Path(root) if root is not None else schema_root())
 
 
 def main():

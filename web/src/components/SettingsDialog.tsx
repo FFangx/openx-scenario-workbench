@@ -3,6 +3,7 @@ import { Alert, App, AutoComplete, Button, Collapse, Form, Input, InputNumber, M
 import { ApiOutlined, FolderOpenOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from "@ant-design/icons";
 import { api, type Appearance, type Encoder, type Lang, type ModelDraft, type Preferences, type Settings } from "../api";
 import { useT } from "../i18n";
+import { SchemaTab } from "./SchemaUpdates";
 
 interface Props {
   open: boolean;
@@ -39,6 +40,7 @@ export function SettingsDialog({ open, onClose, preferences, onPreferences }: Pr
               label: t("本机服务", "Local service"),
               children: <ServiceTab settings={settings} onPreview={(preview) => setSettings({ ...settings, preview })} onOpen={openFolder} />,
             },
+            { key: "schemas", label: t("文件标准", "File standards"), children: <SchemaTab /> },
             { key: "display", label: t("显示与检索", "Display & search"), children: <DisplayTab preferences={preferences} onChange={onPreferences} /> },
           ]}
         />

@@ -17,6 +17,7 @@ from .presentation import asset_display_title, difference_text, display
 from .preview_frames import read_frame
 from .retrieval import OpenXIndex, RetrievalResult, catalog_fingerprint
 from .reuse_trace import review_items
+from .schema_validation import registry_stamp
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
 RANKINGS_KEPT = 16
@@ -43,18 +44,20 @@ def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
     """The latest version of every asset, as `AssetStore.catalog` returns it.
 
     A version's files never change, so each is parsed once and reparsed only when its classification
-    does. The catalog fingerprint is computed once per change, not per request.
+    or the installed XSD registry does. The catalog fingerprint is computed once per change, not per request.
     """
     store = _store()
     latest = store.latest()
     stamps = [_classification_stamp(store, version) for version in latest]
-    key = tuple(sorted((version.version_id, version.compatibility, stamp) for version, stamp in zip(latest, stamps)))
+    schemas = registry_stamp()
+    key = (schemas, tuple(sorted((version.version_id, version.compatibility, stamp)
+                                 for version, stamp in zip(latest, stamps))))
     with _lock:
         if _cache.get("catalog_key") != key:
             parsed = _cache.get("parsed", {})
             fresh = {}
             for version, stamp in zip(latest, stamps):
-                identity = (version.asset_id, version.version_id, stamp)
+                identity = (version.asset_id, version.version_id, stamp, schemas)
                 fresh[identity] = parsed.get(identity) or store.load_asset(version)
             assets = list(fresh.values())
             _cache.update(parsed=fresh, catalog_key=key, catalog=(assets, {

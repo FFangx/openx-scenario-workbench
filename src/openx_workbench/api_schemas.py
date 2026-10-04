@@ -616,7 +616,7 @@ class JobResult(Open):
 
 class Job(Shape):
     id: str
-    kind: Literal["pdf_import", "asset_import"]
+    kind: Literal["pdf_import", "asset_import", "schema_update"]
     status: Literal["running", "completed", "failed", "stopped", "interrupted"]
     stage: str
     current: str
@@ -674,6 +674,66 @@ class Settings(Shape):
     preview: PreviewSettings
     data_dir: str
     preferences: Preferences
+
+
+class SchemaRegistry(Shape):
+    revision: str
+    commit_date: str | None = None
+    installed_at: str
+    versions: list[str]
+    skipped: dict[str, str]
+
+
+class VerdictCount(Shape):
+    status: str
+    issues: int
+
+
+class SchemaVerdictChange(Shape):
+    asset_id: str
+    version_id: str
+    title: str
+    role: Literal["scenario", "road"]
+    standard: str | None = None
+    version: str | None = None
+    before: VerdictCount
+    after: VerdictCount
+
+
+class SchemaPreview(Shape):
+    """Library verdicts a staged registry would change; nothing is switched until the user applies it."""
+    revision: str
+    date: str
+    message: str
+    compared: int
+    changes: list[SchemaVerdictChange]
+    created_at: str
+
+
+class StagedSchemaRegistry(SchemaRegistry):
+    preview: SchemaPreview | None = None
+
+
+class SchemaStatus(Shape):
+    active: SchemaRegistry | None
+    previous: SchemaRegistry | None
+    staged: StagedSchemaRegistry | None
+    pinned: str
+    job: Job | None = None
+
+
+class SchemaCheck(Shape):
+    revision: str
+    date: str
+    message: str
+    installed: bool
+    up_to_date: bool
+    changed: list[str]
+    added: list[str]
+    removed: list[str]
+    new_versions: list[str]
+    dropped_versions: list[str]
+    unmapped: dict[str, str]
 
 
 class PreviewStatus(Shape):

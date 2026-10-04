@@ -40,6 +40,9 @@ export type Lang = Preferences["language"];
 export type Appearance = Preferences["appearance"];
 export type Encoder = Preferences["encoder"];
 export type Settings = Schemas["Settings"];
+export type SchemaStatus = Schemas["SchemaStatus"];
+export type SchemaCheck = Schemas["SchemaCheck"];
+export type SchemaVerdictChange = Schemas["SchemaVerdictChange"];
 export type Job = Schemas["Job"];
 export type JobStatus = Job["status"];
 export type ImportReport = Schemas["ImportReport"];
@@ -128,6 +131,12 @@ export const api = {
   previewBrowse: () => post<PreviewSettings>("/api/settings/preview/browse", {}),
   previewDetect: () => post<PreviewSettings>("/api/settings/preview/detect", {}),
   openFolder: (target: "data" | "esmini") => post<{ opened: string }>("/api/settings/open-folder", { target }),
+  schemaStatus: () => call<SchemaStatus>("/api/settings/schemas"),
+  schemaCheck: () => post<SchemaCheck>("/api/settings/schemas/check", {}),
+  schemaPreview: (revision: string) => post<Job>("/api/settings/schemas/preview", { revision }),
+  schemaApply: (revision: string) => post<SchemaStatus>("/api/settings/schemas/apply", { revision }),
+  schemaRollback: () => post<SchemaStatus>("/api/settings/schemas/rollback", {}),
+  schemaDiscard: () => send<SchemaStatus>("DELETE", "/api/settings/schemas/staged"),
 
   jobs: (kind?: Job["kind"]) => call<Job[]>(`/api/jobs${kind ? `?kind=${kind}` : ""}`),
   job: (id: string) => call<Job>(`/api/jobs/${id}`),

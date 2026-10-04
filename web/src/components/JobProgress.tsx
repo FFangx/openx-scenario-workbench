@@ -11,6 +11,8 @@ const STAGES: Record<string, [string, string]> = {
   parsing: ["解析场景与道路", "Parsing scenarios and roads"],
   saving: ["保存资产", "Saving assets"],
   classifying: ["复核分类", "Reviewing classification"],
+  downloading: ["下载规范文件", "Downloading schemas"],
+  comparing: ["对比场景库检查结论", "Comparing library verdicts"],
 };
 
 /** Live state of a background job: stage, count, current step, recent messages, stop. */

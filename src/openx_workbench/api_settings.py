@@ -1,4 +1,4 @@
-"""Settings routes: language model, esmini, data folder and workbench preferences.
+"""Settings routes: language model, esmini, data folder, XSD registry and workbench preferences.
 
 The saved API key never leaves this process; responses only say whether one exists.
 """
@@ -13,14 +13,16 @@ from typing import Any, Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from .api_schemas import (ModelList, ModelProbe, ModelSettings, OpenedFolder, Preferences, PreviewSettings, Settings,
-                          documented)
+from . import jobs, schema_updates
+from .api_schemas import (Job, ModelList, ModelProbe, ModelSettings, OpenedFolder, Preferences, PreviewSettings,
+                          SchemaCheck, SchemaStatus, Settings, documented)
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
 from .llm_service import ModelClient, ModelConfig, draft_config, load_config, save_config
 from .local_folders import choose_folder, open_folder
 from .matching import ENCODERS, known_encoder
 from .preferences import read_preferences, save_preferences
+from .schema_validation import SCHEMA_REVISION, schema_root
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -45,6 +47,10 @@ class PreferencesUpdate(BaseModel):
 
 class FolderRequest(BaseModel):
     target: Literal["data", "esmini"]
+
+
+class SchemaRevision(BaseModel):
+    revision: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 def _saved_model() -> tuple[ModelConfig, bool]:
@@ -170,3 +176,60 @@ def open_local_folder(request: FolderRequest) -> dict[str, str]:
     except OSError:
         raise ValueError("无法打开此文件夹，请检查它是否仍然存在。 / Could not open this folder. Check that it still exists.") from None
     return {"opened": str(path)}
+
+
+# ---------- XSD registry updates ----------
+# Only these routes reach the network, and only when the user asks; validation stays offline.
+
+def _schema_scope() -> str:
+    return str(schema_root().resolve())
+
+
+def _schema_status() -> dict[str, Any]:
+    job = jobs.latest(schema_updates.KIND, _schema_scope())
+    return {**schema_updates.status(), "pinned": SCHEMA_REVISION, "job": job.snapshot() if job else None}
+
+
+def _idle() -> None:
+    if jobs.running(schema_updates.KIND, _schema_scope()):
+        raise ValueError("规范预览仍在进行 / A schema preview is still running.")
+
+
+@router.get("/schemas", **documented(SchemaStatus))
+def schema_status() -> dict[str, Any]:
+    return _schema_status()
+
+
+@router.post("/schemas/check", **documented(SchemaCheck))
+def schema_check() -> dict[str, Any]:
+    """Compares the newest esmini schema folder with the installed registry; reads GitHub, changes nothing."""
+    return schema_updates.check()
+
+
+@router.post("/schemas/preview", **documented(Job))
+def schema_preview(request: SchemaRevision) -> dict[str, Any]:
+    """Downloads `revision` beside the active registry and lists the library verdicts it would change."""
+    store = AssetStore()
+    job = jobs.Job(schema_updates.KIND, _schema_scope())
+    return jobs.start(job, lambda job: schema_updates.preview(store, job, request.revision)).snapshot()
+
+
+@router.post("/schemas/apply", **documented(SchemaStatus))
+def schema_apply(request: SchemaRevision) -> dict[str, Any]:
+    _idle()
+    schema_updates.apply(request.revision)
+    return _schema_status()
+
+
+@router.post("/schemas/rollback", **documented(SchemaStatus))
+def schema_rollback() -> dict[str, Any]:
+    _idle()
+    schema_updates.rollback()
+    return _schema_status()
+
+
+@router.delete("/schemas/staged", **documented(SchemaStatus))
+def schema_discard() -> dict[str, Any]:
+    _idle()
+    schema_updates.discard()
+    return _schema_status()

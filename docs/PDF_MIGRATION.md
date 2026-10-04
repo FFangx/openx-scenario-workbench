@@ -104,7 +104,8 @@ Model initialization/CPU recognition can be slow; completed OCR results are cach
 Schemas come from esmini revision `61b44a717d2ade513b4d66d1348b35c5d3dbdc3b`,
 preserving their original ASAM license headers. The local registry covers XOSC
 1.0–1.4 and XODR 1.4–1.8. Unknown versions are reported as unsupported; no nearest
-version is substituted. XML structure checks and diagnostics appear in the asset
+version is substituted. Settings → File standards can move to a newer esmini revision after
+previewing which library verdicts change, and roll back one step. XML structure checks and diagnostics appear in the asset
 library, retrieval candidates and JSON/HTML decisions. They do not certify complete
 ASAM semantics or esmini execution. `OPENX_SCHEMA_DIR` can select another registry.
 Schema diagnostics do not invalidate unchanged semantic vectors.
