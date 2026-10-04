@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import threading
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -13,15 +12,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from . import matching
 from .asset_store import AssetStore, AssetVersion
 from .catalog import OpenXAsset
 from .pdf_store import PdfStore, StoredScene
 from .presentation import asset_display_title, difference_text, display
 from .preview_frames import read_frame
 from .project_store import ProjectStore
-from .retrieval import OpenXIndex, RetrievalResult, build_encoder, catalog_fingerprint
-from .reuse_trace import build_trace
-from .scene_package import scene_package_to_query
+from .retrieval import OpenXIndex, RetrievalResult
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -53,34 +51,12 @@ def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
         return _cache["catalog"]
 
 
-def _preferred_encoder() -> str:
-    try:
-        value = json.loads((_store().root / "preferences.json").read_text(encoding="utf-8")).get("encoder")
-    except (OSError, ValueError, AttributeError):
-        value = None
-    # Older preference files stored the display label; the Streamlit app treats those as BGE too.
-    return value if value in {"bge", "hashing"} else "bge"
-
-
-@lru_cache(maxsize=2)
-def _encoder(name: str):
-    return build_encoder(name)
-
-
 def _index(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
-    identity = (encoder_name, catalog_fingerprint(catalog))
+    identity = matching.index_identity(catalog, encoder_name)
     with _lock:
-        if _cache.get("index_identity") == identity:
-            return _cache["index"]
-        path = _store().root / "indexes" / encoder_name / f"{identity[1][:24]}.json"
-        encoder = _encoder(encoder_name)
-        try:
-            index = OpenXIndex.load(path, catalog, encoder)
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-            index = OpenXIndex(catalog, encoder)
-            index.save(path)
-        _cache.update(index_identity=identity, index=index)
-        return index
+        if _cache.get("index_identity") != identity:
+            _cache.update(index_identity=identity, index=matching.open_index(catalog, identity))
+        return _cache["index"]
 
 
 def _scene(pdf: PdfStore, project_id: str, document_id: str, scene_id: str,
@@ -257,7 +233,7 @@ def library() -> dict[str, Any]:
                     facets[key].add(str(item))
     imported = [version.created_at for version in versions.values()]
     return {"asset_count": len(catalog), "last_import": max(imported) if imported else None,
-            "encoder": _preferred_encoder(), "facets": {key: sorted(values) for key, values in facets.items()}}
+            "encoder": matching.preferred_encoder(), "facets": {key: sorted(values) for key, values in facets.items()}}
 
 
 def _version(asset_id: str, version_id: str) -> AssetVersion:
@@ -313,17 +289,14 @@ def _run(request: MatchRequest) -> tuple[StoredScene | None, list[RetrievalResul
             raise ValueError("A scene needs its document ID.")
         stored = _scene(PdfStore(_store()), request.project_id, request.document_id,
                         request.scene_id, request.revision)
-    query = scene_package_to_query(stored.package) if stored else None
-    text = request.text.strip()
-    if query and text and text not in query.text:
-        query = replace(query, text=f"{query.text} {text}")
-    if query is None and not text:
+    query = matching.scene_query(stored.package if stored else None, request.text, skip_contained=True)
+    if query is None and not request.text.strip():
         raise ValueError("Select a scene or enter search text.")
-    encoder = request.encoder or _preferred_encoder()
-    if encoder not in {"bge", "hashing"}:
+    encoder = request.encoder or matching.preferred_encoder()
+    if encoder not in matching.ENCODERS:
         raise ValueError("Unknown encoder.")
-    results = _index(catalog, encoder).search(query.text if query else text, query=query,
-                                              top_k=len(catalog)) if catalog else []
+    results = matching.search(_index(catalog, encoder), query, request.text,
+                              top_k=len(catalog)) if catalog else []
     return stored, results, versions, encoder
 
 
@@ -356,9 +329,7 @@ def _trace_for(request: DecisionRequest) -> tuple[dict, AssetVersion | None]:
     version = versions.get(result.asset.asset_id) if result else None
     if result is None or version is None or version.version_id != request.version_id:
         raise ValueError("The selected asset version is no longer the latest in the library. Search again.")
-    identity = ({"document_id": stored.document.document_id, "pdf_sha256": stored.document.sha256,
-                 "scene_id": stored.scene_id, "revision": stored.revision} if stored else {})
-    return build_trace(result, stored.package if stored else None, version, identity), version
+    return matching.assessment_trace(result, stored.package if stored else None, version, stored), version
 
 
 @app.post("/api/trace")

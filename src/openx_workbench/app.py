@@ -7,7 +7,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from typing import Any
 
 import streamlit as st
@@ -29,10 +29,11 @@ from openx_workbench.report_html import render_report
 from openx_workbench.requirement_editor import edit_structure
 from openx_workbench.presentation import display, difference_text, asset_display_title
 from openx_workbench.native_locale import native_locale
-from openx_workbench.reuse_trace import build_trace, checked_trace
+from openx_workbench.reuse_trace import checked_trace
 from openx_workbench.batch_matching import match_document, batch_signature
-from openx_workbench.retrieval import OpenXIndex, RetrievalResult, build_encoder, catalog_fingerprint
-from openx_workbench.scene_package import ScenePackage, scene_package_to_query
+from openx_workbench.retrieval import OpenXIndex, RetrievalResult
+from openx_workbench.scene_package import ScenePackage
+from openx_workbench import matching
 from openx_workbench.sim_archive import SimImportReport
 
 
@@ -149,26 +150,12 @@ def _demo_files() -> list[AssetFile]:
     return [AssetFile(demo.xosc_name, demo.xosc_data), AssetFile(demo.xodr_name, demo.xodr_data)]
 
 
-@st.cache_resource(show_spinner=False)
-def _encoder(name: str):
-    return build_encoder(name)
-
-
 def _index_for(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
-    identity = (encoder_name, catalog_fingerprint(catalog))
-    if st.session_state.get("index_identity") == identity:
-        return st.session_state["search_index"]
-    fingerprint = identity[1][:24]
-    path = AssetStore().root / "indexes" / encoder_name / f"{fingerprint}.json"
-    encoder = _encoder(encoder_name)
-    try:
-        index = OpenXIndex.load(path, catalog, encoder)
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        index = OpenXIndex(catalog, encoder)
-        index.save(path)
-    st.session_state.index_identity = identity
-    st.session_state.search_index = index
-    return index
+    identity = matching.index_identity(catalog, encoder_name)
+    if st.session_state.get("index_identity") != identity:
+        st.session_state.search_index = matching.open_index(catalog, identity)
+        st.session_state.index_identity = identity
+    return st.session_state["search_index"]
 
 
 def safe(value: object) -> str:
@@ -1047,11 +1034,9 @@ def _asset_panel(language: str, package: ScenePackage | None) -> None:
     auto_search = st.session_state.pop("pdf_auto_search", False)
     if search_clicked or auto_search:
         try:
-            query = scene_package_to_query(package) if package else None
-            if query and query_text.strip():
-                query = replace(query, text=f"{query.text} {query_text.strip()}")
+            query = matching.scene_query(package, query_text)
             with st.spinner(localized(language, "正在检索并核对候选结构…", "Retrieving and checking candidate structures…")):
-                results = _index_for(catalog, encoder_name).search(query.text if query else query_text.strip(), query=query, top_k=min(8, len(catalog)))
+                results = matching.search(_index_for(catalog, encoder_name), query, query_text, top_k=min(8, len(catalog)))
             st.session_state.update(retrieval_results=results, result_index=0, selected_candidate_index=0)
             st.rerun()
         except Exception as exc:  # noqa: BLE001
@@ -1119,14 +1104,8 @@ def _asset_panel(language: str, package: ScenePackage | None) -> None:
 
 
 def _trace(result: RetrievalResult, package: ScenePackage | None) -> dict[str, Any]:
-    version = st.session_state.get("asset_versions", {}).get(result.asset.asset_id)
-    stored_scene: StoredScene | None = st.session_state.get("selected_stored_scene")
-    identity = {}
-    if package and stored_scene and stored_scene.package is package:
-        identity = {"document_id": stored_scene.document.document_id,
-                    "pdf_sha256": stored_scene.document.sha256,
-                    "scene_id": stored_scene.scene_id, "revision": stored_scene.revision}
-    return build_trace(result, package, version, identity)
+    return matching.assessment_trace(result, package, st.session_state.get("asset_versions", {}).get(result.asset.asset_id),
+                                     st.session_state.get("selected_stored_scene"))
 
 
 def _decision_panel(language: str, package: ScenePackage | None) -> None:

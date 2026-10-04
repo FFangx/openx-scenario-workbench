@@ -10,16 +10,9 @@ import streamlit as st
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
 from .local_folders import choose_folder, open_folder
+from .matching import known_encoder, read_preferences as preferences
 from .pdf_store import PdfStore
 from .project_store import ProjectStore
-
-
-def preferences():
-    try:
-        value = json.loads((AssetStore().root / "preferences.json").read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except (OSError, ValueError):
-        return {}
 
 
 def save_preferences(**values):
@@ -36,8 +29,7 @@ def initialize():
     st.session_state.setdefault("language", prefs.get("language", "中文"))
     st.session_state.setdefault("esmini_path", prefs.get("esmini_path", ""))
     st.session_state.setdefault("active_page", "home")
-    encoder = prefs.get("encoder", "bge")
-    st.session_state.setdefault("retrieval_encoder", encoder if encoder in {"bge", "hashing"} else "bge")
+    st.session_state.setdefault("retrieval_encoder", known_encoder(prefs.get("encoder")))
     mode = prefs.get("appearance", "system")
     st.session_state.setdefault("appearance", mode if mode in {"light", "dark", "system"} else "system")
 

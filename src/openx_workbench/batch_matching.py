@@ -4,6 +4,7 @@ from dataclasses import asdict
 import hashlib
 import json
 
+from .matching import source_identity
 from .pdf_store import StoredScene
 from .retrieval import OpenXIndex, catalog_fingerprint
 from .reuse_trace import build_trace
@@ -27,8 +28,7 @@ def match_document(document, scenes: list[StoredScene], index: OpenXIndex, versi
     entries = []
     counts = Counter()
     for scene, candidates in zip(scenes, results):
-        identity = {"document_id": document.document_id, "pdf_sha256": document.sha256,
-                    "scene_id": scene.scene_id, "revision": scene.revision}
+        identity = source_identity(scene)  # scene.document == document, checked above
         traces = [build_trace(result, scene.package, versions.get(result.asset.asset_id), identity)
                   for result in candidates]
         best = traces[0]["reuse"] if traces else {"level": "no_candidates", "review_kind": ""}
