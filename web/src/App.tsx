@@ -8,6 +8,7 @@ import { LangContext, useT } from "./i18n";
 import { StepBar, TopBar, type Page } from "./components/TopBar";
 import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { OverviewPage } from "./components/OverviewPage";
 import { RequirementsPanel } from "./components/RequirementsPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { DecisionPanel } from "./components/DecisionPanel";
@@ -93,6 +94,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [checked, setChecked] = useState<string[]>([]);
   const searchSeq = useRef(0);
+  const pendingScene = useRef<string | null>(null);
 
   const doc = docs.find((d) => d.document_id === docId) ?? null;
   const scene = scenes.find((s) => s.scene_id === sceneId) ?? null;
@@ -130,9 +132,12 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     if (!projectId || !docId) return;
     api.scenes(projectId, docId).then((s) => {
       setScenes(s);
-      if (s[0]) {
-        setSceneId(s[0].scene_id);
-        setQuery(s[0].title);
+      // Enter a document at the requested scene (from Overview), otherwise at its first requirement.
+      const first = s.find((x) => x.scene_id === pendingScene.current) ?? s[0];
+      pendingScene.current = null;
+      if (first) {
+        setSceneId(first.scene_id);
+        setQuery(first.title);
       }
     }).catch((e: Error) => message.error(e.message));
   }, [projectId, docId, message]);
@@ -198,6 +203,15 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     switchProject(id);
     api.selectProject(id).catch(() => undefined);
   };
+  const openScene = (documentId: string, sceneId: string) => {
+    setPage("workbench");
+    if (documentId === docId) {
+      pickScene(sceneId);
+    } else {
+      pendingScene.current = sceneId;
+      setDocId(documentId);
+    }
+  };
   const projectCreated = (p: Project) => {
     setProjects((all) => [...all, p]);
     switchProject(p.project_id);
@@ -253,6 +267,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
         <DecisionPanel sceneRef={ref} cand={cand} searching={searching} query={query} lang={lang} />
       </main>
       </>)}
+      {page === "overview" && <OverviewPage projectId={projectId} onNavigate={setPage} onOpenScene={openScene} />}
     </div>
   );
 }

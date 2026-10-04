@@ -98,8 +98,25 @@ try {
   await p.locator(".ant-message-success").waitFor({ timeout: 30000 });
   await p.locator(".ox-steps .tools button").filter({ hasText: "Recent activity" }).click();
   await p.locator(".pop-history .row").first().waitFor();
-  check("saved decision appears under Recent activity", (await p.locator(".pop-history .row b").first().innerText()) === (await p.locator(".scene.sel .t").innerText()));
-  await p.keyboard.press("Escape");
+  const savedScene = await p.locator(".scene.sel .t").innerText();
+  check("saved decision appears under Recent activity", (await p.locator(".pop-history .row b").first().innerText()) === savedScene);
+
+  // overview: library counts, the saved decision, its downloads, and the way back to the requirement
+  await p.locator(".pop-history .ant-btn-link").click();
+  await p.locator(".ov-detail").waitFor();
+  check("View all decisions opens Overview", (await p.locator(".ox-nav button.on").innerText()) === "Overview");
+  check("Overview counts the demo library", (await p.locator(".metric b").first().innerText()) === "6" && (await p.locator(".ov-library tbody tr.ant-table-row").count()) === 6);
+  check("Overview lists the saved decision", (await p.locator(".ov-reports tbody tr.row-active").innerText()).includes(savedScene));
+  const html = await p.request.get(BASE + (await p.locator(".ov-actions a").nth(1).getAttribute("href")));
+  check("saved decision downloads as an HTML report", html.ok() && (await html.text()).includes("OpenX reuse trace"));
+  await p.locator(".ox-nav button").filter({ hasText: "Workbench" }).click();
+  await p.locator(".scene").nth(1).click();
+  await idle();
+  await p.locator(".ox-nav button").filter({ hasText: "Overview" }).click();
+  await p.locator(".ov-detail").waitFor();
+  await p.locator(".ov-actions .ant-btn").filter({ hasText: "Continue reviewing" }).click();
+  await idle();
+  check("Continue reviewing reopens the saved requirement", (await p.locator(".scene.sel .t").innerText()) === savedScene);
 
   // project files list both PDFs with download links
   await p.locator(".ox-steps .tools button").filter({ hasText: "Project files" }).click();

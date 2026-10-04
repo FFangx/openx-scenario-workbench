@@ -80,7 +80,45 @@ export interface Candidate {
 
 export interface Library { asset_count: number; last_import: string | null; encoder: string; facets: Record<string, string[]> }
 
-export interface Report { report_id: string; saved_at: string; asset_id: string | null; version_id: string | null; level: Level | null; scene: { title: string | null; scene_id: string | null; revision: number | null; document_id: string | null } }
+export interface Report {
+  report_id: string;
+  saved_at: string;
+  asset_id: string | null;
+  version_id: string | null;
+  kind: "decision" | "batch";
+  level: Level | null;
+  review_kind: string;
+  counts: Record<string, number> | null;
+  scene_count: number | null;
+  scene: { title: string | null; scene_id: string | null; revision: number | null; document_id: string | null };
+}
+
+export interface TraceSource { title?: string; scene_id?: string; revision?: number; document_id?: string; evidence?: Evidence[] }
+
+export interface TraceCandidate { title?: string; xosc?: string; xodr?: string; asset_id?: string; version_id?: string; version_number?: number }
+
+export interface Trace {
+  kind?: "batch_match";
+  source?: TraceSource;
+  candidate?: TraceCandidate;
+  reuse?: { level: Level; review_kind?: string; estimated_change_cost?: number | null };
+  // batch reports
+  scene_count?: number;
+  encoder?: string;
+  counts?: Record<string, number>;
+  entries?: { source: TraceSource; assessment: { level: Level | "no_candidates"; review_kind?: string; estimated_change_cost?: number | null }; candidates: { candidate: TraceCandidate }[] }[];
+}
+
+export interface ReportDetail { report_id: string; saved_at: string; version_id?: string; trace: Trace; reopenable: { document_id: string; scene_id: string }[] }
+
+export interface Overview {
+  assets: number;
+  versions: number;
+  playable: number;
+  unavailable: number;
+  untested: number;
+  recent: { asset_id: string; version_id: string; title: string; source_name: string; version_number: number; compatibility: string; created_at: string }[];
+}
 
 export interface SearchResponse { encoder: string; total: number; library_size: number; scene: Scene | null; results: Candidate[] }
 
@@ -168,6 +206,8 @@ export const api = {
   trace: (req: MatchRequest & { asset_id: string; version_id: string }) => post<Record<string, unknown>>("/api/trace", req),
   createProject: (name: string) => post<Project>("/api/projects", { name }),
   reports: (pid: string) => call<Report[]>(`/api/projects/${pid}/reports`),
+  report: (pid: string, rid: string) => call<ReportDetail>(`/api/projects/${pid}/reports/${rid}`),
+  overview: () => call<Overview>("/api/overview"),
   saveDecision: (req: MatchRequest & { asset_id: string; version_id: string }) =>
     post<{ report_id: string; saved_to: string }>("/api/decisions", req),
 
@@ -196,6 +236,8 @@ export const urls = {
   page: (pid: string, did: string, page: number, width: number, clip?: number[]) =>
     `/api/projects/${pid}/documents/${did}/pages/${page}?width=${width}${clip ? `&clip=${clip.join(",")}` : ""}`,
   pdf: (pid: string, did: string, page?: number) => `/api/projects/${pid}/documents/${did}/file${page ? `#page=${page}` : ""}`,
+  report: (pid: string, rid: string, format: "json" | "html", lang: Lang) =>
+    `/api/projects/${pid}/reports/${rid}/download?format=${format}&lang=${lang}`,
   frame: (c: Candidate) => `/api/assets/${c.asset_id}/versions/${c.version_id}/frame`,
   file: (c: Candidate, role: "scenario" | "road") => `/api/assets/${c.asset_id}/versions/${c.version_id}/files/${role}`,
 };
@@ -208,6 +250,23 @@ export const LEVEL: Record<Level, { zh: string; en: string; cls: "direct" | "mod
 };
 
 export const levelLabel = (level: Level, lang: Lang) => LEVEL[level][lang];
+
+// "Needs review" splits into sub-kinds with their own headline, matching the desktop wording.
+const REVIEW_TITLE: Record<string, { zh: string; en: string }> = {
+  standards: { zh: "文件标准待复核", en: "File standards need review" },
+  partial: { zh: "部分已验证 · 待复核", en: "Partially verified · review" },
+  undecidable: { zh: "关键结构不足 · 无法判断", en: "Insufficient structure · undecidable" },
+  recall: { zh: "文本召回 · 待结构验证", en: "Text recall · verify structure" },
+};
+
+export const verdictLabel = (level: Level | "no_candidates" | string, kind: string | undefined, lang: Lang) =>
+  level === "no_candidates"
+    ? lang === "zh" ? "没有候选资产" : "No candidate assets"
+    : level === "review" && kind && REVIEW_TITLE[kind]
+      ? REVIEW_TITLE[kind][lang]
+      : REVIEW_TITLE[level]?.[lang] ?? LEVEL[level as Level]?.[lang] ?? level;
+
+export const verdictClass = (level: string) => LEVEL[level as Level]?.cls ?? (REVIEW_TITLE[level] ? "review" : "not");
 
 export const FACET_LABEL: Record<string, { zh: string; en: string }> = {
   function_type: { zh: "功能", en: "Function" },

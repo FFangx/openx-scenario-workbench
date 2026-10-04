@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from dataclasses import asdict
 from functools import lru_cache
@@ -22,7 +23,9 @@ from .pdf_store import PdfStore, StoredScene
 from .presentation import asset_display_title, difference_text, display
 from .preview_frames import read_frame
 from .project_store import ProjectStore
+from .report_html import render_report
 from .retrieval import OpenXIndex, RetrievalResult
+from .reuse_trace import checked_trace
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -384,12 +387,64 @@ def save_decision(request: DecisionRequest) -> dict[str, Any]:
 def reports(project_id: str) -> list[dict[str, Any]]:
     result = []
     for report in ProjectStore(_store()).reports(project_id):
-        trace = report.get("trace") or {}
+        trace = checked_trace(report.get("trace") or {})
         source = trace.get("source") or {}
+        reuse = trace.get("reuse") or {}
         result.append({**{key: report.get(key) for key in ("report_id", "saved_at", "asset_id", "version_id")},
+                       "kind": "batch" if trace.get("kind") == "batch_match" else "decision",
                        "scene": {key: source.get(key) for key in ("title", "scene_id", "revision", "document_id")},
-                       "level": (trace.get("reuse") or {}).get("level")})
+                       "level": reuse.get("level"), "review_kind": reuse.get("review_kind") or "",
+                       "counts": trace.get("counts"), "scene_count": trace.get("scene_count")})
     return result
+
+
+def _report(project_id: str, report_id: str) -> dict[str, Any]:
+    report = next((item for item in ProjectStore(_store()).reports(project_id) if item["report_id"] == report_id), None)
+    if report is None:
+        raise HTTPException(404, "Unknown report.")
+    return {**report, "trace": checked_trace(report["trace"])}
+
+
+@app.get("/api/projects/{project_id}/reports/{report_id}")
+def report_detail(project_id: str, report_id: str) -> dict[str, Any]:
+    """The saved snapshot, plus which of its source scenes still exist to reopen for review."""
+    report = _report(project_id, report_id)
+    trace = report["trace"]
+    sources = [entry["source"] for entry in trace.get("entries", [])] if trace.get("kind") == "batch_match"         else [trace.get("source") or {}]
+    pdf = PdfStore(_store())
+    known = {document.document_id for document in pdf.documents(project_id)}
+    existing = {(document_id, scene.scene_id) for document_id in {s.get("document_id") for s in sources} & known
+                for scene in pdf.scenes(project_id, document_id)}
+    return {**report, "reopenable": [{"document_id": d, "scene_id": s} for d, s in sorted(existing)
+                                     if any(src.get("document_id") == d and src.get("scene_id") == s for src in sources)]}
+
+
+@app.get("/api/projects/{project_id}/reports/{report_id}/download")
+def report_download(project_id: str, report_id: str, format: str = "json", lang: str = "zh") -> Response:
+    report = _report(project_id, report_id)
+    stem = f"openx-{'batch' if report['trace'].get('kind') == 'batch_match' else 'decision'}-{report_id}"
+    if format == "html":
+        return Response(render_report(report["trace"], language="zh" if lang == "zh" else "en"), media_type="text/html",
+                        headers={"Content-Disposition": f'attachment; filename="{stem}.html"'})
+    if format != "json":
+        raise HTTPException(400, "Unknown format.")
+    return Response(json.dumps(report["trace"], ensure_ascii=False, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{stem}.json"'})
+
+
+@app.get("/api/overview")
+def overview() -> dict[str, Any]:
+    store = _store()
+    versions = store.versions()
+    latest = store.latest()
+    recent = sorted(versions, key=lambda item: item.created_at, reverse=True)[:8]
+    return {"assets": len(latest), "versions": len(versions),
+            "playable": sum(item.compatibility == "playable" for item in latest),
+            "unavailable": sum(item.compatibility in {"unsupported", "failed", "timeout"} for item in latest),
+            "untested": sum(item.compatibility == "not_tested" for item in latest),
+            "recent": [{key: getattr(item, key) for key in ("asset_id", "version_id", "title", "source_name",
+                                                             "version_number", "compatibility", "created_at")}
+                       for item in recent]}
 
 
 if WEB_DIST.is_dir():

@@ -11,7 +11,7 @@ import {
   SafetyCertificateOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
-import { api, basename, categoryLabel, LEVEL, levelLabel, urls, type Candidate, type Difference, type Lang } from "../api";
+import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang } from "../api";
 import { useT } from "../i18n";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
@@ -24,14 +24,6 @@ const SUB: Record<string, [string, string]> = {
   partial: ["已完成部分结构比较；确认未验证项后才能认定复用。", "Part of the structure was compared. Resolve the unverified items before confirming reuse."],
   undecidable: ["参与者交互或主车动作缺少关键结构，无法判断复用。", "Key participant or ego-action facts are missing, so reuse cannot be assessed."],
   recall: ["这是文本检索结果。选择 PDF 场景后才能按结构评估复用。", "Text-only match. Select a PDF scene to assess reuse structurally."],
-};
-
-// Review sub-kinds get their own headline, matching the desktop wording.
-const REVIEW_TITLE: Record<string, [string, string]> = {
-  standards: ["文件标准待复核", "File standards need review"],
-  partial: ["部分已验证 · 待复核", "Partially verified · review"],
-  undecidable: ["关键结构不足 · 无法判断", "Insufficient structure · undecidable"],
-  recall: ["文本召回 · 待结构验证", "Text recall · verify structure"],
 };
 
 const STATUS = (d: Difference, lang: Lang) =>
@@ -149,7 +141,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
             </span>
           </Tooltip>
         </div>
-        <div className="big">{cand.level === "review" && REVIEW_TITLE[cand.review_kind] ? t(...REVIEW_TITLE[cand.review_kind]) : levelLabel(cand.level, lang)}</div>
+        <div className="big">{verdictLabel(cand.level, cand.review_kind, lang)}</div>
         <div className="sub">{t(...SUB[cand.level === "review" ? (SUB[cand.review_kind] ? cand.review_kind : "partial") : cand.level])}</div>
       </div>
 
