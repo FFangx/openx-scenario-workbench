@@ -5,19 +5,13 @@ from subprocess import TimeoutExpired
 
 import streamlit as st
 
-from .atomic_write import write_json
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
 from .local_folders import choose_folder, open_folder
-from .matching import known_encoder, read_preferences as preferences
+from .matching import known_encoder
 from .pdf_store import PdfStore
+from .preferences import read_preferences as preferences, save_preferences
 from .project_store import ProjectStore
-
-
-def save_preferences(**values):
-    path = AssetStore().root / "preferences.json"
-    data = {**preferences(), **values}
-    write_json(path, data, ensure_ascii=False)
 
 
 def initialize():

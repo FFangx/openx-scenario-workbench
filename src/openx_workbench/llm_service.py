@@ -5,7 +5,7 @@ import base64
 import ctypes
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
@@ -40,6 +40,15 @@ def base_url(value: str) -> str:
         if path.endswith(suffix):
             path = path[:-len(suffix)]
     return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def draft_config(saved: ModelConfig, endpoint: str, key: str = "", **values) -> ModelConfig:
+    """Settings edits over the saved config; a saved key never silently follows an edited endpoint."""
+    try:
+        same_endpoint = base_url(endpoint) == base_url(saved.base_url)
+    except ModelError:
+        same_endpoint = False
+    return replace(saved, base_url=endpoint, api_key=key.strip() or (saved.api_key if same_endpoint else ""), **values)
 
 
 def _protect(data: bytes, *, decrypt=False) -> bytes:

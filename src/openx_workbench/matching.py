@@ -13,19 +13,12 @@ from typing import Any
 from .asset_store import AssetStore, AssetVersion
 from .catalog import OpenXAsset
 from .pdf_store import StoredScene
+from .preferences import read_preferences
 from .retrieval import OpenXIndex, RetrievalResult, build_encoder, catalog_fingerprint
 from .reuse_trace import build_trace
 from .scene_package import RetrievalQuery, ScenePackage, scene_package_to_query
 
 ENCODERS = {"bge", "hashing"}
-
-
-def read_preferences() -> dict[str, Any]:
-    try:
-        value = json.loads((AssetStore().root / "preferences.json").read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except (OSError, ValueError):
-        return {}
 
 
 def known_encoder(value: Any) -> str:

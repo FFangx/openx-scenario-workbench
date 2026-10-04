@@ -35,7 +35,7 @@ def workbench(tmp_path, monkeypatch):
     scene = PdfStore(assets).scenes(project.project_id, document.document_id)[0]
     base = {"project_id": project.project_id, "document_id": document.document_id,
             "scene_id": scene.scene_id, "encoder": "hashing"}
-    yield TestClient(api.app), base, version
+    yield TestClient(api.app, base_url="http://127.0.0.1"), base, version
     api._cache.clear()
 
 

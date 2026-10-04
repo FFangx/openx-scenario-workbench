@@ -7,12 +7,15 @@ from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import matching
+from .api_jobs import router as jobs_router
+from .api_settings import router as settings_router
 from .asset_store import AssetStore, AssetVersion
 from .catalog import OpenXAsset
 from .pdf_store import PdfStore, StoredScene
@@ -22,6 +25,7 @@ from .project_store import ProjectStore
 from .retrieval import OpenXIndex, RetrievalResult
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 
 app = FastAPI(title="OpenX Scenario Workbench API", version="0.1.0")
@@ -32,6 +36,25 @@ _cache: dict[str, Any] = {}
 @app.exception_handler(ValueError)
 async def _value_error(_: Request, error: ValueError) -> JSONResponse:
     return JSONResponse({"detail": str(error)}, status_code=400)
+
+
+@app.middleware("http")
+async def _this_machine_only(request: Request, call_next):
+    """The service binds to loopback; also refuse other sites driving it through the user's browser.
+
+    A foreign Host header means DNS rebinding; a foreign Origin on a write means a cross-site form or fetch.
+    """
+    host = urlsplit("//" + request.headers.get("host", "")).hostname
+    origin = request.headers.get("origin")
+    if host not in LOCAL_HOSTS or (request.method not in {"GET", "HEAD", "OPTIONS"} and origin
+                                   and urlsplit(origin).hostname not in LOCAL_HOSTS):
+        return JSONResponse({"detail": "Only pages served from this computer may use the workbench API."},
+                            status_code=403)
+    return await call_next(request)
+
+
+app.include_router(jobs_router)
+app.include_router(settings_router)
 
 
 # ---------- shared state ----------
@@ -153,6 +176,15 @@ def projects() -> dict[str, Any]:
     last = store.last()
     return {"projects": [asdict(item) for item in store.projects()],
             "last_project_id": last.project_id if last else None}
+
+
+class ProjectRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+@app.post("/api/projects")
+def create_project(request: ProjectRequest) -> dict[str, Any]:
+    return asdict(ProjectStore(_store()).create(request.name))
 
 
 @app.post("/api/projects/{project_id}/select")
