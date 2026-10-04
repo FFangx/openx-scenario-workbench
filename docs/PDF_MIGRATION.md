@@ -39,7 +39,8 @@ details were removed; no private corpus, configuration, model responses or
 evaluation data was copied. No ScenarioManager installation is needed at runtime.
 
 OpenX owns orchestration, HTTP transport, persistence and UI. It uses the same
-default `chain` heading decoder and `scene-first-prompt-v6`, preserves typed scene
+default `chain` heading decoder and, since 2026-10-04, `scene-first-prompt-v7`
+(v6 plus an optional per-participant `speed_kph`; v6 stays frozen), preserves typed scene
 structures, subtree expansion, shared clauses, source anchors and review issues.
 Additional checks reject incomplete finishes and malformed response collections
 instead of treating them as successful empty extractions. Invalid references are

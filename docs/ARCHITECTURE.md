@@ -13,11 +13,13 @@
 | `models.py` | Entities, actions, triggers, positions, road summary |
 | `catalog.py` | Pair XOSC files with referenced XODR files into OpenX assets |
 | `sim_archive.py` | Expand ScenarioManager-compatible SIM archives and report unpairable cases |
-| `retrieval.py` | Local vector retrieval with scenario and road reranking |
+| `retrieval.py` | Asset index (vectors for text recall) and the structural ranking of the whole library |
+| `reuse.py`, `reuse_*.py` | Reuse comparison: asset facts, structured and keyword comparison, participant pairing, verdicts; all tunable numbers in `reuse_policy.py` |
+| `api_schemas.py` | Documented response models; the web client's types are generated from them |
 | `scene_package.py` | Stable PDF-to-retrieval contract with source evidence |
 | `pdf_pipeline.py` | Explicit legacy offline extraction for historical compatibility |
 | `pdf_tables.py` | Geometrically verified native cell spans; original slots retained on ambiguity |
-| `pdf_v2/`, `pdf_extraction.py` | Migrated V2 chapter tree, scene-first v6, typed structures and evidence validation |
+| `pdf_v2/`, `pdf_extraction.py` | Migrated V2 chapter tree, scene-first extraction (prompt v7), typed structures and evidence validation |
 | `llm_service.py` | Shared model configuration, credential protection, discovery and probes |
 | `classification.py` | Rule/model/final asset labels and manual review history |
 | `reuse.py` | Participant interaction signatures, grounded differences, and change cost |
@@ -59,7 +61,7 @@ The React client (`web/src`) keeps no business logic: it renders API data, keeps
 
 ## Asset retrieval flow
 
-`catalog.build_catalog` resolves each OpenSCENARIO `LogicFile` reference against the uploaded or discovered OpenDRIVE files. `OpenXIndex` embeds a compact text representation for candidate recall, then compares explicit scenario and road facts. Results retain the XOSC/XODR pair and explain which structures matched.
+`catalog.build_catalog` resolves each OpenSCENARIO `LogicFile` reference against the uploaded or discovered OpenDRIVE files. For a typed requirement, `OpenXIndex` compares every asset's explicit scenario and road facts and ranks by blocking differences, then change cost; the vectors (a text representation and a name-free structure summary) order assets within the same structural bucket and serve free-text search, where FAISS recall applies. Results retain the XOSC/XODR pair and explain which structures matched.
 
 `sim_archive.expand_sim_archives` treats `.sim` as a ZIP container. It reads case JSON and contained OpenDRIVE files in memory, resolves ScenarioManager's logical `<map-id>.xodr` reference to `map/<map-id>/<road-name>.xodr`, converts the embedded OpenSCENARIO-shaped JSON into deterministic XML for the existing parser, and supplements genuinely missing roads with separately uploaded XODR files. Cases whose `LogicFile` cannot be resolved are excluded and summarized in an import report; the adapter does not invent a road or silently accept an incomplete pair.
 
@@ -74,7 +76,7 @@ verification, missing core structure, or text recall without changing verdict or
 The parser resolves bounded lexical parameter references in memory and records
 event/action/condition ownership; original asset bytes remain immutable.
 
-PDF scene sections are converted to a `ScenePackage` that retains filename, section ID, page range, and source text. Its canonical scenario-family, participant, relative-position, action, trigger, road, and parameter fields form a `RetrievalQuery`. Candidate ranking first minimizes blocking differences, then estimated change cost, and only then uses the combined relevance score. The same change cost is exposed in the UI and CLI. Vector similarity therefore affects recall but cannot turn an incompatible scenario into a direct-reuse recommendation.
+PDF scene sections are converted to a `ScenePackage` that retains filename, section ID, page range, and source text. Its canonical scenario-family, participant, relative-position, action, trigger, road, and parameter fields form a `RetrievalQuery`. Candidate ranking first minimizes blocking differences, then estimated change cost, and only then uses the combined relevance score. The same change cost is exposed in the UI and CLI. Vector similarity therefore only breaks ties and cannot turn an incompatible scenario into a direct-reuse recommendation.
 
 Reuse levels come from explicit differences: established matches allow direct reuse, adjustable differences allow modification, missing evidence requires review, and known function/type/topology conflicts require a new build. Typed structures are authoritative and compatibility fields are derived from them. Old rule-only requirements retain their legacy adapter. Participant signatures preserve multiplicity, relative bearing, facing and actor-owned behavior. Initialization speeds and story targets distinguish cruise, static, stopping and speed changes; unresolved or complex behavior remains unknown. Structure profiles are computed once per index. Initial relative, lane, road and world positions and OpenDRIVE reference lines support the existing geometry normalization.
 
@@ -82,7 +84,7 @@ A free-text query without a selected `ScenePackage` is recall-only. It returns r
 
 Unknown topology is a distinct state rather than a mismatch. If participant type and actions agree but either side lacks a resolvable bearing or facing direction, the result requires placement verification and cannot be marked as direct reuse.
 
-The default PDF path uses the migrated ScenarioManager V2 native block parser, chain chapter decoder, scene-first v6 model extraction, subtree resolution and Stage D review checks. Native tables preserve row/cell boundaries and verified row/column spans; cross-page continuation follows chapter ownership, retaining separate page evidence. Scanned pages (including image bodies with native footers) pass through an isolated local PP-StructureV3 worker; native pages retain their existing parser. Both paths preserve page/bbox/provenance in the same scene contract. Confirmed revisions can enter a shared requirement library. Native chapter quality failures can start an isolated PP-DocLayoutV2 overlay using the same runtime/cache runner; it retains original evidence and rechecks coverage before model extraction. Image semantics and complete cross-page/merged-table interpretation remain deferred. See [migration scope and validation](PDF_MIGRATION.md). No private corpus or internal evaluation results are bundled.
+The default PDF path uses the migrated ScenarioManager V2 native block parser, chain chapter decoder, scene-first model extraction (prompt v7; v6 stays frozen), subtree resolution and Stage D review checks. Native tables preserve row/cell boundaries and verified row/column spans; cross-page continuation follows chapter ownership, retaining separate page evidence. Scanned pages (including image bodies with native footers) pass through an isolated local PP-StructureV3 worker; native pages retain their existing parser. Both paths preserve page/bbox/provenance in the same scene contract. Confirmed revisions can enter a shared requirement library. Native chapter quality failures can start an isolated PP-DocLayoutV2 overlay using the same runtime/cache runner; it retains original evidence and rechecks coverage before model extraction. Image semantics and complete cross-page/merged-table interpretation remain deferred. See [migration scope and validation](PDF_MIGRATION.md). No private corpus or internal evaluation results are bundled.
 
 The road-reference check first resolves the referenced relative path against the scenario directory, then falls back to a unique basename. Ambiguous same-name roads are rejected. Pairing does not prove that the scene can execute.
 

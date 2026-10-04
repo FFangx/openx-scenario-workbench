@@ -205,3 +205,14 @@ checked pair, avoiding original-road aliases; the full ZIP remains the immutable
 source blob. This is XSD validation, not complete simulation certification.
 Custom commands remain explicit and need target-engine execution verification.
 Private corpus evidence and screenshots stay outside Git.
+
+## Matching corrections and refactor — 2026-10-04
+
+Participant pairing is now a global optimum, target speeds can be bound to
+participants, reviewers can sign off review items, and verified changes above
+`MAJOR_MODIFY_COST` are `major_modify` (contract above; benchmark evidence in
+[evaluation](EVALUATION.md)). The comparison is split into `reuse_facts`,
+`reuse_structured`, `reuse_legacy`, `reuse_differences` and `reuse_policy`;
+API responses stayed byte-identical through the refactors on both demo
+workspaces. Local regression: **304 tests passed**, Ruff passed, and 73 browser
+checks passed against the fixture demo workspace.

@@ -20,7 +20,7 @@ OpenX Scenario Workbench turns an ADAS requirement in a PDF into a traceable dec
 
 ## Positioning
 
-The product joins document evidence, scenario structure, road geometry, and retrieval scores in one deterministic workflow. Vector similarity recalls candidates; explicit OpenX facts decide compatibility and explain the result.
+The product joins document evidence, scenario structure, road geometry, and retrieval scores in one deterministic workflow. Explicit OpenX facts rank every candidate, decide compatibility and explain the result; similarity only orders candidates that need the same change and serves free-text search.
 
 ## Operating Context
 
@@ -32,7 +32,7 @@ The core demonstration starts with a text-based ADAS PDF and a small library of 
 - Page-aware PDF scene extraction with section IDs and source evidence.
 - Paired OpenSCENARIO/OpenDRIVE parsing and catalog construction.
 - Offline hashing retrieval and optional local BGE semantic embeddings.
-- Scenario, participant-interaction, and road-geometry reranking.
+- Structural ranking by scenario, participant interaction and road geometry.
 - Grounded reuse classification and estimated change cost.
 - No full simulation, ASAM conformance certification, OCR, or complete OpenX coverage.
 - ScenarioManager-compatible `.sim` extraction is implemented for the observed ZIP layout, including map-ID-to-embedded-XODR resolution.
@@ -43,7 +43,8 @@ The core demonstration starts with a text-based ADAS PDF and a small library of 
 - Public esmini example under `examples/esmini/` with its upstream license.
 - Synthetic minimal OpenX fixtures under `tests/fixtures/`.
 - Architecture and limitations documented in `README.md`, `docs/ARCHITECTURE.md`, and `DEVELOPMENT_PLAN.md`.
-- No licensed public ADAS PDF corpus or multi-candidate public demo library is currently bundled.
+- An authored multi-candidate reuse benchmark (`examples/reuse-benchmark/`, 26 assets and 38 typed requirements) with an ablation report (`docs/EVALUATION.md`), loadable with `openx-demo`.
+- No licensed public ADAS PDF corpus is currently bundled.
 
 ## Product Principles
 

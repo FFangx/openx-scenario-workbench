@@ -7,7 +7,7 @@ English | [中文](README.zh-CN.md)
 
 Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets from files or ScenarioManager-compatible `.sim` archives, and ranks candidates using text, scenario structure, and road fit.
 
-**Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, run `openx-demo` after installing: it opens the workbench on an authored library of 25 assets and 35 reviewed requirements ([demo workspace](#demo-workspace)). Semantic search and simulation have separate dependencies below.
+**Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, run `openx-demo` after installing: it opens the workbench on an authored library of 26 assets and 38 reviewed requirements ([demo workspace](#demo-workspace)). Semantic search and simulation have separate dependencies below.
 
 ![Workbench with a requirement queue, ranked assets and a reuse assessment](docs/images/workbench-en.jpg)
 
@@ -34,26 +34,26 @@ Asset versions are shared across projects. PDF sources, scene revisions and deci
 
 ![OpenX Scenario Workbench architecture](docs/images/architecture-overview.svg)
 
-The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The React interface talks to a local FastAPI service; the parser, retrieval core and decision logic are plain Python shared with the command-line tools.
+The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. For a reviewed requirement, every library asset is compared structurally and ranked by blocking differences, then change cost; text similarity only orders assets that need the same change, and drives free-text search. Source evidence and parsed candidate facts ground the final reuse decision. The React interface talks to a local FastAPI service; the parser, retrieval core and decision logic are plain Python shared with the command-line tools.
 
 [Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Evaluation
 
-An authored [reuse benchmark](examples/reuse-benchmark/) of 25 assets and 35 Chinese and English requirements, labelled with their expected candidates and verdicts, measures retrieval and the reuse verdict, and an ablation shows which part of the ranking does the work:
+An authored [reuse benchmark](examples/reuse-benchmark/) of 26 assets and 38 Chinese and English requirements, labelled with their expected candidates and verdicts, measures retrieval and the reuse verdict, and an ablation shows which part of the ranking does the work:
 
 | Ranker | R@1 (descriptive names) | R@1 (opaque names) | Top hit wrongly reusable |
 |---|---:|---:|---:|
-| Name similarity (BGE-M3) | 59.4% | 28.1% | 19–30 of 35 |
-| Structure-text similarity (hashing) | 96.9% | 96.9% | 11 of 35 |
-| Workbench: structural rules, then similarity | 100% | 100% | 0 of 35 |
+| Name similarity (BGE-M3) | 57.1% | 25.7% | 22–33 of 38 |
+| Structure-text similarity (hashing) | 94.3% | 94.3% | 13 of 38 |
+| Workbench: structural rules, then similarity | 100% | 100% | 0 of 38 |
 
 Similarity over the structural facts finds most right assets, but cannot say when the best one still needs changes; the structural verdict makes no false `direct` call. The labels follow the documented reuse contract and the requirements enter as reviewed structures, so this checks consistency, not PDF extraction or engineering judgement. Method, full results and limits: [evaluation](docs/EVALUATION.md). Run it with `openx-ablation`.
 
 ## What it does
 
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
-- Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first v6 path, preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
+- Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first path (prompt v7), preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
 - Publishes confirmed PDF scene revisions into a shared requirement library; simulation assets have optional model classification with rule/model/final audit history.
 - Provides model URL/key settings, model discovery, manual model IDs and a selected-model JSON test.
 - Converts each PDF scene package into explicit scenario-family, participant, relative-position, action, trigger, road, and parameter constraints.
@@ -61,7 +61,9 @@ Similarity over the structural facts finds most right assets, but cannot say whe
 - Preserves total road length, lane-type counts, and OpenDRIVE geometry types, and projects lane/road/world positions through the reference line for relative-position matching.
 - Pairs each `.xosc` with its referenced `.xodr` to build an OpenX asset catalog.
 - Imports ScenarioManager-compatible `.sim` ZIP archives, converts their embedded OpenSCENARIO JSON to the same parser input, and pairs cases with contained or separately uploaded `.xodr` roads.
-- Uses BGE-M3 for semantic recall, with an explicitly selected hashing baseline available offline, then ranks candidates by blocking differences and estimated change cost.
+- Ranks every library asset for a reviewed requirement by blocking differences, then estimated change cost; BGE-M3 (or an explicitly selected offline hashing baseline) orders assets within the same change and serves free-text search.
+- Pairs requested and candidate participants for the fewest blocking differences and compares each participant's own initial speed when the requirement states it.
+- Gives one of five verdicts: direct reuse, modify, major modification (verified changes close to a new build), review, or build new. A decision that needs review is saved once the reviewer confirms each open item with a reason; the reasons stay in the trace and report.
 - Builds participant interaction signatures from type, ego-relative bearing, facing direction, and actor-owned actions.
 - Reports grounded reuse differences such as a mismatched scenario family or participant interaction, or a missing relation, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.
@@ -127,7 +129,7 @@ After the quick start install, one command starts the workbench on an authored d
 openx-demo
 ```
 
-It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 25 assets and a project with an English and a Chinese protocol PDF whose 35 requirements are already reviewed. Pick a requirement to see its ranked candidates and verdict:
+It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed. Pick a requirement to see its ranked candidates and verdict:
 
 ![openx-demo stepping through four requirements: two direct matches, one needing parameter changes, one with no reusable asset](docs/images/demo-en.gif)
 
@@ -206,7 +208,7 @@ After changing Python source files, reinstall with `python -m pip install ".[dev
 python -m pytest -q
 ```
 
-For interface work, run `openx-web` and, in `web/`, `npm run dev`; Vite serves the interface on port 5173 and forwards `/api` to the service. `npm run build` type-checks and builds; `npm run verify:ui` then runs the browser checks against a throwaway demo workspace (it starts its own service and never uses your data folder).
+For interface work, run `openx-web` and, in `web/`, `npm run dev`; Vite serves the interface on port 5173 and forwards `/api` to the service. `npm run build` type-checks and builds; `npm run verify:ui` then runs the browser checks against a throwaway demo workspace (it starts its own service and never uses your data folder). The client's API types are generated from the service's OpenAPI document: after changing `src/openx_workbench/api_schemas.py`, run `npm run gen:api`.
 
 CI tests on Windows and Linux with Python 3.10 and 3.12, builds the distribution, and builds and checks the web interface. Automated tests use local fixtures and mocked downloads; the live public demo is checked separately.
 
