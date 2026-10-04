@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -21,6 +20,7 @@ from .api_jobs import router as jobs_router
 from .api_preview import router as preview_router
 from .api_settings import router as settings_router
 from .api_workflow import router as workflow_router
+from .checkout import checkout_root
 from .pdf_store import PdfStore
 from .preview_frames import read_frame
 from .project_store import ProjectStore
@@ -28,7 +28,7 @@ from .report_html import render_report
 from .reuse_trace import checked_trace
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
-WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+WEB_DIST = checkout_root() / "web" / "dist"
 
 app = FastAPI(title="OpenX Scenario Workbench API", version="0.1.0")
 

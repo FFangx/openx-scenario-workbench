@@ -20,10 +20,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
 from .asset_store import default_store_root
+from .checkout import checkout_root
 from .windows_job import WindowsJob
 
 
-WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+WEB_DIST = checkout_root() / "web" / "dist"
 HEALTH = "/api/health"
 
 
