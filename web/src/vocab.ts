@@ -8,6 +8,17 @@ const EN: Record<string, string> = {
   障碍物: "Obstacle", 动物: "Animal",
   rule_only: "Rule classified", classified: "Model reviewed", manual_confirmed: "Confirmed", failed: "Failed", pending: "Pending",
   not_tested: "Not tested", playable: "Playable", warning: "Warning", unsupported: "Unsupported", timeout: "Timed out",
+  // typed requirement vocabulary (src/openx_workbench/pdf_v2/scene_schemas.py)
+  高速路: "Motorway", 匝道合流: "Ramp merge", 卡车: "Truck", 客车: "Bus", 厢式车: "Van", 挂车: "Trailer", 摩托车: "Motorcycle",
+  三轮车: "Tricycle", 正前方: "Ahead", 正后方: "Behind", 并排同车道: "Alongside, same lane", 左前方: "Front left", 左后方: "Rear left",
+  左并排: "Alongside left", 右前方: "Front right", 右后方: "Rear right", 右并排: "Alongside right", 未知方位: "Unknown bearing",
+  同向: "Same direction", 对向: "Oncoming", 横向: "Crossing", 静止: "Stationary", 匀速行驶: "Constant speed", 变速: "Speed change",
+  刹停: "Brake to stop", 变道: "Lane change", 定距跟车: "Follow at distance", 倒车: "Reverse", 被测系统控制: "System under test",
+  遮挡: "Occlusion", 相对距离: "Relative distance", 绝对距离: "Absolute distance", 车头时距: "Time headway", 速度: "Speed",
+  相对速度: "Relative speed", 晴天: "Clear", 雨天: "Rain", 雾天: "Fog", 雪天: "Snow", 沙尘: "Sand or dust", 日间: "Day", 夜间: "Night",
+  儿童: "Child", 成人: "Adult", 隧道: "Tunnel", 收费站: "Toll station", 服务区: "Service area", 实线: "Solid line", 虚线: "Dashed line",
+  泊入: "Park in", 泊出: "Park out", 功能试验: "Functional test", 误作用试验: "False activation test", 激活边界试验: "Activation boundary test",
+  驾驶员干预试验: "Driver intervention test", 左: "Left", 右: "Right", 单向: "One-way", 双向: "Two-way",
 };
 const ZH: Record<string, string> = {
   rule_only: "规则分类", classified: "模型复核", manual_confirmed: "人工确认", failed: "失败", pending: "待分类",

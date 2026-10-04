@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Collapse, Modal, Spin, Tabs, Tag } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
-import { api, basename, urls, type Candidate, type DecisionReq, type Explanation } from "../api";
+import { api, basename, urls, type Candidate, type DecisionReq, type Explanation, type StandardCheck } from "../api";
 import { useT } from "../i18n";
 
 /** Read-only stored files of the candidate version; edits are imported as a new version. */
-export function SourceFilesDialog({ cand, open, onClose }: { cand: Candidate; open: boolean; onClose: () => void }) {
+type FileRef = Pick<Candidate, "asset_id" | "version_id" | "version_number" | "xosc" | "xodr">;
+
+export function SourceFilesDialog({ cand, open, onClose }: { cand: FileRef; open: boolean; onClose: () => void }) {
   const { t } = useT();
   const [texts, setTexts] = useState<Record<string, string | null>>({});
   useEffect(() => {
@@ -38,13 +40,21 @@ export function SourceFilesDialog({ cand, open, onClose }: { cand: Candidate; op
 /** XSD structure checks per file, issues grouped by message with their line numbers. */
 export function StandardChecksDialog({ cand, open, onClose }: { cand: Candidate; open: boolean; onClose: () => void }) {
   const { t } = useT();
+  return (
+    <Modal title={t("文件标准检查", "File standard checks")} open={open} onCancel={onClose} footer={null} width={720}>
+      <StandardChecks checks={cand.standard_checks.checks ?? {}} />
+    </Modal>
+  );
+}
+
+export function StandardChecks({ checks }: { checks: Record<string, StandardCheck> }) {
+  const { t } = useT();
   const labels: Record<string, [string, string, string]> = {
     valid: ["通过", "Passed", "direct"], invalid: ["未通过", "Failed", "not"],
     unsupported: ["此版本未支持", "Version unsupported", "review"], unavailable: ["未完成检查", "Check unavailable", "review"],
   };
-  const checks = cand.standard_checks.checks ?? {};
   return (
-    <Modal title={t("文件标准检查", "File standard checks")} open={open} onCancel={onClose} footer={null} width={720}>
+    <>
       <p className="muted">{t("按文件声明的版本检查 XML 结构；仿真可运行性需另行预览验证。", "Checks XML structure against the declared version. Verify execution separately with preview.")}</p>
       {Object.entries(checks).map(([role, record]) => {
         const grouped = new Map<string, (number | null | undefined)[]>();
@@ -77,7 +87,7 @@ export function StandardChecksDialog({ cand, open, onClose }: { cand: Candidate;
           </div>
         );
       })}
-    </Modal>
+    </>
   );
 }
 

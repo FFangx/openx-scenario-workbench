@@ -84,6 +84,7 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
 
   return (
     <div className="facts">
+      <div className="facts-title" title={scene.title}>{scene.section_id && <span className="muted">{scene.section_id}</span>} {scene.title}</div>
       <div className="facts-head">
         <span className="sec-title">{t("已保存的需求事实", "Saved requirement facts")}</span>
         <span className="muted">{t(`修订 ${scene.revision}`, `Revision ${scene.revision}`)}</span>

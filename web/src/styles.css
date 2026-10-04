@@ -486,3 +486,28 @@ a { color: var(--link); }
 .explanation ul { margin: 6px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
 .check-block { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .check-issue { margin-bottom: 8px; }
+
+/* ---------- asset management ---------- */
+.assets-page { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+.assets-page .ph .ant-btn { margin-left: 12px; }
+.assets-page .ph .meta { margin-left: auto; }
+.assets-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.assets-tabs > .ant-tabs-content-holder { flex: 1; min-height: 0; overflow: auto; }
+.asset-table { display: flex; flex-direction: column; gap: 8px; }
+.asset-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.asset-filters .ant-input-affix-wrapper { width: 240px; }
+.latest-only { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); margin-left: 4px; }
+.asset-count { font-size: 12px; }
+.job-strip { margin-bottom: 8px; }
+.job-summary { display: inline-flex; gap: 10px; align-items: baseline; }
+.pending-strip { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 6px 10px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); font-size: 12.5px; }
+.asset-detail { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.asset-detail-head { display: flex; align-items: flex-start; gap: 6px; }
+.asset-detail-head .name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asset-detail-head .sel-name { min-width: 0; flex: 1; }
+.asset-player { max-width: 420px; }
+.asset-player .player img.live, .asset-player .img-empty { height: 220px; }
+.asset-player .ant-image, .asset-player .ant-image-img { width: 100%; }
+.history-files { display: inline-flex; gap: 10px; }
+.facts-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.facts-title .muted { font-weight: 400; margin-right: 4px; }

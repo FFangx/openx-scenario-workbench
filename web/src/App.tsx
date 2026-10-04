@@ -9,6 +9,7 @@ import { StepBar, TopBar, type Page } from "./components/TopBar";
 import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OverviewPage } from "./components/OverviewPage";
+import { AssetsPage } from "./components/AssetsPage";
 import { RequirementsPanel } from "./components/RequirementsPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { DecisionPanel } from "./components/DecisionPanel";
@@ -103,6 +104,8 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const [checked, setChecked] = useState<string[]>([]);
   const searchSeq = useRef(0);
   const pending = useRef<string | null>(null);
+  const pendingDoc = useRef<string | null>(null);
+  const [libraryStamp, setLibraryStamp] = useState(0);
 
   const scene = scenes.find((s) => keyOf(s) === selected) ?? null;
   const doc = docs.find((d) => d.document_id === (scene?.document_id ?? docId)) ?? null;
@@ -129,7 +132,9 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const loadDocs = useCallback((pid: string, select?: string) =>
     api.documents(pid).then((d) => {
       setDocs(d);
-      setDocId(select && d.some((x) => x.document_id === select) ? select : d[0]?.document_id ?? null);
+      const wanted = select ?? pendingDoc.current;
+      pendingDoc.current = null;
+      setDocId(wanted && d.some((x) => x.document_id === wanted) ? wanted : d[0]?.document_id ?? null);
       if (d.length < 2) setScope("pdf");
     }).catch((e: Error) => message.error(e.message)), [message]);
 
@@ -191,7 +196,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   );
 
   // A new scene revision (or language, or encoder) re-runs matching so the middle and right columns never show stale results.
-  const sceneKey = scene ? `${keyOf(scene)}@${scene.revision}:${lang}:${prefs.encoder}` : "";
+  const sceneKey = scene ? `${keyOf(scene)}@${scene.revision}:${lang}:${prefs.encoder}:${libraryStamp}` : "";
   useEffect(() => {
     if (sceneKey) runSearch({ text: scene!.title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,6 +237,25 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const pickProject = (id: string) => {
     switchProject(id);
     api.selectProject(id).catch(() => undefined);
+  };
+  /** After imports, deletions or relabelling: refresh facets and re-rank, so no stale candidate stays on screen. */
+  const libraryChanged = useCallback(() => {
+    loadLibrary();
+    setLibraryStamp((n) => n + 1);
+    setResult(null);
+    setActiveKey(null);
+  }, [loadLibrary]);
+  const openSceneIn = (pid: string, documentId: string, sceneId: string) => {
+    if (pid === projectId) {
+      openScene(documentId, sceneId);
+      return;
+    }
+    setPage("workbench");
+    setLeftTab("facts");
+    switchProject(pid);
+    pendingDoc.current = documentId;
+    pending.current = `${documentId}/${sceneId}`;
+    api.selectProject(pid).catch(() => undefined);
   };
   const openScene = (documentId: string, sceneId: string) => {
     setPage("workbench");
@@ -334,6 +358,9 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
       </main>
       </>)}
       {page === "overview" && <OverviewPage projectId={projectId} onNavigate={setPage} onOpenScene={openScene} />}
+      {page === "assets" && (
+        <AssetsPage esmini={esmini} onSettings={() => setDialog("settings")} onLibraryChanged={libraryChanged} onOpenScene={openSceneIn} />
+      )}
     </div>
   );
 }

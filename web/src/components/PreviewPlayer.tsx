@@ -8,7 +8,7 @@ import { ArrowUpRight } from "./ArrowUpRight";
 const ACTIVE = new Set(["starting", "running"]);
 
 /** Real esmini frames only: a live MJPEG stream while playing, otherwise the saved still frame of this exact version. */
-export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Candidate; esmini: boolean; onSettings: () => void }) {
+export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Pick<Candidate, "asset_id" | "version_id" | "has_frame">; esmini: boolean; onSettings: () => void }) {
   const { t } = useT();
   const [status, setStatus] = useState<PreviewStatus>({ state: "idle" });
   const [busy, setBusy] = useState(false);

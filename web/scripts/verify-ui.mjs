@@ -298,6 +298,56 @@ try {
   const saved = await (await p.request.get(BASE + "/api/settings")).json();
   check("appearance is saved on the server", saved.preferences.appearance === "dark");
 
+  // asset management: table, labels, deletion guard, deletion, import, requirement library
+  await p.locator(".ox-nav button").filter({ hasText: "Asset management" }).click();
+  const assetRows = () => p.locator(".asset-table tbody tr.ant-table-row");
+  await assetRows().first().waitFor();
+  check("asset table lists the latest versions", (await assetRows().count()) === 6, `${await assetRows().count()} rows`);
+  await assetRows().filter({ hasText: "Opaque 003" }).click();
+  await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Classification" }).click();
+  await p.locator(".asset-detail .ant-form-item").filter({ hasText: "Road type" }).locator(".ant-select").click();
+  await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: /^Curve$/ }).click();
+  await p.locator(".asset-detail .ant-btn-primary").filter({ hasText: "Save and confirm" }).click();
+  await p.locator(".ant-message-success").filter({ hasText: "Classification confirmed" }).waitFor();
+  await p.waitForTimeout(400);
+  check("confirmed labels show in the table", (await assetRows().filter({ hasText: "Opaque 003" }).innerText()).includes("Curve"));
+  const facets = (await (await p.request.get(`${BASE}/api/library`)).json()).facets.label_road_type;
+  check("confirmed labels reach the search facets", facets.includes("弯道"), facets.join(", "));
+
+  const savedAsset = trace.candidate.title;
+  await assetRows().filter({ hasText: savedAsset }).click();
+  await p.locator(".asset-detail-head").filter({ hasText: savedAsset }).waitFor();
+  check("a version used by a saved decision cannot be deleted", await p.locator(".asset-detail-head .ant-btn-dangerous").isDisabled());
+  await p.locator(".assets-page .ph .ant-btn-primary").click();
+  const fixtures = path.join(WEB, "..", "tests", "fixtures");
+  await p.locator(".ant-modal:visible input[type=file]").setInputFiles([path.join(fixtures, "minimal.xosc"), path.join(fixtures, "minimal.xodr")]);
+  await p.locator(".ant-modal:visible .ant-btn-primary").filter({ hasText: "Start import" }).click();
+  await p.locator(".ant-modal:visible .job-head b").filter({ hasText: "Completed" }).waitFor({ timeout: 60000 });
+  check("asset import job saves the scenario", (await p.locator(".ant-modal:visible .job-note").first().innerText()).startsWith("1 scenarios saved"));
+  await p.locator(".ant-modal:visible .ant-btn-primary").filter({ hasText: "Done" }).click();
+  await p.waitForTimeout(600);
+  check("imported asset appears in the table", (await assetRows().count()) === 7 && (await assetRows().first().innerText()).includes("Minimal cut-in"));
+
+  await assetRows().filter({ hasText: "Minimal cut-in" }).click();
+  await p.locator(".asset-detail-head").filter({ hasText: "Minimal cut-in" }).waitFor();
+  await p.locator(".asset-detail-head .ant-btn-dangerous").click();
+  await p.locator(".ant-popconfirm .ant-btn-dangerous").click();
+  await p.locator(".ant-message-success").filter({ hasText: "Version deleted" }).waitFor();
+  await p.waitForTimeout(400);
+  check("an unreferenced version is deleted", (await assetRows().count()) === 6);
+
+  await p.locator(".assets-tabs .ant-tabs-tab").filter({ hasText: "PDF requirement library" }).click();
+  const requirementRows = p.locator(".req-library tbody tr.ant-table-row");
+  await requirementRows.first().waitFor();
+  check("published requirement is in the library", (await requirementRows.count()) === 1);
+  await requirementRows.first().click();
+  const publishedTitle = await p.locator(".asset-detail-head .name").innerText();
+  await p.locator(".asset-detail .ant-btn").filter({ hasText: "Open source document" }).click();
+  await idle();
+  check("Open source document returns to the requirement facts", (await p.locator(".ox-nav button.on").innerText()) === "Workbench"
+    && (await p.locator(".left-tabs .ant-tabs-tab-active").innerText()) === "Requirement facts"
+    && (await p.locator(".facts-title").innerText()).endsWith(publishedTitle), publishedTitle);
+
   // new project starts empty and becomes current
   await p.locator(".hbtn").first().click();
   await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "New project" }).click();

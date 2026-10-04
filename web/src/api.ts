@@ -229,6 +229,80 @@ export interface Job {
   reports?: ImportReport[];
 }
 
+export interface VersionRef { asset_id: string; version_id: string | null }
+
+export interface AssetRow {
+  asset_id: string;
+  version_id: string;
+  version_number: number;
+  name: string;
+  xosc_name: string;
+  xodr_name: string;
+  source_name: string;
+  created_at: string;
+  compatibility: string;
+  latest: boolean;
+  function: string;
+  road: string;
+  targets: string[];
+  classification: string;
+  needs_review: boolean;
+}
+
+export interface ClassificationLabels { function_type: string; label_road_type: string; label_target_type: string[]; label_actions: string[]; scenario_intent: string }
+
+export interface ClassificationRecord {
+  status: string;
+  needs_review: boolean;
+  final: ClassificationLabels;
+  rule: ClassificationLabels;
+  llm: (ClassificationLabels & { confidence: number; reason: string }) | null;
+  model: string;
+  error?: string;
+  saved_at?: string;
+}
+
+export interface AssetDetail {
+  version: {
+    asset_id: string; version_id: string; version_number: number; title: string; source_name: string; xosc_name: string; xodr_name: string;
+    created_at: string; content_sha256: string; source_sha256: string; compatibility: string; compatibility_detail: string;
+    files: { role: string; original_name: string; sha256: string }[];
+  };
+  classification: ClassificationRecord | null;
+  references: string[];
+  has_frame: boolean;
+  history: { version_id: string; version_number: number; created_at: string; compatibility: string; source_name: string }[];
+  standard_export: boolean;
+  summary?: { title: string; entities: number; road_length_m: number; lane_count: number; junction_count: number; description: string };
+  validation?: Record<string, StandardCheck>;
+  error?: string;
+}
+
+export interface StandardExportResult {
+  ready: boolean;
+  audit: {
+    validation: Record<string, StandardCheck & { issues?: { path?: string; message: string }[] }>;
+    external_dependencies: unknown[];
+    runtime_extension_points: unknown[];
+    parameter_issues: unknown[];
+    unresolved: unknown[];
+    [key: string]: unknown;
+  };
+}
+
+export interface RequirementRecord {
+  library_id: string;
+  revision: number;
+  reviewed_at: string;
+  project_id: string;
+  document_id: string;
+  scene_id: string;
+  title: string;
+  preferred_text: string;
+  classification: Record<string, unknown>;
+  structure: Record<string, unknown>;
+}
+
 export type DecisionReq = MatchRequest & { asset_id: string; version_id: string; explanation_id?: string };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -273,6 +347,15 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
     return res.text();
   },
+  assets: () => call<AssetRow[]>("/api/assets"),
+  assetDetail: (v: VersionRef) => call<AssetDetail>(`/api/assets/${v.asset_id}/versions/${v.version_id}`),
+  classificationSchema: () => call<Record<"function_type" | "label_road_type" | "label_target_type", string[]>>("/api/classification-schema"),
+  classifyRules: (v: VersionRef) => post<ClassificationRecord>(`/api/assets/${v.asset_id}/versions/${v.version_id}/classification/rules`, {}),
+  confirmClassification: (v: VersionRef, labels: ClassificationLabels) =>
+    send<ClassificationRecord>("PUT", `/api/assets/${v.asset_id}/versions/${v.version_id}/classification`, labels),
+  deleteVersion: (v: VersionRef) => send<{ deleted: string }>("DELETE", `/api/assets/${v.asset_id}/versions/${v.version_id}`),
+  standardExport: (v: VersionRef) => post<StandardExportResult>(`/api/assets/${v.asset_id}/versions/${v.version_id}/standard-export`, {}),
+  requirements: () => call<RequirementRecord[]>("/api/requirements"),
   previewStart: (assetId: string, versionId: string, duration: number) =>
     post<PreviewStatus>(`/api/assets/${assetId}/versions/${versionId}/preview`, { duration }),
   previewStatus: () => call<PreviewStatus>("/api/preview"),
@@ -315,11 +398,14 @@ export const urls = {
   pdf: (pid: string, did: string, page?: number) => `/api/projects/${pid}/documents/${did}/file${page ? `#page=${page}` : ""}`,
   report: (pid: string, rid: string, format: "json" | "html", lang: Lang) =>
     `/api/projects/${pid}/reports/${rid}/download?format=${format}&lang=${lang}`,
-  frame: (c: Candidate, bust?: number) => `/api/assets/${c.asset_id}/versions/${c.version_id}/frame${bust ? `?v=${bust}` : ""}`,
+  frame: (c: VersionRef, bust?: number) => `/api/assets/${c.asset_id}/versions/${c.version_id}/frame${bust ? `?v=${bust}` : ""}`,
   extraction: (pid: string, did: string) => `/api/projects/${pid}/documents/${did}/extraction/download`,
+  classification: (v: VersionRef) => `/api/assets/${v.asset_id}/versions/${v.version_id}/classification/download`,
+  standardExport: (v: VersionRef) => `/api/assets/${v.asset_id}/versions/${v.version_id}/standard-export/download`,
+  requirement: (libraryId: string) => `/api/requirements/${libraryId}/download`,
   batch: (pid: string, did: string, signature: string, format: "json" | "html", lang: Lang) =>
     `/api/projects/${pid}/documents/${did}/batch/${signature}/download?format=${format}&lang=${lang}`,
-  file: (c: Candidate, role: "scenario" | "road") => `/api/assets/${c.asset_id}/versions/${c.version_id}/files/${role}`,
+  file: (c: VersionRef, role: "scenario" | "road") => `/api/assets/${c.asset_id}/versions/${c.version_id}/files/${role}`,
 };
 
 export const LEVEL: Record<Level, { zh: string; en: string; cls: "direct" | "modify" | "review" | "not" }> = {
