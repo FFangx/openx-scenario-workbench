@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .atomic_write import write_json
 from .asset_store import AssetStore, AssetVersion
 from .store_lock import store_transaction
 
@@ -133,8 +133,4 @@ class ProjectStore:
     @staticmethod
     def _write_json(path: Path, value: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                         prefix="writing-", suffix=".tmp", delete=False) as handle:
-            json.dump(value, handle, ensure_ascii=False, indent=2)
-            temporary = Path(handle.name)
-        temporary.replace(path)
+        write_json(path, value, ensure_ascii=False, indent=2, prefix="writing-", suffix=".tmp")

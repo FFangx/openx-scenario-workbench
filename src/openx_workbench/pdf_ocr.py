@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .atomic_write import write_json
 from .asset_store import default_store_root
 from .pdf_v2.models import ParsedBlock
 
@@ -183,8 +184,5 @@ def run_pdf_sidecar(path, pages, *, root, progress, identity, worker, parse_page
         page.pop("image", None)
     payload["identity"] = identity
     cache.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=cache.parent, delete=False) as stream:
-        json.dump(payload, stream, ensure_ascii=False)
-        temporary = Path(stream.name)
-    temporary.replace(cache)
+    write_json(cache, payload, ensure_ascii=False)
     return blocks, {"identity": identity, "runtime": payload["runtime"], "seconds": payload.get("seconds"), "cached": False, **payload.get("provenance", {})}

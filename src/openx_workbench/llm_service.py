@@ -5,13 +5,13 @@ import base64
 import ctypes
 import json
 import os
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from .atomic_write import write_json
 from .asset_store import default_store_root
 
 
@@ -83,11 +83,7 @@ def save_config(config: ModelConfig, root: Path | None = None) -> None:
     value = asdict(config)
     value.pop("api_key")
     value.update(base_url=normalized, model=config.model.strip(), protected_key=base64.b64encode(_protect(config.api_key.encode())).decode() if config.api_key else "")
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, delete=False) as handle:
-        os.chmod(handle.name, 0o600)
-        json.dump(value, handle, ensure_ascii=False, indent=2)
-        temporary = Path(handle.name)
-    temporary.replace(target)
+    write_json(target, value, ensure_ascii=False, indent=2, permissions=0o600)
 
 
 class NoRedirect(HTTPRedirectHandler):

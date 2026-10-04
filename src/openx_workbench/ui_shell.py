@@ -1,12 +1,11 @@
 """Functional navigation and workspace controls for the local workbench."""
 import html
-import json
 from pathlib import Path
-import tempfile
 from subprocess import TimeoutExpired
 
 import streamlit as st
 
+from .atomic_write import write_json
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
 from .local_folders import choose_folder, open_folder
@@ -18,10 +17,7 @@ from .project_store import ProjectStore
 def save_preferences(**values):
     path = AssetStore().root / "preferences.json"
     data = {**preferences(), **values}
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        json.dump(data, handle, ensure_ascii=False)
-        temporary = Path(handle.name)
-    temporary.replace(path)
+    write_json(path, data, ensure_ascii=False)
 
 
 def initialize():

@@ -6,12 +6,12 @@ import hashlib
 import json
 import math
 import re
-import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .atomic_write import write_bytes, write_json
 from .asset_store import AssetStore
 from .pdf_pipeline import extract_scene_packages_from_pdf
 from .project_store import ProjectStore
@@ -161,18 +161,26 @@ class PdfStore:
             raise ValueError("Stored PDF failed integrity check.")
         return data
 
-    def scenes(self, project_id: str, document_id: str) -> list[StoredScene]:
+    @staticmethod
+    def _package(payload: dict[str, Any]) -> ScenePackage:
+        return ScenePackage(**{**payload, "evidence": [EvidenceRef(**item) for item in payload.get("evidence", [])]})
+
+    @classmethod
+    def _revision(cls, document: PdfDocument, scene_id: str, path: Path) -> StoredScene:
+        return StoredScene(document, scene_id, int(path.stem),
+                           cls._package(json.loads(path.read_text(encoding="utf-8"))))
+
+    def _scene_document(self, project_id: str, document_id: str) -> tuple[Path, PdfDocument]:
         root = self._document_root(project_id, document_id)
-        document = PdfDocument(**json.loads((root / "document.json").read_text(encoding="utf-8")))
+        return root, PdfDocument(**json.loads((root / "document.json").read_text(encoding="utf-8")))
+
+    def scenes(self, project_id: str, document_id: str) -> list[StoredScene]:
+        root, document = self._scene_document(project_id, document_id)
         result = []
         for folder in sorted((root / "scenes").glob("scene-*")):
             revision_files = sorted(folder.glob("[0-9][0-9][0-9][0-9].json"))
-            if not revision_files:
-                continue
-            path = revision_files[-1]
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            payload["evidence"] = [EvidenceRef(**item) for item in payload.get("evidence", [])]
-            result.append(StoredScene(document, folder.name, int(path.stem), ScenePackage(**payload)))
+            if revision_files:
+                result.append(self._revision(document, folder.name, revision_files[-1]))
         return result
 
     def all_scenes(self, project_id: str) -> list[StoredScene]:
@@ -182,14 +190,9 @@ class PdfStore:
     def revisions(self, project_id: str, document_id: str, scene_id: str) -> list[StoredScene]:
         if not re.fullmatch(r"scene-[0-9]{4}", scene_id):
             raise ValueError("Invalid scene ID.")
-        root = self._document_root(project_id, document_id)
-        document = PdfDocument(**json.loads((root / "document.json").read_text(encoding="utf-8")))
-        result = []
-        for path in sorted((root / "scenes" / scene_id).glob("[0-9][0-9][0-9][0-9].json")):
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            payload["evidence"] = [EvidenceRef(**item) for item in payload.get("evidence", [])]
-            result.append(StoredScene(document, scene_id, int(path.stem), ScenePackage(**payload)))
-        return result
+        root, document = self._scene_document(project_id, document_id)
+        return [self._revision(document, scene_id, path)
+                for path in sorted((root / "scenes" / scene_id).glob("[0-9][0-9][0-9][0-9].json"))]
 
     @serialized
     def revise_scene(self, project_id: str, document_id: str, scene_id: str,
@@ -243,22 +246,13 @@ class PdfStore:
         revision = current.revision + 1
         path = original.parent / f"{revision:04d}.json"
         self._write_json(path, payload)
-        payload["evidence"] = [EvidenceRef(**item) for item in payload["evidence"]]
-        return StoredScene(current.document, scene_id, revision, ScenePackage(**payload))
+        return StoredScene(current.document, scene_id, revision, self._package(payload))
 
     @staticmethod
     def _write_json(path: Path, value: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                         prefix="writing-", suffix=".tmp", delete=False) as handle:
-            json.dump(value, handle, ensure_ascii=False, indent=2)
-            temporary = Path(handle.name)
-        temporary.replace(path)
+        write_json(path, value, ensure_ascii=False, indent=2, prefix="writing-", suffix=".tmp")
 
     @staticmethod
     def _write_bytes(path: Path, data: bytes) -> None:
-        with tempfile.NamedTemporaryFile("wb", dir=path.parent,
-                                         prefix="writing-", suffix=".tmp", delete=False) as handle:
-            handle.write(data)
-            temporary = Path(handle.name)
-        temporary.replace(path)
+        write_bytes(path, data, prefix="writing-", suffix=".tmp")

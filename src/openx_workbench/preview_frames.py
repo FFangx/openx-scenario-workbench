@@ -4,9 +4,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import tempfile
 from pathlib import Path
 
+from .atomic_write import write_json
 from .asset_store import AssetStore, AssetVersion
 
 
@@ -21,15 +21,7 @@ def save_frame(path: Path, jpeg: bytes, frame_number: int) -> None:
     payload = {"renderer": "esmini", "frame_number": frame_number,
                "simulation_seconds": round(frame_number * 0.1, 1),
                "jpeg": base64.b64encode(jpeg).decode("ascii")}
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-            temporary = Path(handle.name)
-            json.dump(payload, handle)
-        temporary.replace(path)
-    finally:
-        if temporary:
-            temporary.unlink(missing_ok=True)
+    write_json(path, payload)
 
 
 def read_frame(store: AssetStore, version: AssetVersion) -> tuple[bytes, dict] | None:

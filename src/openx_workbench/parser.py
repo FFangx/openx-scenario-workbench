@@ -8,10 +8,7 @@ from xml.etree import ElementTree as ET
 from .models import ActionIR, EntityIR, ParseBundle, PositionIR, RoadIR, ScenarioIR, TriggerIR
 from .road_geometry import parse_road_geometry
 from .parameter_resolution import resolve_parameters
-
-
-def _local(element: ET.Element) -> str:
-    return element.tag.rsplit("}", 1)[-1]
+from .xml_values import local_name as _local, number
 
 
 def _all(root: ET.Element, name: str):
@@ -23,11 +20,9 @@ def _first(root: ET.Element, name: str) -> ET.Element | None:
 
 
 def _float(value: str | None) -> float | None:
-    try:
-        number = float(value) if value is not None else None
-        return number if number is not None and math.isfinite(number) else None
-    except ValueError:
-        return None
+    """Missing, non-numeric and non-finite values all read as None."""
+    result = number(value)
+    return result if result is not None and math.isfinite(result) else None
 
 
 def _revision(header: ET.Element | None) -> str | None:

@@ -4,9 +4,7 @@ import math
 from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
-
-def _local(element: ET.Element) -> str:
-    return element.tag.rsplit("}", 1)[-1]
+from .xml_values import local_name as _local, number
 
 
 def _children(element: ET.Element, name: str) -> list[ET.Element]:
@@ -18,10 +16,8 @@ def _child(element: ET.Element, name: str) -> ET.Element | None:
 
 
 def _float(value: str | None, default: float = 0.0) -> float:
-    try:
-        return float(value) if value is not None else default
-    except ValueError:
-        return default
+    """Missing or non-numeric values read as `default`; geometry keeps non-finite values as given."""
+    return number(value, default)
 
 
 @dataclass(frozen=True, slots=True)

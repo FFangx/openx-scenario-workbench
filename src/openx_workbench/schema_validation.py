@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import json
 import os
-import tempfile
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
@@ -13,6 +12,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen, url2pathname
 from xml.etree import ElementTree as ET
 
+from .atomic_write import write_json
 from .asset_store import default_store_root
 
 # Published ASAM schemas mirrored by esmini. Installation is explicit and local;
@@ -173,10 +173,7 @@ def install_schemas(root=None):
     for key, name in ENTRIES.items():
         _load_schema(str(_local_path(root, name)), checksum, xsd_versions.get(key, "1.0"))
     registry = {"revision": SCHEMA_REVISION, "source": base, "entries": ENTRIES, "sha256": digests, "xsd_versions": xsd_versions}
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=root, delete=False) as stream:
-        json.dump(registry, stream, indent=2)
-        temporary = Path(stream.name)
-    temporary.replace(root / "registry.json")
+    write_json(root / "registry.json", registry, indent=2)
     return registry
 
 

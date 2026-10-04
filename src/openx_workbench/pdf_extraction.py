@@ -7,6 +7,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from .atomic_write import write_json
 from .asset_store import default_store_root
 from .llm_service import ModelClient, ModelError, base_url
 from .pdf_v2.parser import parse_pdf_structure
@@ -154,7 +155,4 @@ def _structure_audit(data, filename, document, quality):
 
 
 def _write_json(path, data):
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
-        temporary = Path(handle.name)
-    temporary.replace(path)
+    write_json(path, data, ensure_ascii=False, indent=2)

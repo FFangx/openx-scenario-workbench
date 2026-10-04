@@ -7,12 +7,12 @@ import io
 import json
 import os
 import shutil
-import tempfile
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+from .atomic_write import write_bytes, write_json
 from .catalog import AssetFile, OpenXAsset, build_catalog
 from .dependency_package import package_files
 from .sim_archive import expand_sim_archives
@@ -132,11 +132,7 @@ class AssetStore:
                 blob = self.root / "blobs" / checksum
                 blob.parent.mkdir(parents=True, exist_ok=True)
                 if not blob.exists():
-                    with tempfile.NamedTemporaryFile("wb", dir=blob.parent, prefix="blob-",
-                                                     suffix=".tmp", delete=False) as handle:
-                        handle.write(item.data)
-                        temporary = Path(handle.name)
-                    temporary.replace(blob)
+                    write_bytes(blob, item.data, prefix="blob-", suffix=".tmp")
                 records.append({"role": role, "original_name": item.name,
                                 "blob_sha256": checksum, "sha256": checksum})
             else:
@@ -160,11 +156,7 @@ class AssetStore:
     def _write_manifest(self, version: AssetVersion) -> None:
         from dataclasses import asdict
         path = self._manifest_path(version.asset_id, version.version_id)
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                         prefix="manifest-", suffix=".tmp", delete=False) as handle:
-            json.dump(asdict(version), handle, ensure_ascii=False, indent=2)
-            temporary = Path(handle.name)
-        temporary.replace(path)
+        write_json(path, asdict(version), ensure_ascii=False, indent=2, prefix="manifest-", suffix=".tmp")
 
     def file_bytes(self, version: AssetVersion, role: str,
                    original_name: str | None = None) -> bytes:
@@ -239,11 +231,7 @@ class AssetStore:
             references[key] = sorted(refs)
         else:
             references.pop(key, None)
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=self.root,
-                                         prefix="references-", suffix=".tmp", delete=False) as handle:
-            json.dump(references, handle, ensure_ascii=False, indent=2)
-            temporary = Path(handle.name)
-        temporary.replace(path)
+        write_json(path, references, ensure_ascii=False, indent=2, prefix="references-", suffix=".tmp")
 
     @serialized
     def delete_version(self, version: AssetVersion) -> None:
