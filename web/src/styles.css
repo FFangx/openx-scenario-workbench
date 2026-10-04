@@ -455,6 +455,8 @@ a { color: var(--link); }
 .fact-unknown { color: var(--muted); font-style: italic; }
 .facts-sub { margin-top: 4px; }
 .facts-alert { font-size: 12px; }
+.signoff-list { margin: 12px 0 0; padding-left: 20px; display: grid; gap: 14px; }
+.signoff-list .ant-input { margin-top: 6px; }
 .facts-note { font-size: 11.5px; margin: 0; }
 .facts-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .json-view, .code-view { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; max-height: 320px; overflow: auto; }

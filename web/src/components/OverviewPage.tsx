@@ -179,7 +179,7 @@ function Decisions({ projectId, onOpenScene }: { projectId: string | null; onOpe
         r.kind === "batch" ? (
           <Tag className="mtag review">{t(`整份 PDF · ${r.scene_count ?? 0} 个场景`, `Whole PDF · ${r.scene_count ?? 0} scenes`)}</Tag>
         ) : r.level ? (
-          <Tag className={`mtag ${verdictClass(r.level)}`}>{verdictLabel(r.level, r.review_kind, lang)}</Tag>
+          <Tag className={`mtag ${verdictClass(r.level)}`}>{verdictLabel(r.level, r.review_kind, lang, r.signed_off)}</Tag>
         ) : "—",
     },
   ];
@@ -256,7 +256,7 @@ function DecisionDetail({ projectId, detail, onOpenScene }: { projectId: string;
   return (
     <div className="ov-detail">
       <div className={`decision ${verdictClass(level)}`}>
-        <div className="big">{verdictLabel(level, reuse?.review_kind, lang)}</div>
+        <div className="big">{verdictLabel(level, reuse?.review_kind, lang, !!reuse?.review_signoff)}</div>
         <div className="sub">{t("保存时的快照；后续事实修订和资产更新不会改变这份报告。", "Saved snapshot. Later fact revisions and asset updates do not change this report.")}</div>
       </div>
       <div className="box flush">
@@ -275,6 +275,16 @@ function DecisionDetail({ projectId, detail, onOpenScene }: { projectId: string;
           <span className="mono">{detail.version_id ?? candidate?.version_id ?? "—"}</span>
           <span>{t("保存时间", "Saved")}</span>
           <span>{dateTime(detail.saved_at)}</span>
+          {reuse?.review_signoff && (
+            <>
+              <span>{t("复核确认", "Review sign-off")}</span>
+              <span>
+                {reuse.review_signoff.items.map((item) => (
+                  <div key={item.id}>{item.difference ? `${valueLabel(item.difference.requested, lang)}：` : t("文件标准检查：", "File standard checks: ")}{item.reason}</div>
+                ))}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="ov-actions">

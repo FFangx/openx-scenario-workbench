@@ -26,12 +26,11 @@ from pathlib import Path
 from .catalog import AssetFile, OpenXAsset, build_catalog
 from .checkout import checkout_root
 from .retrieval import OpenXIndex, build_encoder
-from .reuse import change_cost, classify_reuse_level, compare_query_to_asset
+from .reuse import LEVELS, change_cost, classify_reuse_level, compare_query_to_asset
 from .scene_package import ScenePackage, query_structure_text, scene_package_to_query
 
 RANKERS = ("name", "structure-text", "rules", "full")
 NAMINGS = ("descriptive", "opaque")
-LEVELS = ("direct", "modify", "review", "new_build")
 
 
 def load_benchmark(path: Path, naming: str = "descriptive"):

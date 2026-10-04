@@ -138,9 +138,28 @@ try {
   const r2 = await p.request.get(BASE + page);
   check("evidence page renders from the PDF", r2.ok() && r2.headers()["content-type"] === "image/png");
 
-  // save a decision on a "Modify and reuse" candidate, then find it under Recent activity
+  // a "Needs review" candidate is saved only after each review item is confirmed with a reason
   await p.locator(".scene").first().click();
   await idle();
+  await rows().filter({ has: p.locator(".mtag.review") }).first().click();
+  await p.locator(".actions > .ant-btn").click();
+  const signoff = p.locator(".ant-modal:visible");
+  await signoff.locator(".signoff-list li").first().waitFor();
+  const items = await signoff.locator(".signoff-list li").count();
+  const confirm = signoff.locator(".ant-btn-primary");
+  const blockedWithoutReasons = await confirm.isDisabled();
+  for (let i = 0; i < items; i++) {
+    const item = signoff.locator(".signoff-list li").nth(i);
+    await item.locator(".ant-checkbox-input").check();
+    await item.locator("textarea").fill("Checked against the source text");
+  }
+  check("review sign-off needs every item confirmed with a reason", blockedWithoutReasons && !(await confirm.isDisabled()), `${items} items`);
+  await confirm.click();
+  await p.locator(".ant-message-success").first().waitFor({ timeout: 30000 });
+  await signoff.waitFor({ state: "hidden" });
+  check("a signed-off review decision is saved", (await p.locator(".actions > .ant-btn").innerText()).includes("Review next requirement"));
+
+  // save a decision on a "Modify and reuse" candidate, then find it under Recent activity
   const modify = rows().filter({ has: p.locator(".mtag.modify") }).first();
   await modify.click();
   await p.locator(".actions > .ant-btn").click();

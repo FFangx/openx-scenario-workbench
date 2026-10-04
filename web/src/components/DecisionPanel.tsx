@@ -15,16 +15,17 @@ import {
   SafetyCertificateOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
-import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang } from "../api";
+import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang, type ReviewItem } from "../api";
 import { useT } from "../i18n";
 import { valueLabel } from "../vocab";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
-import { ExplanationDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
+import { ExplanationDialog, ReviewSignoffDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
 
 const SUB: Record<string, [string, string]> = {
   direct: ["候选场景无需修改即可复用。", "The candidate scenario can be reused without modification."],
   modify: ["按下方列出的修改后即可复用。", "The candidate can be reused after the changes listed below."],
+  major_modify: ["可以复用，但修改量接近新建：多个参与者或行为需要调整。", "Reusable, but the changes come close to a new build: several participants or behaviors change."],
   new_build: ["存在阻断差异，无法复用，需要新建场景。", "Blocking differences prevent reuse. Build a new scenario."],
   standards: ["结构相似，但场景或道路的标准检查未通过或未完成。", "Structure matches, but the scenario or road standard checks have not passed yet."],
   partial: ["已完成部分结构比较；确认未验证项后才能认定复用。", "Part of the structure was compared. Resolve the unverified items before confirming reuse."],
@@ -63,7 +64,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
   const { message } = App.useApp();
   const { t } = useT();
   const [busy, setBusy] = useState(false);
-  const [dialog, setDialog] = useState<"files" | "checks" | "explain" | null>(null);
+  const [dialog, setDialog] = useState<"files" | "checks" | "explain" | "signoff" | null>(null);
   const [explanationId, setExplanationId] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   const identity = `${sceneRef?.scene.document_id}/${sceneRef?.scene.scene_id}@${sceneRef?.scene.revision}:${cand?.asset_id}/${cand?.version_id}:${lang}`;
@@ -131,10 +132,14 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
     }
   };
 
-  const save = async () => {
+  const describe = (item: ReviewItem) =>
+    item.difference !== null ? say(cand.differences[item.difference]) : t("文件标准检查未通过或未完成", "File standard checks did not pass or could not run");
+
+  const save = async (confirmations?: { item: string; reason: string }[]) => {
     setBusy(true);
     try {
-      await api.saveDecision(request);
+      await api.saveDecision({ ...request, confirmations });
+      setDialog(null);
       message.success(t("决策已保存到当前项目，并固定了所选资产版本。", "Decision saved to this project and pinned to the selected asset version."));
       setSaved(true);
       onSaved();
@@ -147,9 +152,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
 
   const saveBlocked = !scene
     ? t("先选择 PDF 场景才能保存决策。", "Select a PDF scene before saving a decision.")
-    : cand.level === "review"
-      ? t("处理待复核项后才能保存；仍可导出评估。", "Resolve the review items before saving. You can still export the assessment.")
-      : !cand.version_id
+    : !cand.version_id
         ? t("此资产没有已保存的版本。", "This asset has no stored version.")
         : null;
 
@@ -349,14 +352,16 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
           </Button>
         ) : (
           <Tooltip title={saveBlocked ?? (saved ? t("已保存；再次保存会生成新的记录。", "Saved; saving again creates another record.") : null)}>
-            <Button size="large" icon={saved ? <CheckOutlined /> : <SaveOutlined />} disabled={!!saveBlocked || busy} onClick={save}>
-              {saved ? t("已保存", "Saved") : t("保存决策", "Save decision")}
+            <Button size="large" icon={saved ? <CheckOutlined /> : <SaveOutlined />} disabled={!!saveBlocked || busy}
+              onClick={() => (cand.level === "review" ? setDialog("signoff") : save())}>
+              {saved ? t("已保存", "Saved") : cand.level === "review" ? t("复核并保存", "Review and save") : t("保存决策", "Save decision")}
             </Button>
           </Tooltip>
         )}
       </div>
       <SourceFilesDialog cand={cand} open={dialog === "files"} onClose={() => setDialog(null)} />
       <StandardChecksDialog cand={cand} open={dialog === "checks"} onClose={() => setDialog(null)} />
+      <ReviewSignoffDialog cand={cand} open={dialog === "signoff"} busy={busy} describe={describe} onClose={() => setDialog(null)} onConfirm={save} />
       {scene && (
         <ExplanationDialog request={{ ...request, explanation_id: undefined }} open={dialog === "explain"} onClose={() => setDialog(null)}
           onExplained={setExplanationId} />

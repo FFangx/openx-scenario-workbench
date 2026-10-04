@@ -18,7 +18,7 @@ tell whether the top hit may be reused as is.
 | Families | AEB car-to-car (stationary, moving, braking), truck, motorcycle, cyclist and pedestrian cases, oncoming car, ACC follow/brake/cut-in/cut-out, BSM with and without a lead car |
 | Variants | ego speed, night, rain, curve, an extra roadside pedestrian, and one asset whose target start position is not declared |
 | Requirements | 38 typed requirements, 20 in Chinese and 18 in English, each with a title and protocol-style text |
-| Expected best verdict | 25 direct, 8 modify, 1 review, 4 new build |
+| Expected best verdict | 25 direct, 8 modify, 1 review, 4 new build (two confusers are labelled major modify) |
 
 Every asset is generated from its specification in
 [`benchmark.json`](../examples/reuse-benchmark/benchmark.json) by
@@ -28,7 +28,7 @@ Nothing comes from a test protocol, a company library or a third-party dataset.
 **Labels.** For every requirement, `relevant` names every asset that needs the
 least change, with the verdict a reviewer following the documented
 [reuse contract](REUSE_ALIGNMENT.md) expects; `confusers` add similar-looking
-assets and their verdicts (109 labelled pairs in total). Labels were declared
+assets and their verdicts (111 labelled pairs in total). Labels were declared
 from the asset specifications before running the system. The first run found one
 labelling mistake, not a system error: a child-crossing requirement states no time
 of day, so the night variant needs the same change as the day asset and is now

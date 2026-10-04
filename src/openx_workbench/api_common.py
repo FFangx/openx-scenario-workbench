@@ -16,6 +16,7 @@ from .pdf_store import PdfStore, StoredScene
 from .presentation import asset_display_title, difference_text, display
 from .preview_frames import read_frame
 from .retrieval import OpenXIndex, RetrievalResult, catalog_fingerprint
+from .reuse_trace import review_items
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
 RANKINGS_KEPT = 16
@@ -155,6 +156,8 @@ def _candidate_json(result: RetrievalResult, version: AssetVersion | None, lang:
                    "scenario": result.scenario_score, "road": result.road_score},
         "level": result.confirmation_level, "structural_level": result.reuse_level,
         "review_kind": result.confirmation_review_kind,
+        "review_items": review_items({"level": result.confirmation_level, "structural_level": result.reuse_level,
+                                      "differences": [asdict(item) for item in result.differences]}),
         "change_cost": result.estimated_change_cost,
         "reasons": [{"code": reason, "label": display(reason, lang)} for reason in result.reasons],
         "differences": [{**asdict(item), "category_label": display(item.category, lang),
@@ -197,10 +200,17 @@ class MatchRequest(BaseModel):
     lang: str = "en"
 
 
+class ReviewConfirmation(BaseModel):
+    item: str = Field(description="A review item ID from the candidate's review_items.")
+    reason: str = Field(max_length=2000)
+
+
 class DecisionRequest(MatchRequest):
     asset_id: str
     version_id: str
     explanation_id: str | None = None
+    confirmations: list[ReviewConfirmation] = Field(default_factory=list,
+                                                     description="Only when saving a decision that needs review.")
 
 
 def _run(request: MatchRequest) -> tuple[StoredScene | None, list[RetrievalResult], dict, str]:

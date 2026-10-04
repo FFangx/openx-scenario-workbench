@@ -1,6 +1,6 @@
 // Typed client for the FastAPI layer in src/openx_workbench/api.py (proxied at /api by Vite).
 
-export type Level = "direct" | "modify" | "review" | "new_build";
+export type Level = "direct" | "modify" | "major_modify" | "review" | "new_build";
 export type Lang = "en" | "zh";
 export type Appearance = "light" | "dark" | "system";
 export type Encoder = "bge" | "hashing";
@@ -105,6 +105,8 @@ export interface Difference {
   text: string;
 }
 
+export interface ReviewItem { id: string; kind: "difference" | "standards"; difference: number | null }
+
 export interface StandardCheck { status: string; standard?: string; version?: string | null; issues?: { message: string; line?: number | null }[]; detail?: string }
 
 export interface Candidate {
@@ -123,6 +125,8 @@ export interface Candidate {
   level: Level;
   structural_level: Level;
   review_kind: string;
+  /** What a reviewer confirms, each with a reason, before a "review" decision can be saved. */
+  review_items: ReviewItem[];
   change_cost: number | null;
   reasons: { code: string; label: string }[];
   differences: Difference[];
@@ -142,6 +146,7 @@ export interface Report {
   kind: "decision" | "batch";
   level: Level | null;
   review_kind: string;
+  signed_off: boolean;
   counts: Record<string, number> | null;
   scene_count: number | null;
   scene: { title: string | null; scene_id: string | null; revision: number | null; document_id: string | null };
@@ -155,7 +160,7 @@ export interface Trace {
   kind?: "batch_match";
   source?: TraceSource;
   candidate?: TraceCandidate;
-  reuse?: { level: Level; review_kind?: string; estimated_change_cost?: number | null };
+  reuse?: { level: Level; review_kind?: string; estimated_change_cost?: number | null; review_signoff?: { signed_at: string; items: { id: string; reason: string; difference?: { category: string; requested: string; candidate: string } }[] } };
   // batch reports
   scene_count?: number;
   encoder?: string;
@@ -303,7 +308,7 @@ export interface RequirementRecord {
   structure: Record<string, unknown>;
 }
 
-export type DecisionReq = MatchRequest & { asset_id: string; version_id: string; explanation_id?: string };
+export type DecisionReq = MatchRequest & { asset_id: string; version_id: string; explanation_id?: string; confirmations?: { item: string; reason: string }[] };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -411,6 +416,7 @@ export const urls = {
 export const LEVEL: Record<Level, { zh: string; en: string; cls: "direct" | "modify" | "review" | "not" }> = {
   direct: { zh: "直接复用", en: "Direct reuse", cls: "direct" },
   modify: { zh: "修改复用", en: "Modify and reuse", cls: "modify" },
+  major_modify: { zh: "大幅修改复用", en: "Major modification", cls: "modify" },
   review: { zh: "待复核", en: "Needs review", cls: "review" },
   new_build: { zh: "不可复用", en: "Not reusable", cls: "not" },
 };
@@ -425,8 +431,10 @@ const REVIEW_TITLE: Record<string, { zh: string; en: string }> = {
   recall: { zh: "文本召回 · 待结构验证", en: "Text recall · verify structure" },
 };
 
-export const verdictLabel = (level: Level | "no_candidates" | string, kind: string | undefined, lang: Lang) =>
-  level === "no_candidates"
+export const verdictLabel = (level: Level | "no_candidates" | string, kind: string | undefined, lang: Lang, signedOff = false) =>
+  signedOff && level === "review"
+    ? lang === "zh" ? "复核后确认" : "Confirmed after review"
+    : level === "no_candidates"
     ? lang === "zh" ? "没有候选资产" : "No candidate assets"
     : level === "review" && kind && REVIEW_TITLE[kind]
       ? REVIEW_TITLE[kind][lang]

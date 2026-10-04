@@ -25,7 +25,7 @@ from .pdf_store import PdfStore
 from .preview_frames import read_frame
 from .project_store import ProjectStore
 from .report_html import render_report
-from .reuse_trace import checked_trace
+from .reuse_trace import checked_trace, sign_off
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 WEB_DIST = checkout_root() / "web" / "dist"
@@ -203,8 +203,7 @@ def save_decision(request: DecisionRequest) -> dict[str, Any]:
     if not request.scene_id:
         raise ValueError("Select a PDF scene before saving a reuse decision.")
     payload, version = _trace_for(request)
-    if payload["reuse"]["level"] == "review":
-        raise ValueError("Resolve the open review items before saving a reuse decision.")
+    payload = sign_off(payload, {item.item: item.reason for item in request.confirmations})
     path = ProjectStore(_store()).save_decision(request.project_id, version, payload)
     return {"report_id": path.stem, "saved_to": str(path)}
 
@@ -220,6 +219,7 @@ def reports(project_id: str) -> list[dict[str, Any]]:
                        "kind": "batch" if trace.get("kind") == "batch_match" else "decision",
                        "scene": {key: source.get(key) for key in ("title", "scene_id", "revision", "document_id")},
                        "level": reuse.get("level"), "review_kind": reuse.get("review_kind") or "",
+                       "signed_off": bool(reuse.get("review_signoff")),
                        "counts": trace.get("counts"), "scene_count": trace.get("scene_count")})
     return result
 

@@ -29,6 +29,8 @@ _ZH = {
     "Citation locations": "引用位置", "OpenX document assessment": "OpenX 文档评估报告",
     "Review and missing candidates require follow-up; these are assessment snapshots.": "待复核和无候选场景需要继续处理；此报告保留评估时的快照。",
     "Scene": "需求场景", "Revision": "事实修订", "Best candidate": "首选候选", "Assessment": "评估结论", "Change cost": "修改成本（相对分值）",
+    "Review sign-off": "复核确认", "Signed at": "确认时间", "Review item": "复核项", "Reason": "确认理由",
+    "File standard checks did not pass or could not run": "文件标准检查未通过或未完成",
 }
 
 
@@ -67,6 +69,15 @@ def _report_body(trace: dict[str, Any], language="en") -> str:
         for item in reuse.get("differences", [])
     ) or "<tr><td colspan='6'>No structural differences recorded.</td></tr>"
     reasons = "".join(f"<li>{value(display(reason, language))}</li>" for reason in reuse.get("reasons", []))
+    signoff = reuse.get("review_signoff")
+    signoff_html = ("<h2>Review sign-off</h2><p>" + value(signoff.get("signed_at")) + "</p><table class='wide'><thead><tr>"
+                    "<th>Review item</th><th>Reason</th></tr></thead><tbody>" + "".join(
+                        "<tr><td>" + (value(display(" · ".join(str(item["difference"].get(key)) for key in
+                                                               ("category", "requested", "candidate")), language))
+                                      if item.get("difference") else
+                                      "File standard checks did not pass or could not run")
+                        + f"</td><td>{value(item.get('reason'))}</td></tr>" for item in signoff.get("items", []))
+                    + "</tbody></table>") if signoff else ""
     validation = (candidate.get("parsed_facts") or {}).get("validation") or {}
     validation_parts = []
     for role, record in validation.items():
@@ -102,6 +113,7 @@ def _report_body(trace: dict[str, Any], language="en") -> str:
     return _localized_templates(f"""<h1>OpenX reuse trace</h1><p class="muted">Exact asset version and source evidence for review.</p>
 <h2>Decision</h2><table>{row('Reuse level', reuse.get('level'))}{row('Structural match', reuse.get('structural_level', reuse.get('level')))}{row('Review scope', reuse.get('review_kind') or '—')}{row('Direct confirmation standard gate', (trace.get('standard_checks') or {}).get('passed', 'Not recorded'))}{row('Estimated change cost', reuse.get('estimated_change_cost'))}
 {row('Source scene', source.get('title'))}{row('Asset', candidate.get('title'))}</table>
+{signoff_html}
 <details><summary>{'版本与证据追踪信息' if language == 'zh' else 'Version and source identity'}</summary><table>{row('Asset ID', candidate.get('asset_id'))}
 {row('PDF document ID', source.get('document_id'))}{row('PDF SHA-256', source.get('pdf_sha256'))}
 {row('Scene ID', source.get('scene_id'))}{row('Scene revision', source.get('revision'))}

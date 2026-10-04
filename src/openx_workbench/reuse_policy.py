@@ -26,6 +26,11 @@ COST_TRIGGER = 1.5  # change a start trigger
 COST_ROAD = 1.0  # select or modify the OpenDRIVE road
 COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
 
+# Verified, non-blocking changes costing at least this much are a "major modification": the
+# candidate is still reusable, but close to a new build. A behavior change plus removing an extra
+# participant (2 + 3) reaches it; on the benchmark every labelled "modify" stays below 4.
+MAJOR_MODIFY_COST = 5.0
+
 # ---------- ego-relative geometry ----------
 # Where a participant sits relative to the ego vehicle (reuse_geometry).
 

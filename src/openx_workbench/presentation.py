@@ -3,7 +3,8 @@ import re
 from .scene_package import STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS
 
 LABELS = {
-    "direct": "可直接复用", "modify": "修改后复用", "rebuild": "需要重建", "new_build": "需要新建", "review": "待复核",
+    "direct": "可直接复用", "modify": "修改后复用", "major_modify": "大幅修改后复用", "rebuild": "需要重建",
+    "new_build": "需要新建", "review": "待复核", "signed_off": "复核后确认",
     "undecidable": "事实不足，无法判断", "partial": "部分事实待核对", "standards": "文件标准待复核",
     "recall": "仅相似召回", "no_candidates": "没有候选资产",
     "scenario_structure_match": "场景结构匹配", "road_structure_match": "道路结构匹配", "partial_match": "部分匹配",

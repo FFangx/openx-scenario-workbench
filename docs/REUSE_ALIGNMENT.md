@@ -13,6 +13,17 @@ It does not introduce a second ingestion, model or indexing stack.
   behavior, tested function, road, triggers, initial speeds and environment.
   Additional participants/actions prevent direct reuse. Missing facts and declared
   unsupported constraints produce `review`, rather than silently disappearing.
+- Participants are paired one-to-one for the fewest blocking differences, then the
+  lowest change cost, over all pairings. A participant's own initial speed, when the
+  requirement states it, is compared after pairing; otherwise the requirement's speed
+  list is compared with duplicates when it has one speed per participant.
+- Verdicts (2026-10-04): `direct`; `modify` for verified changes only; `major_modify`
+  when those changes cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus an
+  extra participant removed); `review` for any unverified fact; `new_build` for any
+  blocking difference. All numbers live in `reuse_policy.py`.
+- A `review` assessment is saved only when the reviewer confirms each open item with a
+  reason. The verdict stays `review`; the reasons are kept in the trace
+  (`reuse.review_signoff`) and shown as "confirmed after review".
 - Initialization speed is separate from story speed events. A single positive-to-zero
   target establishes stopping; complex events or unresolved speed actions require
   review. Function labels describe an accepted classification, not ASAM certification.

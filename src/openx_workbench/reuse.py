@@ -7,6 +7,7 @@ from reuse_facts, the numbers behind both from reuse_policy.
 
 from __future__ import annotations
 
+from . import reuse_policy as policy
 from .catalog import OpenXAsset
 from .reuse_differences import ReuseDifference
 from .reuse_legacy import compare_keywords
@@ -29,14 +30,19 @@ def compare_query_to_asset(
     return compare_keywords(query, asset)
 
 
+LEVELS = ("direct", "modify", "major_modify", "review", "new_build")
+
+
 def classify_reuse_level(differences: tuple[ReuseDifference, ...]) -> str:
+    """One of LEVELS: blocking differences make a new build, unverified ones a review,
+    and verified changes a modification, a major one from MAJOR_MODIFY_COST."""
     if not differences:
         return "direct"
     if any(item.blocking for item in differences):
         return "new_build"
     if any(not item.verified for item in differences):
         return "review"
-    return "modify"
+    return "major_modify" if change_cost(differences) >= policy.MAJOR_MODIFY_COST else "modify"
 
 
 def change_cost(differences: tuple[ReuseDifference, ...]) -> float:

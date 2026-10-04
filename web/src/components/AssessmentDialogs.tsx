@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Collapse, Modal, Spin, Tabs, Tag } from "antd";
+import { Alert, Button, Checkbox, Collapse, Input, Modal, Spin, Tabs, Tag } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
-import { api, basename, urls, type Candidate, type DecisionReq, type Explanation, type StandardCheck } from "../api";
+import { api, basename, urls, type Candidate, type DecisionReq, type Explanation, type ReviewItem, type StandardCheck } from "../api";
 import { useT } from "../i18n";
 
 /** Read-only stored files of the candidate version; edits are imported as a new version. */
@@ -168,6 +168,44 @@ export function ExplanationDialog({ request, open, onClose, onExplained }: {
           )}
         </div>
       )}
+    </Modal>
+  );
+}
+
+/** Each open review item is confirmed with a reason; the reasons are saved with the decision. */
+export function ReviewSignoffDialog({ cand, open, busy, describe, onClose, onConfirm }: {
+  cand: Candidate; open: boolean; busy: boolean; describe: (item: ReviewItem) => string;
+  onClose: () => void; onConfirm: (confirmations: { item: string; reason: string }[]) => void;
+}) {
+  const { t } = useT();
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!open) return;
+    setChecked({});
+    setReasons({});
+  }, [open, cand]);
+  const items = cand.review_items;
+  const ready = items.length > 0 && items.every((item) => checked[item.id] && reasons[item.id]?.trim());
+  return (
+    <Modal title={t("逐项复核后保存", "Review each item, then save")} open={open} onCancel={onClose} width={680}
+      okText={t("确认并保存决策", "Confirm and save decision")} cancelText={t("取消", "Cancel")}
+      okButtonProps={{ disabled: !ready, loading: busy }}
+      onOk={() => onConfirm(items.map((item) => ({ item: item.id, reason: reasons[item.id].trim() })))}>
+      <p className="muted">{t("确认每一项已核对，并写明理由。复用结论不变，理由会写入追溯记录和报告。",
+        "Confirm that you checked each item and give a reason. The verdict stays as assessed; the reasons are kept in the trace and report.")}</p>
+      <ol className="signoff-list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <Checkbox checked={!!checked[item.id]} onChange={(e) => setChecked((all) => ({ ...all, [item.id]: e.target.checked }))}>
+              {describe(item)}
+            </Checkbox>
+            <Input.TextArea value={reasons[item.id] ?? ""} maxLength={2000} autoSize={{ minRows: 1, maxRows: 4 }}
+              placeholder={t("理由，例如：已对照原文与 XOSC 核对", "Reason, e.g. checked against the source and the XOSC")}
+              aria-label={t("确认理由", "Reason")} onChange={(e) => setReasons((all) => ({ ...all, [item.id]: e.target.value }))} />
+          </li>
+        ))}
+      </ol>
     </Modal>
   );
 }

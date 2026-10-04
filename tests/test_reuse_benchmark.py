@@ -67,7 +67,7 @@ def test_opaque_names_defeat_similarity_but_not_structure():
     assert by_key[("full", "opaque")]["recall_at_1"] == by_key[("full", "descriptive")]["recall_at_1"] == 1
     # Similarity alone cannot say when the top hit needs changes.
     assert by_key[("structure-text", "descriptive")]["unsafe_reuse"] > 0
-    assert report["expected_best"] == {"direct": 25, "modify": 8, "review": 1, "new_build": 4}
+    assert report["expected_best"] == {"direct": 25, "modify": 8, "major_modify": 0, "review": 1, "new_build": 4}
 
 
 def test_benchmark_rejects_unknown_labels(tmp_path):
