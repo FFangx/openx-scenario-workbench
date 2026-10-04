@@ -15,10 +15,12 @@ from .catalog import OpenXAsset
 from .pdf_store import PdfStore, StoredScene
 from .presentation import asset_display_title, difference_text, display
 from .preview_frames import read_frame
-from .retrieval import OpenXIndex, RetrievalResult
+from .retrieval import OpenXIndex, RetrievalResult, catalog_fingerprint
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
-_lock = threading.Lock()
+RANKINGS_KEPT = 16
+_lock = threading.Lock()  # guards _cache; never held while an index is built
+_index_build = threading.Lock()  # one index build at a time
 _cache: dict[str, Any] = {}
 
 
@@ -37,23 +39,52 @@ def _classification_stamp(store: AssetStore, version: AssetVersion) -> int:
 
 
 def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
-    """Parsed assets are reused until a stored version, its preview status or its classification changes."""
+    """The latest version of every asset, as `AssetStore.catalog` returns it.
+
+    A version's files never change, so each is parsed once and reparsed only when its classification
+    does. The catalog fingerprint is computed once per change, not per request.
+    """
     store = _store()
-    key = tuple(sorted((version.version_id, version.compatibility, _classification_stamp(store, version))
-                       for version in store.latest()))
+    latest = store.latest()
+    stamps = [_classification_stamp(store, version) for version in latest]
+    key = tuple(sorted((version.version_id, version.compatibility, stamp) for version, stamp in zip(latest, stamps)))
     with _lock:
         if _cache.get("catalog_key") != key:
-            _cache["catalog"] = store.catalog()
-            _cache["catalog_key"] = key
+            parsed = _cache.get("parsed", {})
+            fresh = {}
+            for version, stamp in zip(latest, stamps):
+                identity = (version.asset_id, version.version_id, stamp)
+                fresh[identity] = parsed.get(identity) or store.load_asset(version)
+            assets = list(fresh.values())
+            _cache.update(parsed=fresh, catalog_key=key, catalog=(assets, {
+                asset.asset_id: version for asset, version in zip(assets, latest)}),
+                catalog_fingerprint=catalog_fingerprint(assets))
         return _cache["catalog"]
 
 
-def _index(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
-    identity = matching.index_identity(catalog, encoder_name)
+def _fingerprint(catalog: list[OpenXAsset]) -> str:
     with _lock:
-        if _cache.get("index_identity") != identity:
-            _cache.update(index_identity=identity, index=matching.open_index(catalog, identity))
-        return _cache["index"]
+        cached = _cache.get("catalog")
+        if cached is not None and cached[0] is catalog:
+            return _cache["catalog_fingerprint"]
+    return catalog_fingerprint(catalog)
+
+
+def _index(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
+    """The index for this catalog and encoder. A build (minutes for BGE-M3 on a large library) holds only
+    `_index_build`, so requests that need no new index are still served meanwhile."""
+    identity = matching.index_identity(catalog, encoder_name, _fingerprint(catalog))
+    with _lock:
+        if _cache.get("index_identity") == identity:
+            return _cache["index"]
+    with _index_build:
+        with _lock:
+            if _cache.get("index_identity") == identity:
+                return _cache["index"]
+        index = matching.open_index(catalog, identity)
+        with _lock:
+            _cache.update(index_identity=identity, index=index)
+        return index
 
 
 def _scene(pdf: PdfStore, project_id: str, document_id: str, scene_id: str,
@@ -186,9 +217,25 @@ def _run(request: MatchRequest) -> tuple[StoredScene | None, list[RetrievalResul
     encoder = request.encoder or matching.preferred_encoder()
     if encoder not in matching.ENCODERS:
         raise ValueError("Unknown encoder.")
-    results = matching.search(_index(catalog, encoder), query, request.text,
-                              top_k=len(catalog)) if catalog else []
+    results = _ranking(_index(catalog, encoder), query, request.text) if catalog else []
     return stored, results, versions, encoder
+
+
+def _ranking(index: OpenXIndex, query, text: str) -> list[RetrievalResult]:
+    """The whole library ranked for `query`, kept so the assessment, report and decision of a candidate
+    reuse the ranking its search produced instead of ranking the library again."""
+    key = (index.encoder.encoder_id, index.fingerprint, query, text)
+    with _lock:
+        rankings = _cache.setdefault("rankings", {})
+        if key in rankings:
+            rankings[key] = rankings.pop(key)  # most recently used last
+            return rankings[key]
+    results = matching.search(index, query, text, top_k=len(index.assets))
+    with _lock:
+        rankings[key] = results
+        while len(rankings) > RANKINGS_KEPT:
+            rankings.pop(next(iter(rankings)))
+    return results
 
 
 def _matches(asset: OpenXAsset, filters: dict[str, str]) -> bool:

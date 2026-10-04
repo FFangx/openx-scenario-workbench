@@ -5,7 +5,6 @@ Callers own their caching of the returned index.
 
 from __future__ import annotations
 
-import json
 from dataclasses import replace
 from functools import lru_cache
 from typing import Any
@@ -35,19 +34,19 @@ def encoder(name: str):
     return build_encoder(name)
 
 
-def index_identity(catalog: list[OpenXAsset], encoder_name: str) -> tuple[str, str]:
-    return encoder_name, catalog_fingerprint(catalog)
+def index_identity(catalog: list[OpenXAsset], encoder_name: str, fingerprint: str | None = None) -> tuple[str, str]:
+    return encoder_name, fingerprint or catalog_fingerprint(catalog)
 
 
 def open_index(catalog: list[OpenXAsset], identity: tuple[str, str]) -> OpenXIndex:
     """Load the saved index for `identity`, rebuilding and saving it when the file is missing or unusable."""
     encoder_name, fingerprint = identity
-    path = AssetStore().root / "indexes" / encoder_name / f"{fingerprint[:24]}.json"
+    path = AssetStore().root / "indexes" / encoder_name / f"{fingerprint[:24]}.bin"
     selected = encoder(encoder_name)
     try:
-        return OpenXIndex.load(path, catalog, selected)
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        index = OpenXIndex(catalog, selected)
+        return OpenXIndex.load(path, catalog, selected, fingerprint=fingerprint)
+    except (OSError, ValueError, KeyError, TypeError):
+        index = OpenXIndex(catalog, selected, fingerprint=fingerprint)
         index.save(path)
         return index
 

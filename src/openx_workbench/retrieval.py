@@ -4,11 +4,14 @@ import hashlib
 import json
 import math
 import re
+import sys
+from array import array
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from .atomic_write import write_bytes
 from .catalog import OpenXAsset
 from .models import ParseBundle
 from . import reuse_policy as policy
@@ -26,7 +29,7 @@ from .scene_package import RetrievalQuery, query_structure_text
 
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}|\d+(?:\.\d+)?")
 DEFAULT_BGE_MODEL = "BAAI/bge-m3"
-INDEX_SCHEMA_VERSION = 2
+INDEX_SCHEMA_VERSION = 3  # 3: binary float64 vectors instead of JSON numbers
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,12 +198,17 @@ def build_encoder(name: str) -> TextEncoder:
 
 class OpenXIndex:
     def __init__(
-        self, assets: list[OpenXAsset], encoder: TextEncoder | None = None
+        self,
+        assets: list[OpenXAsset],
+        encoder: TextEncoder | None = None,
+        *,
+        fingerprint: str | None = None,
     ) -> None:
+        """`fingerprint` is the caller's `catalog_fingerprint(assets)`, when it already has it."""
         self.assets = assets
         self.encoder = encoder or HashingEncoder()
         self.structures = [asset_structure_query(asset) for asset in assets]
-        self.fingerprint = catalog_fingerprint(assets)
+        self.fingerprint = fingerprint or catalog_fingerprint(assets)
         self.vectors = self.encoder.encode_many([asset_text(asset) for asset in assets])
         self.structure_vectors = self.encoder.encode_many(
             [query_structure_text(structure) for structure in self.structures]
@@ -269,20 +277,23 @@ class OpenXIndex:
         return sorted(ranked, key=lambda item: (-item[1], item[0]))[:count]
 
     def save(self, path: Path) -> None:
+        """One header line of JSON, then every vector as little-endian float64 (names first, then structures)."""
         if catalog_fingerprint(self.assets) != self.fingerprint:
             raise ValueError(
                 "The asset facts or classifications changed; rebuild the index."
             )
-        payload = {
+        header = {
             "schema_version": INDEX_SCHEMA_VERSION,
             "encoder_id": self.encoder.encoder_id,
             "asset_ids": [asset.asset_id for asset in self.assets],
             "catalog_fingerprint": self.fingerprint,
-            "vectors": self.vectors,
-            "structure_vectors": self.structure_vectors,
+            "dimensions": len(self.vectors[0]) if self.vectors else 0,
         }
+        values = array("d", (value for rows in (self.vectors, self.structure_vectors) for row in rows for value in row))
+        if sys.byteorder == "big":
+            values.byteswap()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+        write_bytes(path, json.dumps(header, separators=(",", ":")).encode() + b"\n" + values.tobytes())
 
     @classmethod
     def load(
@@ -290,30 +301,37 @@ class OpenXIndex:
         path: Path,
         assets: list[OpenXAsset],
         encoder: TextEncoder | None = None,
+        *,
+        fingerprint: str | None = None,
     ) -> OpenXIndex:
         selected_encoder = encoder or HashingEncoder()
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        header, _, data = path.read_bytes().partition(b"\n")
+        payload = json.loads(header)
         if payload.get("schema_version") != INDEX_SCHEMA_VERSION:
             raise ValueError("Unsupported index schema version.")
         if payload.get("encoder_id") != selected_encoder.encoder_id:
             raise ValueError("The saved index uses a different encoder.")
         if payload.get("asset_ids") != [asset.asset_id for asset in assets]:
             raise ValueError("The asset catalog changed; rebuild the index.")
-        if payload.get("catalog_fingerprint") != catalog_fingerprint(assets):
+        if payload.get("catalog_fingerprint") != (fingerprint or catalog_fingerprint(assets)):
             raise ValueError(
                 "The asset facts or classifications changed; rebuild the index."
             )
+        dimensions = payload["dimensions"]
+        values = array("d")
+        values.frombytes(data)
+        if sys.byteorder == "big":
+            values.byteswap()
+        if not isinstance(dimensions, int) or len(values) != 2 * len(assets) * dimensions:
+            raise ValueError("The stored vectors do not match the asset catalog.")
+        rows = [tuple(values[start:start + dimensions]) for start in range(0, len(values), dimensions or 1)]
         index = cls.__new__(cls)
         index.assets = assets
         index.encoder = selected_encoder
         index.fingerprint = payload["catalog_fingerprint"]
         index.structures = [asset_structure_query(asset) for asset in assets]
-        index.vectors = [
-            tuple(float(value) for value in row) for row in payload["vectors"]
-        ]
-        index.structure_vectors = [
-            tuple(float(value) for value in row) for row in payload["structure_vectors"]
-        ]
+        index.vectors = rows[:len(assets)]
+        index.structure_vectors = rows[len(assets):]
         index._build_recall()
         return index
 

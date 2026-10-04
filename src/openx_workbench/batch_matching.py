@@ -6,15 +6,16 @@ import json
 
 from .matching import source_identity
 from .pdf_store import StoredScene
-from .retrieval import OpenXIndex, catalog_fingerprint
+from .retrieval import OpenXIndex
 from .reuse_trace import build_trace
 from .scene_package import scene_package_to_query
 
 
-def batch_signature(document, scenes: list[StoredScene], assets, versions, encoder: str) -> str:
+def batch_signature(document, scenes: list[StoredScene], fingerprint: str, versions, encoder: str) -> str:
+    """`fingerprint` is the asset catalog's `catalog_fingerprint`."""
     snapshot = {"document": asdict(document), "scenes": [
         {"id": scene.scene_id, "revision": scene.revision, "package": asdict(scene.package)} for scene in scenes],
-        "catalog": catalog_fingerprint(assets), "versions": {
+        "catalog": fingerprint, "versions": {
             key: value.version_id for key, value in sorted(versions.items())}, "encoder": encoder}
     return hashlib.sha256(json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
@@ -38,6 +39,6 @@ def match_document(document, scenes: list[StoredScene], index: OpenXIndex, versi
                         "assessment": best, "candidates": traces})
     return {"kind": "batch_match", "source": {"title": document.filename,
             "document_id": document.document_id, "pdf_sha256": document.sha256},
-            "signature": batch_signature(document, scenes, index.assets, versions, index.encoder.encoder_id),
-            "encoder": index.encoder.encoder_id, "catalog_fingerprint": catalog_fingerprint(index.assets),
+            "signature": batch_signature(document, scenes, index.fingerprint, versions, index.encoder.encoder_id),
+            "encoder": index.encoder.encoder_id, "catalog_fingerprint": index.fingerprint,
             "scene_count": len(entries), "counts": dict(counts), "entries": entries}

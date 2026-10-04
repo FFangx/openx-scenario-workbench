@@ -43,9 +43,9 @@ def test_batch_uses_one_encoding_call_and_matches_single_verdicts():
     html = render_report(batch)
     assert "authored &lt;PDF&gt;.pdf" in html and "Review scope" in html
     assert "partial" in html and "pdf-hash" in html
-    old = batch_signature(doc, scenes, index.assets, {}, encoder.encoder_id)
+    old = batch_signature(doc, scenes, index.fingerprint, {}, encoder.encoder_id)
     scenes[0] = replace(scenes[0], revision=2)
-    assert old != batch_signature(doc, scenes, index.assets, {}, encoder.encoder_id)
+    assert old != batch_signature(doc, scenes, index.fingerprint, {}, encoder.encoder_id)
 
 
 def test_no_candidates_and_empty_document_do_not_become_new_build():

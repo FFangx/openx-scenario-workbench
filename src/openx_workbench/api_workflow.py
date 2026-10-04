@@ -148,7 +148,7 @@ def _batch(project_id: str, document_id: str, encoder: str | None) -> tuple[dict
     if not catalog or not scenes:
         raise ValueError("批量匹配需要资产和场景 / Matching needs assets and scenes.")
     index = _index(catalog, encoder)
-    signature = batch_signature(document, scenes, index.assets, versions, index.encoder.encoder_id)
+    signature = batch_signature(document, scenes, index.fingerprint, versions, index.encoder.encoder_id)
     return {"document": document, "scenes": scenes, "index": index, "versions": versions, "encoder": encoder}, signature
 
 
