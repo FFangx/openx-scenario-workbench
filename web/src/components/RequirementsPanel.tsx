@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Dropdown, Empty, Select, Spin, Tabs } from "antd";
 import { EllipsisOutlined, ExportOutlined } from "@ant-design/icons";
 import { urls, type PdfDocument, type Scene } from "../api";
+import { useT } from "../i18n";
 
 interface Props {
   projectId: string | null;
@@ -16,6 +17,7 @@ const sizeText = (b: number | null) => (b == null ? "—" : b > 1e6 ? `${(b / 1e
 const sectionKey = (s: Scene) => s.section_id.split(".").map((n) => n.padStart(4, "0")).join(".");
 
 export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Props) {
+  const { t } = useT();
   const [sort, setSort] = useState<"section" | "page">("section");
   const listRef = useRef<HTMLDivElement>(null);
   const ordered = useMemo(
@@ -37,11 +39,11 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
       : undefined;
 
   const list = !doc ? (
-    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No PDF in this project yet" />
+    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("当前项目还没有 PDF", "No PDF in this project yet")} />
   ) : !scenes.length ? (
     <div className="center-pad"><Spin /></div>
   ) : (
-    <div className="scenes" role="listbox" aria-label="Extracted scenes" ref={listRef}>
+    <div className="scenes" role="listbox" aria-label={t("提取的场景", "Extracted scenes")} ref={listRef}>
       {ordered.map((s) => (
         <button
           key={s.scene_id}
@@ -59,10 +61,10 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
               {s.preferred_text}
             </div>
             <div className="p">
-              Pages: <b>{pagesText(s.pages)}</b>
+              {t("页码：", "Pages: ")}<b>{pagesText(s.pages)}</b>
             </div>
           </span>
-          <span className={`c ${s.review_status}`}>{s.review_status === "confirmed" ? "Confirmed" : "To review"}</span>
+          <span className={`c ${s.review_status}`}>{s.review_status === "confirmed" ? t("已确认", "Confirmed") : t("待核对", "To review")}</span>
         </button>
       ))}
     </div>
@@ -73,20 +75,20 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
   return (
     <section className="panel req">
       <div className="ph">
-        <span className="n">1</span>Requirements and extracted scenes
+        <span className="n">1</span>{t("需求与提取的场景", "Requirements and extracted scenes")}
       </div>
 
       <div className="box pdfcard">
         <span className="pdf" aria-hidden>PDF</span>
         <div className="pdf-meta">
-          <div className="t" title={doc?.filename}>{doc?.filename ?? "No document"}</div>
+          <div className="t" title={doc?.filename}>{doc?.filename ?? t("尚无文档", "No document")}</div>
           <div className="m">
             {doc ? (
               <>
-                Imported {doc.imported_at.slice(0, 10)}<i>|</i>{sizeText(doc.size_bytes)}<i>|</i>{doc.page_count} pages
+                {t("导入于", "Imported")} {doc.imported_at.slice(0, 10)}<i>|</i>{sizeText(doc.size_bytes)}<i>|</i>{t(`${doc.page_count} 页`, `${doc.page_count} pages`)}
               </>
             ) : (
-              "Import a PDF in the classic workbench (tray menu)"
+              t("导入规程 PDF 后开始核对需求", "Import a protocol PDF to start reviewing requirements")
             )}
           </div>
         </div>
@@ -94,11 +96,11 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
           trigger={["click"]}
           disabled={!doc || !projectId}
           menu={{
-            items: [{ key: "open", label: "Open PDF" }],
+            items: [{ key: "open", label: t("打开 PDF", "Open PDF") }],
             onClick: () => projectId && doc && window.open(urls.pdf(projectId, doc.document_id), "_blank"),
           }}
         >
-          <Button className="more" type="text" icon={<EllipsisOutlined />} aria-label="Document actions" />
+          <Button className="more" type="text" icon={<EllipsisOutlined />} aria-label={t("文档操作", "Document actions")} />
         </Dropdown>
       </div>
 
@@ -106,17 +108,17 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
         className="left-tabs"
         size="small"
         items={[
-          { key: "scenes", label: `Extracted scenes (${scenes.length})`, children: list },
+          { key: "scenes", label: t(`提取的场景（${scenes.length}）`, `Extracted scenes (${scenes.length})`), children: list },
           {
             key: "doc",
-            label: "Document view",
+            label: t("文档视图", "Document view"),
             children:
               projectId && doc && page ? (
                 <div className="docview">
-                  <img src={urls.page(projectId, doc.document_id, page, 800)} alt={`Page ${page}`} />
+                  <img src={urls.page(projectId, doc.document_id, page, 800)} alt={t(`第 ${page} 页`, `Page ${page}`)} />
                 </div>
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Select a scene" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("请选择场景", "Select a scene")} />
               ),
           },
         ]}
@@ -127,8 +129,8 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
             onChange={setSort}
             style={{ width: 106 }}
             options={[
-              { value: "section", label: "Sort by section" },
-              { value: "page", label: "Sort by page" },
+              { value: "section", label: t("按条款排序", "Sort by section") },
+              { value: "page", label: t("按页码排序", "Sort by page") },
             ]}
           />
         }
@@ -136,18 +138,18 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
 
       <div className="box evi">
         <div className="hd">
-          <b>Selected source evidence</b>
+          <b>{t("所选原文证据", "Selected source evidence")}</b>
           {projectId && doc && page && (
             <a href={urls.pdf(projectId, doc.document_id, page)} target="_blank" rel="noreferrer">
-              Open in document <ExportOutlined />
+              {t("在文档中打开", "Open in document")} <ExportOutlined />
             </a>
           )}
         </div>
         <div className="pg">
-          Pages <b>{pagesText(scene?.pages ?? null)}</b>
+          {t("页码", "Pages")} <b>{pagesText(scene?.pages ?? null)}</b>
         </div>
         <div className="bd">
-          {projectId && doc && page ? <img src={urls.page(projectId, doc.document_id, page, 260)} alt={`Page ${page}`} /> : <span className="page-empty" />}
+          {projectId && doc && page ? <img src={urls.page(projectId, doc.document_id, page, 260)} alt={t(`第 ${page} 页`, `Page ${page}`)} /> : <span className="page-empty" />}
           <div className="x">
             {scene ? (
               <>
@@ -162,7 +164,7 @@ export function RequirementsPanel({ projectId, doc, scenes, scene, onPick }: Pro
                 ))}
               </>
             ) : (
-              <span className="muted">Select a scene to see the cited source text.</span>
+              <span className="muted">{t("选择场景后显示引用的原文。", "Select a scene to see the cited source text.")}</span>
             )}
           </div>
         </div>

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App as AntApp, ConfigProvider } from "antd";
+import zhCN from "antd/locale/zh_CN";
+import enUS from "antd/locale/en_US";
 import { buildTheme } from "./theme";
-import { api, type Lang, type Library, type PdfDocument, type Project, type Scene, type SearchResponse } from "./api";
-import { StepBar, TopBar, type Appearance } from "./components/TopBar";
+import { api, type Library, type PdfDocument, type Preferences, type Project, type Scene, type SearchResponse } from "./api";
+import { LangContext, useT } from "./i18n";
+import { StepBar, TopBar, type Page } from "./components/TopBar";
+import { HelpDialog } from "./components/HelpDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { RequirementsPanel } from "./components/RequirementsPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { DecisionPanel } from "./components/DecisionPanel";
@@ -19,40 +24,59 @@ function useSystemDark() {
   return dark;
 }
 
-function readAppearance(): Appearance {
+const CACHE = "openx.preferences";
+const DEFAULTS: Preferences = { language: "zh", appearance: "system", encoder: "bge" };
+
+/** The server owns preferences; a local copy only avoids a flash of the wrong theme and language on load. */
+function cachedPreferences(): Preferences {
   try {
-    const v = localStorage.getItem("openx.appearance");
-    if (v === "light" || v === "dark" || v === "system") return v;
+    const value = JSON.parse(localStorage.getItem(CACHE) ?? "null");
+    if (value && typeof value === "object") return { ...DEFAULTS, ...value };
   } catch { /* storage unavailable */ }
-  return "light";
+  return DEFAULTS;
 }
 
 export default function Root() {
-  const [appearance, setAppearance] = useState<Appearance>(readAppearance);
+  const [prefs, setPrefs] = useState<Preferences>(cachedPreferences);
   const systemDark = useSystemDark();
-  const dark = appearance === "dark" || (appearance === "system" && systemDark);
+  const dark = prefs.appearance === "dark" || (prefs.appearance === "system" && systemDark);
+
+  useEffect(() => {
+    api.settings().then((s) => setPrefs(s.preferences)).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
-    try { localStorage.setItem("openx.appearance", appearance); } catch { /* ignore */ }
-  }, [dark, appearance]);
+    document.documentElement.lang = prefs.language === "zh" ? "zh-CN" : "en";
+    try { localStorage.setItem(CACHE, JSON.stringify(prefs)); } catch { /* ignore */ }
+  }, [dark, prefs]);
+
+  const changePrefs = useCallback((change: Partial<Preferences>) => {
+    setPrefs((p) => ({ ...p, ...change }));
+    api.savePreferences(change).then(setPrefs).catch(() => undefined);
+  }, []);
 
   const themeConfig = useMemo(() => buildTheme(dark), [dark]);
 
   return (
-    <ConfigProvider theme={themeConfig}>
-      <AntApp>
-        <Workbench appearance={appearance} onAppearance={setAppearance} />
-      </AntApp>
+    <ConfigProvider theme={themeConfig} locale={prefs.language === "zh" ? zhCN : enUS} button={{ autoInsertSpace: false }}>
+      <LangContext.Provider value={prefs.language}>
+        <AntApp>
+          <Workbench prefs={prefs} onPrefs={changePrefs} />
+        </AntApp>
+      </LangContext.Provider>
     </ConfigProvider>
   );
 }
 
 export interface SceneRef { projectId: string; doc: PdfDocument; scene: Scene }
 
-function Workbench({ appearance, onAppearance }: { appearance: Appearance; onAppearance: (a: Appearance) => void }) {
+function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partial<Preferences>) => void }) {
   const { message } = AntApp.useApp();
-  const [lang, setLang] = useState<Lang>("en");
+  const { t } = useT();
+  const lang = prefs.language;
+  const [page, setPage] = useState<Page>("workbench");
+  const [dialog, setDialog] = useState<"help" | "settings" | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [docs, setDocs] = useState<PdfDocument[]>([]);
@@ -84,8 +108,9 @@ function Workbench({ appearance, onAppearance }: { appearance: Appearance; onApp
       })
       .catch((e: Error) => {
         setOnline(false);
-        message.error(`Cannot reach the workbench API: ${e.message}`);
+        message.error(t(`无法连接工作台服务：${e.message}`, `Cannot reach the workbench API: ${e.message}`));
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);
 
   useEffect(() => {
@@ -142,7 +167,7 @@ function Workbench({ appearance, onAppearance }: { appearance: Appearance; onApp
   );
 
   // A new scene (or language) re-runs matching so the middle and right columns never show stale results.
-  const sceneKey = scene ? `${scene.scene_id}@${scene.revision}:${lang}` : "";
+  const sceneKey = scene ? `${scene.scene_id}@${scene.revision}:${lang}:${prefs.encoder}` : "";
   useEffect(() => {
     if (sceneKey) runSearch({ text: scene!.title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -162,9 +187,20 @@ function Workbench({ appearance, onAppearance }: { appearance: Appearance; onApp
     setFilters(f);
     runSearch({ filters: f });
   };
-  const pickProject = (id: string) => {
+  // Clear the document in the same render, so scenes are never requested with the previous project's document.
+  const switchProject = (id: string) => {
+    setDocs([]);
+    setDocId(null);
+    setQuery("");
     setProjectId(id);
+  };
+  const pickProject = (id: string) => {
+    switchProject(id);
     api.selectProject(id).catch(() => undefined);
+  };
+  const projectCreated = (p: Project) => {
+    setProjects((all) => [...all, p]);
+    switchProject(p.project_id);
   };
 
   const ref: SceneRef | null = projectId && doc && scene ? { projectId, doc, scene } : null;
@@ -173,15 +209,20 @@ function Workbench({ appearance, onAppearance }: { appearance: Appearance; onApp
   return (
     <div className="ox-root">
       <TopBar
-        appearance={appearance}
-        onAppearance={onAppearance}
-        lang={lang}
-        onLang={setLang}
+        page={page}
+        onPage={setPage}
+        onLang={(language) => onPrefs({ language })}
         projects={projects}
         projectId={projectId}
         onProject={pickProject}
+        onCreated={projectCreated}
+        onHelp={() => setDialog("help")}
+        onSettings={() => setDialog("settings")}
       />
-      <StepBar active={step} projectId={projectId} docs={docs} docId={docId} onDoc={setDocId} />
+      <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />
+      <SettingsDialog open={dialog === "settings"} onClose={() => setDialog(null)} preferences={prefs} onPreferences={onPrefs} />
+      {page === "workbench" && (<>
+      <StepBar active={step} projectId={projectId} docs={docs} docId={docId} onDoc={setDocId} onAllDecisions={() => setPage("overview")} />
       <main className="ox-main">
         <RequirementsPanel projectId={projectId} doc={doc} scenes={scenes} scene={scene} onPick={pickScene} />
         <SearchPanel
@@ -202,6 +243,7 @@ function Workbench({ appearance, onAppearance }: { appearance: Appearance; onApp
           searching={searching}
           error={searchError}
           canSearch={!!projectId && (!!scene || !!query.trim())}
+          hasScene={!!scene}
           activeKey={activeKey}
           onActivate={activate}
           checked={checked}
@@ -210,6 +252,7 @@ function Workbench({ appearance, onAppearance }: { appearance: Appearance; onApp
         />
         <DecisionPanel sceneRef={ref} cand={cand} searching={searching} query={query} lang={lang} />
       </main>
+      </>)}
     </div>
   );
 }

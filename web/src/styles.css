@@ -70,7 +70,6 @@ a { color: var(--link); }
 .ox-brand b { color: #3d8bff; font-weight: 700; }
 .ox-app { font-size: 18.5px; font-weight: 400; color: #f1f5f9; margin-right: 19px; }
 .ox-sep { width: 1px; height: 22px; background: #44576c; flex: none; }
-.ox-tagline { color: #dfe6ee; font-size: 13.5px; margin-left: 16px; }
 .ox-top .right { margin-left: auto; display: flex; align-items: center; color: #aab6c3; }
 .ox-top .right > .ox-sep { margin: 0 15px; }
 .hbtn { background: none; border: 0; color: #aab6c3; font: inherit; display: inline-flex; align-items: center; gap: 12px; cursor: pointer; padding: 4px 0; }
@@ -352,3 +351,34 @@ a { color: var(--link); }
 .pop-list > button { cursor: pointer; }
 .pop-list > button:hover, .pop-list > button.on { background: var(--blue-bg); }
 .pop-list span { color: var(--muted); font-size: 11px; }
+
+/* ---------- page navigation in the header ---------- */
+.ox-nav { display: flex; align-items: stretch; height: 43px; margin-left: 10px; }
+.ox-nav button { background: none; border: 0; color: #c3cdd8; font: inherit; font-size: 13px; padding: 0 12px; cursor: pointer; position: relative; }
+.ox-nav button:hover { color: #fff; }
+.ox-nav button.on { color: #fff; font-weight: 500; }
+.ox-nav button.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: #3d8bff; }
+.ox-nav button:focus-visible, .hbtn:focus-visible, .hicon:focus-visible, .lang button:focus-visible { outline: 2px solid #3d8bff; outline-offset: -2px; }
+
+/* project files popover */
+.file-row { display: flex; align-items: center; gap: 4px; border-radius: 4px; }
+.file-row > button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: none; border: 0; padding: 6px 8px; font: inherit; color: inherit; cursor: pointer; border-radius: 4px; }
+.file-row > button b { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row:hover, .file-row.on { background: var(--blue-bg); }
+.pop-history { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 260px; }
+
+/* settings and help dialogs */
+.settings-lead { margin: -4px 0 6px; }
+.settings-form { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.settings-form .ant-form-item { margin-bottom: 4px; }
+.settings-form .ant-collapse-header { padding-left: 0 !important; }
+.settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 16px; }
+.settings-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.settings-note { font-size: 12px; margin: 0; }
+.settings-h { margin: 6px 0 0; font-size: 13.5px; font-weight: 600; }
+.location { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.location code { background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; font-size: 12px; overflow-wrap: anywhere; }
+.help { font-size: 13px; line-height: 1.65; }
+.help h4 { margin: 4px 0 6px; font-size: 14px; }
+.help ol { padding-left: 20px; margin: 0 0 10px; }
+.help p { margin: 0 0 8px; }
