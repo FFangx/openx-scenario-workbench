@@ -13,6 +13,8 @@ from typing import Any, Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from .api_schemas import (ModelList, ModelProbe, ModelSettings, OpenedFolder, Preferences, PreviewSettings, Settings,
+                          documented)
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
 from .llm_service import ModelClient, ModelConfig, draft_config, load_config, save_config
@@ -79,13 +81,13 @@ def _preferences_json() -> dict[str, Any]:
             "encoder": known_encoder(prefs.get("encoder"))}
 
 
-@router.get("")
+@router.get("", **documented(Settings))
 def settings() -> dict[str, Any]:
     return {"model": _model_json(*_saved_model()), "preview": _preview_json(),
             "data_dir": str(AssetStore().root), "preferences": _preferences_json()}
 
 
-@router.put("/preferences")
+@router.put("/preferences", **documented(Preferences))
 def update_preferences(request: PreferencesUpdate) -> dict[str, Any]:
     values: dict[str, Any] = {}
     if request.language:
@@ -101,12 +103,12 @@ def update_preferences(request: PreferencesUpdate) -> dict[str, Any]:
     return _preferences_json()
 
 
-@router.post("/model/models")
+@router.post("/model/models", **documented(ModelList))
 def model_list(request: ModelDraft) -> dict[str, list[str]]:
     return {"models": ModelClient(_draft(request)).models()}
 
 
-@router.post("/model/test")
+@router.post("/model/test", **documented(ModelProbe))
 def model_test(request: ModelDraft) -> dict[str, str]:
     draft = _draft(request)
     if not draft.model:
@@ -114,20 +116,20 @@ def model_test(request: ModelDraft) -> dict[str, str]:
     return {"model": ModelClient(draft).probe()}
 
 
-@router.put("/model")
+@router.put("/model", **documented(ModelSettings))
 def model_save(request: ModelDraft) -> dict[str, Any]:
     save_config(_draft(request))
     return _model_json(load_config())
 
 
-@router.delete("/model/key")
+@router.delete("/model/key", **documented(ModelSettings))
 def model_remove_key() -> dict[str, Any]:
     saved, _ = _saved_model()
     save_config(replace(saved, api_key=""))
     return _model_json(load_config())
 
 
-@router.post("/preview/browse")
+@router.post("/preview/browse", **documented(PreviewSettings))
 def preview_browse() -> dict[str, Any]:
     """Opens the native folder dialog on this machine; the browser and service share a desktop."""
     current = find_esmini(str(read_preferences().get("esmini_path", "")))
@@ -147,13 +149,13 @@ def preview_browse() -> dict[str, Any]:
     return _preview_json()
 
 
-@router.post("/preview/detect")
+@router.post("/preview/detect", **documented(PreviewSettings))
 def preview_detect() -> dict[str, Any]:
     save_preferences(esmini_path="")
     return _preview_json()
 
 
-@router.post("/open-folder")
+@router.post("/open-folder", **documented(OpenedFolder))
 def open_local_folder(request: FolderRequest) -> dict[str, str]:
     """Only fixed, server-known folders; the client never supplies a path."""
     if request.target == "data":

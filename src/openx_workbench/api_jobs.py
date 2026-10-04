@@ -12,6 +12,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from . import import_jobs, jobs
+from .api_schemas import Job, PendingClassification, documented
 from .asset_store import AssetStore
 from .catalog import AssetFile
 from .classification import read_classification
@@ -45,7 +46,7 @@ def _uploads(files: list[UploadFile], suffixes: tuple[str, ...], message: str) -
 
 # ---------- jobs ----------
 
-@router.get("/jobs")
+@router.get("/jobs", **documented(list[Job]))
 def job_list(kind: Literal["pdf_import", "asset_import"] | None = None) -> list[dict[str, Any]]:
     store = AssetStore()
     result = jobs.recent(kind, str(store.root.resolve()))
@@ -64,12 +65,12 @@ def _job(job_id: str) -> jobs.Job:
     return job
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", **documented(Job))
 def job_status(job_id: str) -> dict[str, Any]:
     return _job(job_id).snapshot()
 
 
-@router.post("/jobs/{job_id}/cancel")
+@router.post("/jobs/{job_id}/cancel", **documented(Job))
 def job_cancel(job_id: str) -> dict[str, Any]:
     """Stops after the current step; work already saved is kept."""
     job = _job(job_id)
@@ -100,14 +101,14 @@ def _start_extraction(pdf: PdfStore, project_id: str, files: list[tuple[str, byt
     return jobs.start(job, _extract(pdf, project_id, files, standard)).snapshot()
 
 
-@router.post("/projects/{project_id}/documents")
+@router.post("/projects/{project_id}/documents", **documented(Job))
 def import_pdfs(project_id: str, files: list[UploadFile] = File(...), standard: str = Form("")) -> dict[str, Any]:
     """Extracts scenes with the configured model; sends the PDF text to that model."""
     uploads = _uploads(files, (".pdf",), "请选择 PDF 文件 / Select PDF files.")
     return _start_extraction(PdfStore(), project_id, uploads, standard.strip())
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/reextract")
+@router.post("/projects/{project_id}/documents/{document_id}/reextract", **documented(Job))
 def reextract_pdf(project_id: str, document_id: str) -> dict[str, Any]:
     pdf = PdfStore()
     document = next((item for item in pdf.documents(project_id) if item.document_id == document_id), None)
@@ -118,14 +119,14 @@ def reextract_pdf(project_id: str, document_id: str) -> dict[str, Any]:
 
 # ---------- asset import and classification ----------
 
-@router.post("/assets/import")
+@router.post("/assets/import", **documented(Job))
 def import_assets(files: list[UploadFile] = File(...), classify: bool = Form(False)) -> dict[str, Any]:
     uploads = _uploads(files, ASSET_SUFFIXES, "请选择 .sim、.xosc、.xodr 或 .zip 文件 / Select .sim, .xosc, .xodr or .zip files.")
     store = AssetStore()
     return import_jobs.start_import(store, [AssetFile(name, data) for name, data in uploads], classify=classify).snapshot()
 
 
-@router.post("/assets/import/demo")
+@router.post("/assets/import/demo", **documented(Job))
 def import_demo() -> dict[str, Any]:
     """Downloads the public esmini cut-in example, then imports it."""
     from .demo import DemoDownloadError, fetch_public_demo
@@ -137,7 +138,7 @@ def import_demo() -> dict[str, Any]:
     return import_jobs.start_import(AssetStore(), files).snapshot()
 
 
-@router.get("/assets/classification/pending")
+@router.get("/assets/classification/pending", **documented(PendingClassification))
 def pending_classification() -> dict[str, Any]:
     store = AssetStore()
     pending = [version for version in store.versions()
@@ -146,7 +147,7 @@ def pending_classification() -> dict[str, Any]:
             "versions": [{"asset_id": item.asset_id, "version_id": item.version_id} for item in pending]}
 
 
-@router.post("/assets/classify")
+@router.post("/assets/classify", **documented(Job))
 def classify_assets(request: ClassifyRequest) -> dict[str, Any]:
     """Model classification for the given versions, or every version still awaiting review.
 

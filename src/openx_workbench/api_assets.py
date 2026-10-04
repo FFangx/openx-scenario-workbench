@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 from . import import_jobs
 from .api_common import _cache, _lock, _store, _version
+from .api_schemas import (AssetDetail, AssetRow, ClassificationRecord, ClassificationSchema, DeletedVersion,
+                          RequirementRecord, StandardExportResult, documented)
 from .classification import FUNCTIONS, ROADS, TARGETS, classify_asset, confirm_classification, read_classification
 from .pdf_store import PdfStore
 from .preview_frames import read_frame
@@ -26,12 +28,12 @@ def _busy() -> None:
         raise ValueError("导入任务结束后才能修改资产 / Wait for the running import to finish.")
 
 
-@router.get("/classification-schema")
+@router.get("/classification-schema", **documented(ClassificationSchema))
 def classification_schema() -> dict[str, list[str]]:
     return {"function_type": list(FUNCTIONS), "label_road_type": list(ROADS), "label_target_type": list(TARGETS)}
 
 
-@router.get("/assets")
+@router.get("/assets", **documented(list[AssetRow]))
 def assets() -> list[dict[str, Any]]:
     """Every stored version with its labels; listing never parses files or calls a model."""
     store = _store()
@@ -51,7 +53,7 @@ def assets() -> list[dict[str, Any]]:
     return rows
 
 
-@router.get("/assets/{asset_id}/versions/{version_id}")
+@router.get("/assets/{asset_id}/versions/{version_id}", **documented(AssetDetail))
 def asset_detail(asset_id: str, version_id: str) -> dict[str, Any]:
     store = _store()
     version = _version(asset_id, version_id)
@@ -76,7 +78,7 @@ def asset_detail(asset_id: str, version_id: str) -> dict[str, Any]:
     return detail
 
 
-@router.post("/assets/{asset_id}/versions/{version_id}/classification/rules")
+@router.post("/assets/{asset_id}/versions/{version_id}/classification/rules", **documented(ClassificationRecord))
 def classify_by_rules(asset_id: str, version_id: str) -> dict[str, Any]:
     _busy()
     return classify_asset(_store(), _version(asset_id, version_id))
@@ -90,7 +92,7 @@ class ClassificationRequest(BaseModel):
     scenario_intent: str
 
 
-@router.put("/assets/{asset_id}/versions/{version_id}/classification")
+@router.put("/assets/{asset_id}/versions/{version_id}/classification", **documented(ClassificationRecord))
 def confirm(asset_id: str, version_id: str, request: ClassificationRequest) -> dict[str, Any]:
     """A reviewer's labels; they replace model and rule suggestions for search."""
     _busy()
@@ -106,7 +108,7 @@ def classification_download(asset_id: str, version_id: str) -> Response:
                     headers={"Content-Disposition": 'attachment; filename="classification.json"'})
 
 
-@router.delete("/assets/{asset_id}/versions/{version_id}")
+@router.delete("/assets/{asset_id}/versions/{version_id}", **documented(DeletedVersion))
 def delete_version(asset_id: str, version_id: str) -> dict[str, str]:
     """Removes the version's files; refused while a project or report references it."""
     _busy()
@@ -126,7 +128,7 @@ def delete_version(asset_id: str, version_id: str) -> dict[str, str]:
 
 # ---------- standard export (SIM assets) ----------
 
-@router.post("/assets/{asset_id}/versions/{version_id}/standard-export")
+@router.post("/assets/{asset_id}/versions/{version_id}/standard-export", **documented(StandardExportResult))
 def standard_export(asset_id: str, version_id: str) -> dict[str, Any]:
     """Converts a separate copy and checks it; the original asset is unchanged."""
     from .standard_export import build_standard_export
@@ -150,7 +152,7 @@ def standard_export_download(asset_id: str, version_id: str) -> Response:
 
 # ---------- published requirements ----------
 
-@router.get("/requirements")
+@router.get("/requirements", **documented(list[RequirementRecord]))
 def requirements() -> list[dict[str, Any]]:
     """Latest published revision of every confirmed requirement scene, across projects."""
     return [{"library_id": record["library_id"], "revision": record["revision"], "reviewed_at": record["reviewed_at"],

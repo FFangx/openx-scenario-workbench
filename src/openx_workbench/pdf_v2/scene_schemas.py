@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .models import SectionTree
 
@@ -84,7 +84,7 @@ _ACTION_TO_SIGNATURE: dict[str, tuple[str, ...]] = {"静止": ()}
 
 class SceneParticipant(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     kind: ParticipantKind
     bearing: Bearing = "未知方位"
@@ -94,14 +94,7 @@ class SceneParticipant(BaseModel):
     age: PedestrianAge = "未知"
     # This participant's own initial speed. Optional, and left out of the stored structure when
     # unset, so revisions saved before it existed read back unchanged.
-    speed_kph: float | None = Field(default=None, ge=0, allow_inf_nan=False)
-
-    @model_serializer(mode="wrap")
-    def _omit_unset_speed(self, handler):
-        data = handler(self)
-        if isinstance(data, dict) and data.get("speed_kph") is None:
-            data.pop("speed_kph", None)
-        return data
+    speed_kph: float | None = Field(default=None, ge=0, allow_inf_nan=False, exclude_if=lambda value: value is None)
 
     def signature_actions(self) -> tuple[str, ...]:
 
@@ -112,7 +105,7 @@ class SceneParticipant(BaseModel):
 
 class SceneRelation(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     subject: ParticipantKind
     relation: RelationKind
@@ -120,7 +113,7 @@ class SceneRelation(BaseModel):
 
 class SceneParams(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     ego_speed_kph: float | None = None
     target_speeds_kph: tuple[float, ...] = ()
@@ -140,7 +133,7 @@ class SceneParams(BaseModel):
 
 class SceneStructure(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     road_class: RoadClass = "未知"
 

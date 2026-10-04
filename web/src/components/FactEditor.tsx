@@ -16,7 +16,7 @@ interface Props {
 let schemaCache: Promise<SceneSchema> | null = null;
 const loadSchema = () => (schemaCache ??= api.sceneSchema());
 
-const NUMERIC: [string, string, string][] = [
+const NUMERIC: [keyof SceneStructure["params"], string, string][] = [
   ["ego_speed_kph", "主车速度（km/h）", "Ego speed (km/h)"],
   ["ttc_value", "碰撞时间 TTC（s）", "Time to collision (s)"],
   ["lane_count", "车道数量", "Lane count"],

@@ -18,6 +18,8 @@ from .api_common import (FACETS, DecisionRequest, MatchRequest, _cache, _catalog
                          _scene_json, _candidate_json, _store, _trace_for, _version)
 from .api_jobs import router as jobs_router
 from .api_preview import router as preview_router
+from .api_schemas import (Health, Library, Overview, PdfDocument, Project, ProjectList, Report, ReportDetail,
+                          SavedDecision, SearchResponse, SelectedProject, Trace, documented)
 from .api_settings import router as settings_router
 from .api_workflow import router as workflow_router
 from .checkout import checkout_root
@@ -60,14 +62,14 @@ app.include_router(settings_router)
 app.include_router(workflow_router)
 
 
-@app.get("/api/health")
+@app.get("/api/health", **documented(Health))
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 # ---------- projects and documents ----------
 
-@app.get("/api/projects")
+@app.get("/api/projects", **documented(ProjectList))
 def projects() -> dict[str, Any]:
     store = ProjectStore(_store())
     last = store.last()
@@ -79,18 +81,18 @@ class ProjectRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
-@app.post("/api/projects")
+@app.post("/api/projects", **documented(Project))
 def create_project(request: ProjectRequest) -> dict[str, Any]:
     return asdict(ProjectStore(_store()).create(request.name))
 
 
-@app.post("/api/projects/{project_id}/select")
+@app.post("/api/projects/{project_id}/select", **documented(SelectedProject))
 def select_project(project_id: str) -> dict[str, str]:
     ProjectStore(_store()).set_last(project_id)
     return {"project_id": project_id}
 
 
-@app.get("/api/projects/{project_id}/documents")
+@app.get("/api/projects/{project_id}/documents", **documented(list[PdfDocument]))
 def documents(project_id: str) -> list[dict[str, Any]]:
     pdf = PdfStore(_store())
     return [{**asdict(document), "size_bytes": (pdf.blobs / document.sha256).stat().st_size
@@ -145,7 +147,7 @@ def document_page(project_id: str, document_id: str, page: int, width: int = 480
 
 # ---------- asset library ----------
 
-@app.get("/api/library")
+@app.get("/api/library", **documented(Library))
 def library() -> dict[str, Any]:
     catalog, versions = _catalog()
     facets: dict[str, set[str]] = {key: set() for key in FACETS}
@@ -180,7 +182,7 @@ def asset_file(asset_id: str, version_id: str, role: str) -> Response:
 
 # ---------- matching ----------
 
-@app.post("/api/search")
+@app.post("/api/search", **documented(SearchResponse))
 def search(request: MatchRequest) -> dict[str, Any]:
     unknown = set(request.filters) - set(FACETS)
     if unknown:
@@ -193,12 +195,12 @@ def search(request: MatchRequest) -> dict[str, Any]:
                         for result in kept[:request.top_k]]}
 
 
-@app.post("/api/trace")
+@app.post("/api/trace", **documented(Trace))
 def trace(request: DecisionRequest) -> dict[str, Any]:
     return _trace_for(request)[0]
 
 
-@app.post("/api/decisions")
+@app.post("/api/decisions", **documented(SavedDecision))
 def save_decision(request: DecisionRequest) -> dict[str, Any]:
     if not request.scene_id:
         raise ValueError("Select a PDF scene before saving a reuse decision.")
@@ -208,7 +210,7 @@ def save_decision(request: DecisionRequest) -> dict[str, Any]:
     return {"report_id": path.stem, "saved_to": str(path)}
 
 
-@app.get("/api/projects/{project_id}/reports")
+@app.get("/api/projects/{project_id}/reports", **documented(list[Report]))
 def reports(project_id: str) -> list[dict[str, Any]]:
     result = []
     for report in ProjectStore(_store()).reports(project_id):
@@ -231,7 +233,7 @@ def _report(project_id: str, report_id: str) -> dict[str, Any]:
     return {**report, "trace": checked_trace(report["trace"])}
 
 
-@app.get("/api/projects/{project_id}/reports/{report_id}")
+@app.get("/api/projects/{project_id}/reports/{report_id}", **documented(ReportDetail))
 def report_detail(project_id: str, report_id: str) -> dict[str, Any]:
     """The saved snapshot, plus which of its source scenes still exist to reopen for review."""
     report = _report(project_id, report_id)
@@ -258,7 +260,7 @@ def report_download(project_id: str, report_id: str, format: str = "json", lang:
                     headers={"Content-Disposition": f'attachment; filename="{stem}.json"'})
 
 
-@app.get("/api/overview")
+@app.get("/api/overview", **documented(Overview))
 def overview() -> dict[str, Any]:
     store = _store()
     versions = store.versions()

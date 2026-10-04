@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from .api_common import _store, _version
+from .api_schemas import PreviewStatus, documented
 from .esmini_preview import PreviewProcess, find_esmini, start_preview
 from .preferences import read_preferences
 
@@ -60,7 +61,7 @@ def _status(preview: PreviewProcess | None) -> dict[str, Any]:
     return result
 
 
-@router.post("/assets/{asset_id}/versions/{version_id}/preview")
+@router.post("/assets/{asset_id}/versions/{version_id}/preview", **documented(PreviewStatus))
 def preview_start(asset_id: str, version_id: str, request: PreviewRequest) -> dict[str, Any]:
     version = _version(asset_id, version_id)
     executable = find_esmini(str(read_preferences().get("esmini_path", "")))
@@ -78,13 +79,13 @@ def preview_start(asset_id: str, version_id: str, request: PreviewRequest) -> di
         return _status(_current["preview"])
 
 
-@router.get("/preview")
+@router.get("/preview", **documented(PreviewStatus))
 def preview_status() -> dict[str, Any]:
     with _lock:
         return _status(_current["preview"])
 
 
-@router.post("/preview/stop")
+@router.post("/preview/stop", **documented(PreviewStatus))
 def preview_stop() -> dict[str, Any]:
     with _lock:
         preview, _current["preview"] = _current["preview"], None

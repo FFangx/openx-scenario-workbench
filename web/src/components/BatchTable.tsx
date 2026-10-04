@@ -4,7 +4,7 @@ import { useT } from "../i18n";
 
 type Entry = NonNullable<Trace["entries"]>[number] & { key: number };
 
-export const encoderName = (id: string | undefined, lang: string) =>
+export const encoderName = (id: string | null | undefined, lang: string) =>
   !id ? "—" : id.includes("bge-m3") ? (lang === "zh" ? "BGE-M3 语义检索" : "BGE-M3 semantic retrieval")
     : id.startsWith("hashing-") ? (lang === "zh" ? "轻量离线检索" : "Lightweight offline retrieval") : id;
 

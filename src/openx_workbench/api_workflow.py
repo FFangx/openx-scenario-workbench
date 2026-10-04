@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from . import matching
 from .api_common import (DecisionRequest, _cache, _candidate_for, _catalog, _explanation_key, _index, _lock,
                          _scene, _scene_json, _store, _trace_for)
+from .api_schemas import (BatchResult, Explanation, ExtractionRecord, Publication, QueuedScene, Revision, SavedBatch,
+                          SceneSchema, documented)
 from .batch_matching import batch_signature, match_document
 from .pdf_store import PdfStore, StoredScene
 from .project_store import ProjectStore
@@ -49,7 +51,7 @@ def _queue(pdf: PdfStore, project_id: str, scenes: list[StoredScene]) -> list[di
 
 # ---------- scene queue ----------
 
-@router.get("/scene-schema")
+@router.get("/scene-schema", **documented(SceneSchema))
 def scene_schema() -> dict[str, list[str]]:
     """Controlled vocabulary for the typed requirement editor."""
     from .pdf_v2 import scene_schemas as schema
@@ -60,13 +62,13 @@ def scene_schema() -> dict[str, list[str]]:
     return {key: list(get_args(annotation)) for key, annotation in fields.items()}
 
 
-@router.get("/projects/{project_id}/documents/{document_id}/scenes")
+@router.get("/projects/{project_id}/documents/{document_id}/scenes", **documented(list[QueuedScene]))
 def scenes(project_id: str, document_id: str) -> list[dict[str, Any]]:
     pdf = PdfStore(_store())
     return _queue(pdf, project_id, pdf.scenes(project_id, document_id))
 
 
-@router.get("/projects/{project_id}/scenes")
+@router.get("/projects/{project_id}/scenes", **documented(list[QueuedScene]))
 def all_scenes(project_id: str) -> list[dict[str, Any]]:
     """Every scene of every PDF in the project, newest PDF first."""
     pdf = PdfStore(_store())
@@ -77,7 +79,7 @@ class RevisionRequest(BaseModel):
     edits: dict[str, Any] = Field(description="Only extracted facts: title, preferred_text, structure, or the legacy fields.")
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/revisions")
+@router.post("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/revisions", **documented(QueuedScene))
 def revise(project_id: str, document_id: str, scene_id: str, request: RevisionRequest) -> dict[str, Any]:
     """Saves edited facts as a new immutable revision; matching then uses it."""
     pdf = PdfStore(_store())
@@ -85,7 +87,7 @@ def revise(project_id: str, document_id: str, scene_id: str, request: RevisionRe
     return _queue(pdf, project_id, [stored])[0]
 
 
-@router.get("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/revisions")
+@router.get("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/revisions", **documented(list[Revision]))
 def revisions(project_id: str, document_id: str, scene_id: str) -> list[dict[str, Any]]:
     return [{"revision": item.revision, "title": item.package.title, "parameters": item.package.parameters,
              "structure": item.package.structure}
@@ -96,7 +98,7 @@ class PublishRequest(BaseModel):
     revision: int
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/publish")
+@router.post("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/publish", **documented(Publication))
 def publish(project_id: str, document_id: str, scene_id: str, request: PublishRequest) -> dict[str, Any]:
     """Confirms a saved revision into the shared requirement library."""
     pdf = PdfStore(_store())
@@ -106,7 +108,7 @@ def publish(project_id: str, document_id: str, scene_id: str, request: PublishRe
 
 # ---------- extraction record ----------
 
-@router.get("/projects/{project_id}/documents/{document_id}/extraction")
+@router.get("/projects/{project_id}/documents/{document_id}/extraction", **documented(ExtractionRecord))
 def extraction(project_id: str, document_id: str) -> dict[str, Any]:
     from .pdf_extraction import ENGINE_VERSION
     pdf = PdfStore(_store())
@@ -159,7 +161,7 @@ def _cached_batch(signature: str) -> dict:
     return entry
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/batch")
+@router.post("/projects/{project_id}/documents/{document_id}/batch", **documented(BatchResult))
 def batch(project_id: str, document_id: str, request: BatchRequest) -> dict[str, Any]:
     """Matches every scene of the PDF against the current library; the result is kept for saving and download."""
     inputs, signature = _batch(project_id, document_id, request.encoder)
@@ -176,7 +178,7 @@ class BatchSaveRequest(BaseModel):
     signature: str
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/batch/save")
+@router.post("/projects/{project_id}/documents/{document_id}/batch/save", **documented(SavedBatch))
 def batch_save(project_id: str, document_id: str, request: BatchSaveRequest) -> dict[str, str]:
     entry = _cached_batch(request.signature)
     trace = entry["trace"]
@@ -214,7 +216,7 @@ class ExplanationRequest(DecisionRequest):
     mode: Literal["evidence", "structural", "model"] = "evidence"
 
 
-@router.post("/explanation")
+@router.post("/explanation", **documented(Explanation))
 def explanation(request: ExplanationRequest) -> dict[str, Any]:
     """`evidence` lists exactly what a model request would send; `structural` explains from the
     comparison alone; `model` sends that evidence to the configured model and validates its citations."""

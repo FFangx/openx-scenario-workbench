@@ -236,7 +236,7 @@ function Downloads({ projectId, reportId }: { projectId: string; reportId: strin
   );
 }
 
-function ContinueReview({ detail, source, onOpenScene }: { detail: ReportDetail; source: TraceSource | undefined; onOpenScene: (d: string, s: string) => void }) {
+function ContinueReview({ detail, source, onOpenScene }: { detail: ReportDetail; source: TraceSource | null | undefined; onOpenScene: (d: string, s: string) => void }) {
   const { t } = useT();
   const open = !!source && detail.reopenable.some((r) => r.document_id === source.document_id && r.scene_id === source.scene_id);
   return (
