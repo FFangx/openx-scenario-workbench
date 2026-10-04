@@ -11,16 +11,15 @@ from typing import Protocol
 
 from .catalog import OpenXAsset
 from .models import ParseBundle
-from .reuse import (
-    ReuseDifference,
+from . import reuse_policy as policy
+from .reuse import change_cost, classify_reuse_level, compare_query_to_asset
+from .reuse_differences import ReuseDifference
+from .reuse_facts import (
+    asset_structure_query,
     bundle_features,
     bundle_participant_relations,
     bundle_participant_signatures,
     bundle_scenario_families,
-    change_cost,
-    classify_reuse_level,
-    compare_query_to_asset,
-    asset_structure_query,
 )
 from .scene_package import RetrievalQuery, query_structure_text
 
@@ -62,8 +61,8 @@ def review_kind(query: RetrievalQuery | None, candidate: RetrievalQuery) -> str:
     if query is None:
         return "recall"
     if query.structured:
-        participants_known = bool(query.participant_signatures and candidate.participant_signatures) and all(
-            "unknown" not in signature for signature in (*query.participant_signatures, *candidate.participant_signatures)
+        participants_known = bool(query.participant_signatures and candidate.participant_signatures) and not any(
+            signature.has_unknown for signature in (*query.participant_signatures, *candidate.participant_signatures)
         )
         ego_known = bool(query.ego_actions and candidate.ego_actions) and "unknown" not in (
             query.ego_actions | candidate.ego_actions
@@ -246,7 +245,7 @@ class OpenXIndex:
         index.add(matrix)
         return index
 
-    def _recall(
+    def recall(
         self, query_vector: tuple[float, ...], count: int, *, structure=False
     ) -> list[tuple[int, float]]:
         vectors = self.structure_vectors if structure else self.vectors
@@ -348,14 +347,14 @@ class OpenXIndex:
     def _search_vectors(self, query_vector, structure_vector, query, top_k):
         ranked: list[RetrievalResult] = []
         recall_size = (
-            min(len(self.assets), max(100, top_k * 20))
+            min(len(self.assets), max(policy.RECALL_MIN, top_k * policy.RECALL_FACTOR))
             if query
             else min(len(self.assets), top_k)
         )
-        recalled = dict(self._recall(query_vector, recall_size))
+        recalled = dict(self.recall(query_vector, recall_size))
         if query:
-            for index, _ in self._recall(
-                structure_vector, min(len(self.assets), 50), structure=True
+            for index, _ in self.recall(
+                structure_vector, min(len(self.assets), policy.STRUCTURE_RECALL), structure=True
             ):
                 if index not in recalled:
                     recalled[index] = sum(
@@ -396,7 +395,11 @@ class OpenXIndex:
             )
             road_score = _road_query_score(query, asset.bundle) if query else 0.0
             if query:
-                score = 0.55 * vector_score + 0.30 * scenario_score + 0.15 * road_score
+                score = (
+                    policy.WEIGHT_SEMANTIC * vector_score
+                    + policy.WEIGHT_SCENARIO * scenario_score
+                    + policy.WEIGHT_ROAD * road_score
+                )
             else:
                 score = vector_score
             score = round(max(0.0, min(1.0, score)), 4)
@@ -451,9 +454,7 @@ def bundle_to_query(bundle: ParseBundle) -> RetrievalQuery:
     return RetrievalQuery(
         text=text,
         scenario_families=frozenset(bundle_scenario_families(bundle)),
-        participant_signatures=tuple(
-            item.key() for item in bundle_participant_signatures(bundle)
-        ),
+        participant_signatures=bundle_participant_signatures(bundle),
         participant_relations=frozenset(bundle_participant_relations(bundle)),
         entity_kinds=frozenset(entities),
         action_kinds=frozenset(actions),
@@ -491,9 +492,7 @@ def _scenario_query_score(
         return sum(active) / len(active) if active else 0.0
     entities, actions, triggers, _ = bundle_features(candidate)
     families = bundle_scenario_families(candidate)
-    participant_signatures = {
-        item.key() for item in bundle_participant_signatures(candidate)
-    }
+    participant_signatures = set(bundle_participant_signatures(candidate))
     relations = bundle_participant_relations(candidate)
     comparisons = [
         _overlap(set(query.scenario_families), families),
@@ -536,8 +535,8 @@ def _reasons(
     if query is None:
         return ("vector_text_match",)
     reasons = []
-    if _scenario_query_score(query, candidate, structure) >= 0.66:
+    if _scenario_query_score(query, candidate, structure) >= policy.REASON_SCENARIO_MIN:
         reasons.append("scenario_structure_match")
-    if _road_query_score(query, candidate) >= 0.75:
+    if _road_query_score(query, candidate) >= policy.REASON_ROAD_MIN:
         reasons.append("road_structure_match")
     return tuple(reasons or ["partial_match"])

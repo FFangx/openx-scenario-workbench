@@ -6,7 +6,7 @@ import pytest
 
 from openx_workbench.ablation import load_benchmark, rank, run, score
 from openx_workbench.retrieval import HashingEncoder, OpenXIndex
-from openx_workbench.reuse import asset_structure_query
+from openx_workbench.reuse_facts import asset_structure_query
 
 REPO = Path(__file__).resolve().parents[1]
 BENCHMARK = REPO / "examples" / "reuse-benchmark" / "benchmark.json"
@@ -25,13 +25,17 @@ def test_committed_files_match_the_specification():
         assert (BENCHMARK.parent / relative).read_bytes() == content.encode("utf-8"), relative
 
 
+def keys(structure):
+    return tuple(item.key() for item in structure.participant_signatures)
+
+
 def test_assets_carry_the_specified_interaction():
     assets, _ = load_benchmark(BENCHMARK)
     structures = {asset.asset_id: asset_structure_query(asset) for asset in assets}
-    assert structures["acc-cutin-left-80"].participant_signatures == ("vehicle@front_left:same:cruise+lane_change",)
-    assert structures["aeb-ped-far-40"].participant_signatures == ("pedestrian@front_left:crossing:cruise",)
-    assert structures["bsm-rear-left-60"].participant_signatures == ("vehicle@rear_left:same:cruise",)
-    assert structures["aeb-ccrm-50-unplaced"].participant_signatures == ("vehicle@unknown:unknown:cruise",)
+    assert keys(structures["acc-cutin-left-80"]) == ("vehicle@front_left:same:cruise+lane_change",)
+    assert keys(structures["aeb-ped-far-40"]) == ("pedestrian@front_left:crossing:cruise",)
+    assert keys(structures["bsm-rear-left-60"]) == ("vehicle@rear_left:same:cruise",)
+    assert keys(structures["aeb-ccrm-50-unplaced"]) == ("vehicle@unknown:unknown:cruise",)
     assert structures["aeb-ccrs-50-curve"].road_features == frozenset({"curve"})
     assert dict(structures["aeb-ccrb-50-rain"].environment)["weather"] == "rain"
 

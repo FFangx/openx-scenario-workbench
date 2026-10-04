@@ -83,7 +83,7 @@ def rank(index: OpenXIndex | None, assets: list[OpenXAsset], query, ranker: str)
     structure = ranker == "structure-text"
     text = query_structure_text(query) if structure else query.text
     return [(index.assets[position].asset_id, None)
-            for position, _ in index._recall(index.encoder.encode(text), len(assets), structure=structure)]
+            for position, _ in index.recall(index.encoder.encode(text), len(assets), structure=structure)]
 
 
 def score(ranked_by_case: list[tuple[dict, list[tuple[str, str | None]]]]) -> dict:

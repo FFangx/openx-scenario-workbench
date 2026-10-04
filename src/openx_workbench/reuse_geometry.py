@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import math
 
+from . import reuse_policy as policy
 from .models import PositionIR
 from .road_geometry import RoadReferenceLine
 
 
 def _bearing(forward: float, left: float) -> str:
-    if forward > 5.0:
+    if forward > policy.ALONGSIDE_M:
         longitudinal = "front"
-    elif forward < -5.0:
+    elif forward < -policy.ALONGSIDE_M:
         longitudinal = "rear"
     else:
         longitudinal = "alongside"
-    if abs(left) <= 1.5:
+    if abs(left) <= policy.SAME_LANE_M:
         return f"{longitudinal}_same_lane"
     return f"{longitudinal}_{'left' if left > 0 else 'right'}"
 
@@ -86,9 +87,9 @@ def _heading_on_road(
 
 def _facing(angle: float) -> str:
     delta = abs(_wrap(angle))
-    if delta <= math.pi / 6:
+    if delta <= policy.FACING_SAME_MAX:
         return "same"
-    if delta >= 5 * math.pi / 6:
+    if delta >= policy.FACING_OPPOSITE_MIN:
         return "opposite"
     return "crossing"
 
@@ -139,7 +140,7 @@ def _relative_offset(
             offset = _number(target.attributes, "offset") or 0.0
             direction = _ego_road_direction(ego, roads)
             if ds is not None and lane_delta is not None and direction is not None:
-                return ds * direction, (lane_delta * 3.5 + offset) * direction
+                return ds * direction, (lane_delta * policy.LANE_WIDTH_M + offset) * direction
 
     road_offset = _road_relative_offset(ego, target, roads)
     if road_offset is not None:
@@ -293,7 +294,7 @@ def _lane_position_fallback(
     direction = 1.0 if ego_lane < 0 else -1.0
     return (
         (target_s - ego_s) * direction,
-        (target_lane - ego_lane) * 3.5 * direction,
+        (target_lane - ego_lane) * policy.LANE_WIDTH_M * direction,
     )
 
 

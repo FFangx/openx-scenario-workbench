@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,10 +35,38 @@ class ScenePackage:
 
 
 @dataclass(frozen=True, slots=True)
+class ParticipantSignature:
+    """One non-ego participant as matching sees it: kind, ego-relative bearing and facing, behaviors.
+
+    `actor` names the asset entity it was read from (empty for a requirement); it is
+    not part of the signature's identity. Any component may be "unknown".
+    """
+
+    kind: str
+    bearing: str
+    facing: str
+    actions: tuple[str, ...]
+    actor: str = field(default="", compare=False)
+
+    def __post_init__(self) -> None:
+        if not self.actions:
+            # A participant without recorded actions stands still.
+            object.__setattr__(self, "actions", ("static",))
+
+    def key(self) -> str:
+        """Canonical text form, e.g. ``vehicle@front_same_lane:same:cruise``; part of the index vectors."""
+        return f"{self.kind}@{self.bearing}:{self.facing}:{'+'.join(self.actions)}"
+
+    @property
+    def has_unknown(self) -> bool:
+        return "unknown" in (self.kind, self.bearing, self.facing, *self.actions)
+
+
+@dataclass(frozen=True, slots=True)
 class RetrievalQuery:
     text: str
     scenario_families: frozenset[str] = frozenset()
-    participant_signatures: tuple[str, ...] = ()
+    participant_signatures: tuple[ParticipantSignature, ...] = ()
     participant_relations: frozenset[str] = frozenset()
     entity_kinds: frozenset[str] = frozenset()
     action_kinds: frozenset[str] = frozenset()
@@ -131,7 +159,7 @@ def query_structure_text(query: RetrievalQuery) -> str:
     return json.dumps(
         {
             "function": query.tested_function,
-            "participants": sorted(query.participant_signatures),
+            "participants": sorted(item.key() for item in query.participant_signatures),
             "ego_actions": sorted(query.ego_actions),
             "road": sorted(query.road_features),
             "triggers": sorted(query.trigger_kinds),
@@ -161,9 +189,15 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     signatures = []
     unverified = []
     for participant in participants:
-        actions = sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"])
         signatures.append(
-            f"{STRUCTURE_KINDS[participant['kind']]}@{STRUCTURE_BEARINGS[participant['bearing']]}:{STRUCTURE_FACING[participant['facing']]}:{'+'.join(actions) or 'unknown'}"
+            ParticipantSignature(
+                kind=STRUCTURE_KINDS[participant["kind"]],
+                bearing=STRUCTURE_BEARINGS[participant["bearing"]],
+                facing=STRUCTURE_FACING[participant["facing"]],
+                # A requirement that names no behavior leaves it open, unlike an asset.
+                actions=tuple(sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"]))
+                or ("unknown",),
+            )
         )
         if participant["age"] != "未知":
             unverified.append("participant age=" + participant["age"])
@@ -222,7 +256,7 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     query = RetrievalQuery(
         text=" ".join((package.title, package.preferred_text)),
         structured=True,
-        participant_signatures=tuple(sorted(signatures)),
+        participant_signatures=tuple(sorted(signatures, key=ParticipantSignature.key)),
         road_features=frozenset([STRUCTURE_ROADS[road]])
         if road in STRUCTURE_ROADS
         else frozenset(),
@@ -258,8 +292,6 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             query.unverified,
         )
     ):
-        from dataclasses import replace
-
         query = replace(query, unverified=("no extracted structural requirements",))
     return query
 
@@ -348,16 +380,10 @@ def synchronize_structure(package: ScenePackage) -> ScenePackage:
     if not package.structure:
         return package
     query = _structured_query(package)
-    package.entities = sorted(
-        {signature.split("@", 1)[0] for signature in query.participant_signatures}
-    )
+    package.entities = sorted({signature.kind for signature in query.participant_signatures})
     package.actions = sorted(
         query.ego_actions
-        | {
-            action
-            for signature in query.participant_signatures
-            for action in signature.split(":", 2)[2].split("+")
-        }
+        | {action for signature in query.participant_signatures for action in signature.actions}
     )
     package.triggers = sorted(query.trigger_kinds)
     package.road_types = sorted(query.road_features)

@@ -13,7 +13,7 @@ from openx_workbench.retrieval import (
     bundle_to_query,
     bundle_query_text,
 )
-from openx_workbench.reuse import bundle_participant_relations
+from openx_workbench.reuse_facts import bundle_participant_relations
 from openx_workbench.scene_package import EvidenceRef, ScenePackage, scene_package_to_query
 
 

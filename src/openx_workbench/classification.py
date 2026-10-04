@@ -73,7 +73,7 @@ def classify_asset(store, version, *, client=None, use_model=False):
 
 
 def _target_labels(asset):
-    from .reuse import bundle_participant_signatures
+    from .reuse_facts import bundle_participant_signatures
     labels = {"pedestrian": "行人", "cyclist": "骑行者", "motorcycle": "两轮车",
               "vehicle": "乘用车", "truck": "商用车", "bus": "商用车", "van": "商用车",
               "trailer": "商用车", "obstacle": "障碍物"}
