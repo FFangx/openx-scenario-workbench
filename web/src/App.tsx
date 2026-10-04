@@ -72,6 +72,10 @@ export default function Root() {
 
 export interface SceneRef { projectId: string; doc: PdfDocument; scene: Scene }
 
+export type Scope = "pdf" | "all";
+export type LeftTab = "scenes" | "facts" | "doc";
+const keyOf = (s: Scene) => `${s.document_id}/${s.scene_id}`;
+
 function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partial<Preferences>) => void }) {
   const { message } = AntApp.useApp();
   const { t } = useT();
@@ -82,10 +86,14 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const [projectId, setProjectId] = useState<string | null>(null);
   const [docs, setDocs] = useState<PdfDocument[]>([]);
   const [docId, setDocId] = useState<string | null>(null);
+  const [scope, setScope] = useState<Scope>("pdf");
   const [scenes, setScenes] = useState<Scene[]>([]);
-  const [sceneId, setSceneId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
+  const [queue, setQueue] = useState<string[]>([]);
   const [library, setLibrary] = useState<Library | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
+  const [esmini, setEsmini] = useState<boolean>(false);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [result, setResult] = useState<SearchResponse | null>(null);
@@ -94,53 +102,64 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [checked, setChecked] = useState<string[]>([]);
   const searchSeq = useRef(0);
-  const pendingScene = useRef<string | null>(null);
+  const pending = useRef<string | null>(null);
 
-  const doc = docs.find((d) => d.document_id === docId) ?? null;
-  const scene = scenes.find((s) => s.scene_id === sceneId) ?? null;
+  const scene = scenes.find((s) => keyOf(s) === selected) ?? null;
+  const doc = docs.find((d) => d.document_id === (scene?.document_id ?? docId)) ?? null;
   const cand = result?.results.find((c) => c.asset_id === activeKey) ?? null;
 
+  const loadLibrary = useCallback(() => api.library().then(setLibrary), []);
+  const loadTools = useCallback(() => api.settings().then((s) => setEsmini(!!s.preview.executable)).catch(() => undefined), []);
+
   useEffect(() => {
-    Promise.all([api.projects(), api.library()])
-      .then(([p, lib]) => {
+    Promise.all([api.projects(), loadLibrary()])
+      .then(([p]) => {
         setProjects(p.projects);
         setProjectId(p.last_project_id ?? p.projects[0]?.project_id ?? null);
-        setLibrary(lib);
         setOnline(true);
       })
       .catch((e: Error) => {
         setOnline(false);
         message.error(t(`无法连接工作台服务：${e.message}`, `Cannot reach the workbench API: ${e.message}`));
       });
+    loadTools();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);
 
-  useEffect(() => {
-    if (!projectId) return;
-    setDocs([]);
-    setDocId(null);
-    api.documents(projectId).then((d) => {
+  const loadDocs = useCallback((pid: string, select?: string) =>
+    api.documents(pid).then((d) => {
       setDocs(d);
-      setDocId(d[0]?.document_id ?? null);
-    }).catch((e: Error) => message.error(e.message));
-  }, [projectId, message]);
+      setDocId(select && d.some((x) => x.document_id === select) ? select : d[0]?.document_id ?? null);
+      if (d.length < 2) setScope("pdf");
+    }).catch((e: Error) => message.error(e.message)), [message]);
 
   useEffect(() => {
-    setScenes([]);
-    setSceneId(null);
-    setResult(null);
-    if (!projectId || !docId) return;
-    api.scenes(projectId, docId).then((s) => {
+    if (projectId) loadDocs(projectId);
+  }, [projectId, loadDocs]);
+
+  /** Reload the queue; keep the current selection when it still exists, else enter at the requested or first scene. */
+  const loadScenes = useCallback((keep: string | null) => {
+    if (!projectId || (scope === "pdf" && !docId)) {
+      setScenes([]);
+      setSelected(null);
+      return;
+    }
+    const request = scope === "all" ? api.allScenes(projectId) : api.scenes(projectId, docId!);
+    request.then((s) => {
       setScenes(s);
-      // Enter a document at the requested scene (from Overview), otherwise at its first requirement.
-      const first = s.find((x) => x.scene_id === pendingScene.current) ?? s[0];
-      pendingScene.current = null;
-      if (first) {
-        setSceneId(first.scene_id);
-        setQuery(first.title);
-      }
+      const wanted = pending.current ?? keep;
+      pending.current = null;
+      const next = s.find((x) => keyOf(x) === wanted) ?? s[0];
+      setSelected(next ? keyOf(next) : null);
+      if (next && keyOf(next) !== keep) setQuery(next.title);
     }).catch((e: Error) => message.error(e.message));
-  }, [projectId, docId, message]);
+  }, [projectId, docId, scope, message]);
+
+  useEffect(() => {
+    setResult(null);
+    loadScenes(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, docId, scope]);
 
   const runSearch = useCallback(
     (opts: { text?: string; filters?: Record<string, string> } = {}) => {
@@ -151,7 +170,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
       api
         .search({
           project_id: projectId,
-          document_id: scene ? docId ?? undefined : undefined,
+          document_id: scene?.document_id,
           scene_id: scene?.scene_id,
           revision: scene?.revision,
           text: opts.text ?? query,
@@ -168,21 +187,28 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
         .catch((e: Error) => seq === searchSeq.current && (setSearchError(e.message), setResult(null)))
         .finally(() => seq === searchSeq.current && setSearching(false));
     },
-    [projectId, docId, scene, query, filters, lang],
+    [projectId, scene, query, filters, lang],
   );
 
-  // A new scene (or language) re-runs matching so the middle and right columns never show stale results.
-  const sceneKey = scene ? `${scene.scene_id}@${scene.revision}:${lang}:${prefs.encoder}` : "";
+  // A new scene revision (or language, or encoder) re-runs matching so the middle and right columns never show stale results.
+  const sceneKey = scene ? `${keyOf(scene)}@${scene.revision}:${lang}:${prefs.encoder}` : "";
   useEffect(() => {
     if (sceneKey) runSearch({ text: scene!.title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneKey]);
 
-  const pickScene = (id: string) => {
-    const s = scenes.find((x) => x.scene_id === id);
+  const pickScene = (key: string) => {
+    const s = scenes.find((x) => keyOf(x) === key);
     if (!s) return;
-    setSceneId(id);
+    setSelected(key);
     setQuery(s.title);
+  };
+  /** Free text search: matching without a requirement gives text recall only, never a reuse decision. */
+  const clearScene = () => {
+    setSelected(null);
+    setResult(null);
+    setActiveKey(null);
+    setQuery("");
   };
   const activate = (key: string) => {
     setActiveKey(key);
@@ -196,6 +222,10 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const switchProject = (id: string) => {
     setDocs([]);
     setDocId(null);
+    setScenes([]);
+    setSelected(null);
+    setResult(null);
+    setScope("pdf");
     setQuery("");
     setProjectId(id);
   };
@@ -205,10 +235,13 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   };
   const openScene = (documentId: string, sceneId: string) => {
     setPage("workbench");
-    if (documentId === docId) {
-      pickScene(sceneId);
+    setLeftTab("facts");
+    const key = `${documentId}/${sceneId}`;
+    if (scenes.some((s) => keyOf(s) === key)) {
+      pickScene(key);
     } else {
-      pendingScene.current = sceneId;
+      pending.current = key;
+      setScope("pdf");
       setDocId(documentId);
     }
   };
@@ -216,6 +249,11 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     setProjects((all) => [...all, p]);
     switchProject(p.project_id);
   };
+  const sceneChanged = (s: Scene) => {
+    setScenes((all) => all.map((x) => (keyOf(x) === keyOf(s) ? s : x)));
+    loadScenes(keyOf(s));
+  };
+  const nextKey = scene ? queue[queue.indexOf(keyOf(scene)) + 1] ?? null : null;
 
   const ref: SceneRef | null = projectId && doc && scene ? { projectId, doc, scene } : null;
   const step = cand ? 2 : result ? 1 : 0;
@@ -234,11 +272,27 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
         onSettings={() => setDialog("settings")}
       />
       <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />
-      <SettingsDialog open={dialog === "settings"} onClose={() => setDialog(null)} preferences={prefs} onPreferences={onPrefs} />
+      <SettingsDialog open={dialog === "settings"} onClose={() => { setDialog(null); loadTools(); }} preferences={prefs} onPreferences={onPrefs} />
       {page === "workbench" && (<>
-      <StepBar active={step} projectId={projectId} docs={docs} docId={docId} onDoc={setDocId} onAllDecisions={() => setPage("overview")} />
+      <StepBar active={step} projectId={projectId} docs={docs} docId={docId} onDoc={(id) => { setScope("pdf"); setDocId(id); }} onAllDecisions={() => setPage("overview")} />
       <main className="ox-main">
-        <RequirementsPanel projectId={projectId} doc={doc} scenes={scenes} scene={scene} onPick={pickScene} />
+        <RequirementsPanel
+          projectId={projectId}
+          docs={docs}
+          doc={doc}
+          onDoc={(id) => { setScope("pdf"); setDocId(id); }}
+          onDocsChanged={(select) => projectId && loadDocs(projectId, select)}
+          scope={scope}
+          onScope={setScope}
+          scenes={scenes}
+          scene={scene}
+          selectedKey={selected}
+          onPick={pickScene}
+          onQueue={setQueue}
+          tab={leftTab}
+          onTab={setLeftTab}
+          onSceneChanged={sceneChanged}
+        />
         <SearchPanel
           query={query}
           onQuery={setQuery}
@@ -257,14 +311,26 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
           searching={searching}
           error={searchError}
           canSearch={!!projectId && (!!scene || !!query.trim())}
-          hasScene={!!scene}
+          scene={scene}
+          onClearScene={clearScene}
           activeKey={activeKey}
           onActivate={activate}
           checked={checked}
           onChecked={setChecked}
           active={cand}
+          esmini={esmini}
+          onSettings={() => setDialog("settings")}
         />
-        <DecisionPanel sceneRef={ref} cand={cand} searching={searching} query={query} lang={lang} />
+        <DecisionPanel
+          sceneRef={ref}
+          cand={cand}
+          searching={searching}
+          query={query}
+          lang={lang}
+          onReviewFacts={() => setLeftTab("facts")}
+          onSaved={() => scene && loadScenes(keyOf(scene))}
+          onNext={nextKey ? () => pickScene(nextKey) : undefined}
+        />
       </main>
       </>)}
       {page === "overview" && <OverviewPage projectId={projectId} onNavigate={setPage} onOpenScene={openScene} />}

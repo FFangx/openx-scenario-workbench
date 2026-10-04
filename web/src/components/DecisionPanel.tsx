@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { App, Button, Dropdown, Empty, Space, Spin, Tooltip } from "antd";
 import {
+  ArrowRightOutlined,
   CheckCircleFilled,
+  CheckOutlined,
+  CodeOutlined,
+  FileSearchOutlined,
   CloseCircleFilled,
   DownOutlined,
   DownloadOutlined,
@@ -15,6 +19,7 @@ import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate
 import { useT } from "../i18n";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
+import { ExplanationDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
 
 const SUB: Record<string, [string, string]> = {
   direct: ["候选场景无需修改即可复用。", "The candidate scenario can be reused without modification."],
@@ -48,12 +53,23 @@ interface Props {
   searching: boolean;
   query: string;
   lang: Lang;
+  onReviewFacts: () => void;
+  onSaved: () => void;
+  onNext?: () => void;
 }
 
-export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props) {
+export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReviewFacts, onSaved, onNext }: Props) {
   const { message } = App.useApp();
   const { t } = useT();
   const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<"files" | "checks" | "explain" | null>(null);
+  const [explanationId, setExplanationId] = useState<string | undefined>();
+  const [saved, setSaved] = useState(false);
+  const identity = `${sceneRef?.scene.document_id}/${sceneRef?.scene.scene_id}@${sceneRef?.scene.revision}:${cand?.asset_id}/${cand?.version_id}:${lang}`;
+  useEffect(() => {
+    setExplanationId(undefined);
+    setSaved(false);
+  }, [identity]);
 
   if (!cand) {
     return (
@@ -81,10 +97,22 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
     lang,
     asset_id: cand.asset_id,
     version_id: cand.version_id ?? "",
+    explanation_id: explanationId,
   };
   const stem = `reuse_${scene?.section_id || "search"}_${basename(cand.xosc).replace(/\.xosc$/i, "")}`;
 
-  const exportAs = async (fmt: "json" | "csv") => {
+  const exportAs = async (fmt: "json" | "csv" | "html") => {
+    if (fmt === "html") {
+      setBusy(true);
+      try {
+        download(`${stem}.html`, await api.traceReport(request), "text/html");
+      } catch (e) {
+        message.error((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (fmt === "csv") {
       const lines = [["field", "requirement", "candidate", "status", "action"].join(",")].concat(
         cand.differences.map((d) => [categoryLabel(d, lang), d.requested_label, d.candidate_label, STATUS(d, lang).label, d.action].map(csvCell).join(",")),
@@ -107,6 +135,8 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
     try {
       await api.saveDecision(request);
       message.success(t("决策已保存到当前项目，并固定了所选资产版本。", "Decision saved to this project and pinned to the selected asset version."));
+      setSaved(true);
+      onSaved();
     } catch (e) {
       message.error((e as Error).message);
     } finally {
@@ -143,6 +173,12 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
         </div>
         <div className="big">{verdictLabel(cand.level, cand.review_kind, lang)}</div>
         <div className="sub">{t(...SUB[cand.level === "review" ? (SUB[cand.review_kind] ? cand.review_kind : "partial") : cand.level])}</div>
+        {cand.level === "review" && scene && cand.review_kind !== "standards" && (
+          <Button size="small" className="review-facts" onClick={onReviewFacts}>{t("返回核对需求事实", "Review requirement facts")}</Button>
+        )}
+        {cand.level === "review" && cand.review_kind === "standards" && (
+          <Button size="small" className="review-facts" onClick={() => setDialog("checks")}>{t("查看文件标准检查", "View file standard checks")}</Button>
+        )}
       </div>
 
       <div className="box flush sel-item">
@@ -155,11 +191,25 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
               {cand.display_title}
             </div>
           </div>
-          <Button href={urls.file(cand, "scenario")} target="_blank">
-            <span style={{ color: "var(--link)" }}>
-              {t("打开 XOSC", "Open XOSC")} <ArrowUpRight />
-            </span>
-          </Button>
+          <Dropdown
+            trigger={["click"]}
+            placement="bottomRight"
+            menu={{
+              items: [
+                { key: "xosc", label: <a href={urls.file(cand, "scenario")} target="_blank" rel="noreferrer">{t("打开 XOSC", "Open XOSC")} <ArrowUpRight /></a> },
+                { key: "files", label: t("查看源文件", "View source files"), icon: <CodeOutlined /> },
+                { key: "checks", label: t("文件标准检查", "File standard checks"), icon: <SafetyCertificateOutlined /> },
+                { key: "explain", label: t("证据解释", "Evidence explanation"), icon: <FileSearchOutlined />, disabled: !scene },
+              ],
+              onClick: ({ key }) => key !== "xosc" && setDialog(key as "files" | "checks" | "explain"),
+            }}
+          >
+            <Button>
+              <span style={{ color: "var(--link)" }}>
+                {t("文件与证据", "Files & evidence")} <DownOutlined />
+              </span>
+            </Button>
+          </Dropdown>
         </div>
         <div className="kvt">
           <span>{t("功能", "Function")}</span>
@@ -172,7 +222,9 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
           <span>{cand.change_cost == null ? "—" : `${cand.change_cost.toFixed(1)} ${t("（相对值）", "(relative)")}`}</span>
           <span>{t("标准检查", "Standard checks")}</span>
           <span className={std.passed ? "cost-Low" : "cost-Medium"}>
-            {std.passed ? t("已通过", "Passed") : `${t("待完成：", "Pending: ")}${Object.entries(std.pending).map(([k, v]) => `${k} ${v}`).join(", ")}`}
+            <a className="plain-link" onClick={() => setDialog("checks")}>
+              {std.passed ? t("已通过", "Passed") : `${t("待完成：", "Pending: ")}${Object.entries(std.pending).map(([k, v]) => `${k} ${v}`).join(", ")}`}
+            </a>
           </span>
         </div>
       </div>
@@ -281,20 +333,33 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang }: Props)
             menu={{
               items: [
                 { key: "json", label: t("导出追溯 JSON", "Export trace as JSON") },
+                { key: "html", label: t("导出 HTML 评估报告", "Export HTML assessment report") },
                 { key: "csv", label: t("导出差异 CSV", "Export differences as CSV") },
               ],
-              onClick: ({ key }) => exportAs(key as "json" | "csv"),
+              onClick: ({ key }) => exportAs(key as "json" | "csv" | "html"),
             }}
           >
             <Button type="primary" size="large" icon={<DownOutlined />} aria-label={t("更多导出选项", "More export options")} />
           </Dropdown>
         </Space.Compact>
-        <Tooltip title={saveBlocked}>
-          <Button size="large" icon={<SaveOutlined />} disabled={!!saveBlocked || busy} onClick={save}>
-            {t("保存决策", "Save decision")}
+        {saved && onNext ? (
+          <Button size="large" icon={<ArrowRightOutlined />} onClick={onNext}>
+            {t("继续下一条需求", "Review next requirement")}
           </Button>
-        </Tooltip>
+        ) : (
+          <Tooltip title={saveBlocked ?? (saved ? t("已保存；再次保存会生成新的记录。", "Saved; saving again creates another record.") : null)}>
+            <Button size="large" icon={saved ? <CheckOutlined /> : <SaveOutlined />} disabled={!!saveBlocked || busy} onClick={save}>
+              {saved ? t("已保存", "Saved") : t("保存决策", "Save decision")}
+            </Button>
+          </Tooltip>
+        )}
       </div>
+      <SourceFilesDialog cand={cand} open={dialog === "files"} onClose={() => setDialog(null)} />
+      <StandardChecksDialog cand={cand} open={dialog === "checks"} onClose={() => setDialog(null)} />
+      {scene && (
+        <ExplanationDialog request={{ ...request, explanation_id: undefined }} open={dialog === "explain"} onClose={() => setDialog(null)}
+          onExplained={setExplanationId} />
+      )}
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { DownloadOutlined, FileTextOutlined, FormOutlined, InboxOutlined, Search
 import { api, urls, verdictClass, verdictLabel, type Overview, type Report, type ReportDetail, type TraceSource } from "../api";
 import { dateTime, useT } from "../i18n";
 import { PREVIEW_FAILED, valueLabel } from "../vocab";
+import { BatchCounts, BatchTable, encoderName } from "./BatchTable";
 import type { Page } from "./TopBar";
 
 interface Props {
@@ -284,46 +285,20 @@ function DecisionDetail({ projectId, detail, onOpenScene }: { projectId: string;
   );
 }
 
-const encoderName = (id: string | undefined, lang: string) =>
-  !id ? "—" : id.includes("bge-m3") ? (lang === "zh" ? "BGE-M3 语义检索" : "BGE-M3 semantic retrieval")
-    : id.startsWith("hashing-") ? (lang === "zh" ? "轻量离线检索" : "Lightweight offline retrieval") : id;
-
 function BatchDetail({ projectId, detail, onOpenScene }: { projectId: string; detail: ReportDetail; onOpenScene: (d: string, s: string) => void }) {
   const { t, lang } = useT();
   const trace = detail.trace;
-  const entries = (trace.entries ?? []).map((e, i) => ({ ...e, key: i }));
+  const entries = trace.entries ?? [];
   const [target, setTarget] = useState(0);
-  type Entry = (typeof entries)[number];
-  const columns: TableColumnsType<Entry> = [
-    {
-      title: t("结论", "Verdict"), key: "v", width: 150,
-      render: (_, e) => <Tag className={`mtag ${verdictClass(e.assessment.level)}`}>{verdictLabel(e.assessment.level, e.assessment.review_kind, lang)}</Tag>,
-    },
-    { title: t("需求场景", "Scene"), key: "s", ellipsis: true, render: (_, e) => e.source.title },
-    { title: t("页码", "Pages"), key: "p", width: 70, render: (_, e) => (e.source.evidence ?? []).map((x) => `${x.page_start}–${x.page_end}`).join(", ") || "—" },
-    { title: t("首选候选", "Best candidate"), key: "c", ellipsis: true, render: (_, e) => e.candidates[0]?.candidate.title ?? "—" },
-    { title: t("修订", "Rev."), key: "r", width: 50, render: (_, e) => e.source.revision },
-  ];
   return (
     <div className="ov-detail">
       <div className="sec-head">
         <span className="sec-title">{trace.source?.title}</span>
         <span className="muted">{t(`共 ${trace.scene_count ?? entries.length} 个场景`, `${trace.scene_count ?? entries.length} scenes`)} · {encoderName(trace.encoder, lang)}</span>
       </div>
-      <Table<Entry>
-        className="ov-table"
-        size="small"
-        rowKey="key"
-        columns={columns}
-        dataSource={entries}
-        pagination={false}
-        tableLayout="fixed"
-        scroll={{ y: 200 }}
-        rowClassName={(e) => (e.key === target ? "row-active" : "")}
-        onRow={(e) => ({ onClick: () => setTarget(e.key) })}
-      />
+      <BatchTable trace={trace} target={target} onTarget={setTarget} />
       <p className="muted ov-note">
-        {Object.entries(trace.counts ?? {}).map(([k, n]) => `${verdictLabel(k, k, lang)}: ${n}`).join(" · ")}
+        <BatchCounts trace={trace} />
         {" · "}{t("保存时的快照，含待复核和无法判断项。", "Saved assessment snapshot, including review and undecidable cases.")}
       </p>
       <div className="ov-actions">

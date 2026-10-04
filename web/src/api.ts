@@ -37,6 +37,58 @@ export interface Scene {
   actions: string[];
   road_types: string[];
   source_region: { page: number; clip: [number, number, number, number] } | null;
+  document_id: string;
+  structure: SceneStructure | Record<string, never>;
+  triggers: string[];
+  weather: string[];
+  time_of_day: string[];
+  parameters: Record<string, number>;
+  issues: string[];
+  ocr: boolean;
+  /** Only in queue listings: is this revision confirmed into the library, or already assessed. */
+  published?: boolean;
+  queue_status?: "pending" | "confirmed" | "assessed";
+}
+
+export interface Participant { kind: string; bearing: string; facing: string; actions: string[]; age?: string; [key: string]: unknown }
+
+export interface SceneStructure {
+  road_class: string;
+  tested_function: string;
+  test_intent: string;
+  ego_actions: string[];
+  semantic_triggers: string[];
+  participants: Participant[];
+  params: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export type SceneSchema = Record<
+  "road_class" | "tested_function" | "test_intent" | "ego_actions" | "semantic_triggers" | "weather" | "time_of_day"
+  | "participant_kind" | "bearing" | "facing" | "participant_actions" | "age",
+  string[]
+>;
+
+export interface Revision { revision: number; title: string; parameters: Record<string, number>; structure: SceneStructure | Record<string, never> }
+
+export interface ExtractionRecord { engine: string; current_engine: string; outdated: boolean; has_record: boolean; model: string | null; issues: string[]; flags: string[]; ocr: boolean }
+
+export interface Explanation {
+  evidence: { evidence_id: string; location: string; text: string }[];
+  insufficient: string[];
+  explanation_id?: string;
+  explanation?: { verdict: string; method: string; observations: { text: string; citations: string[] }[] };
+}
+
+export interface PreviewStatus {
+  state: "idle" | "starting" | "running" | "finished" | "failed" | "stopped";
+  asset_id?: string;
+  version_id?: string;
+  frames?: number;
+  error?: string;
+  snapshot_error?: string;
+  stream_url?: string;
+  log?: string;
 }
 
 export interface Difference {
@@ -52,6 +104,8 @@ export interface Difference {
   candidate_label: string;
   text: string;
 }
+
+export interface StandardCheck { status: string; standard?: string; version?: string | null; issues?: { message: string; line?: number | null }[]; detail?: string }
 
 export interface Candidate {
   asset_id: string;
@@ -72,7 +126,7 @@ export interface Candidate {
   change_cost: number | null;
   reasons: { code: string; label: string }[];
   differences: Difference[];
-  standard_checks: { passed: boolean; pending: Record<string, string> };
+  standard_checks: { passed: boolean; pending: Record<string, string>; checks?: Record<string, StandardCheck> };
   scenario: { name: string | null; entities: { name: string; kind: string; category: string | null }[]; actions: string[]; trigger_count: number; parameters: string[]; environment: Record<string, string | number> };
   road: { total_length_m: number; lane_count: number; lane_types: Record<string, number>; geometry_types: Record<string, number>; junction_count: number; road_count: number; revision: string | null };
   has_frame: boolean;
@@ -175,6 +229,8 @@ export interface Job {
   reports?: ImportReport[];
 }
 
+export type DecisionReq = MatchRequest & { asset_id: string; version_id: string; explanation_id?: string };
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
@@ -200,15 +256,36 @@ export const api = {
   projects: () => call<{ projects: Project[]; last_project_id: string | null }>("/api/projects"),
   selectProject: (id: string) => post<{ project_id: string }>(`/api/projects/${id}/select`, {}),
   documents: (pid: string) => call<PdfDocument[]>(`/api/projects/${pid}/documents`),
+  allScenes: (pid: string) => call<Scene[]>(`/api/projects/${pid}/scenes`),
+  sceneSchema: () => call<SceneSchema>("/api/scene-schema"),
+  revise: (pid: string, did: string, sid: string, edits: Record<string, unknown>) =>
+    post<Scene>(`/api/projects/${pid}/documents/${did}/scenes/${sid}/revisions`, { edits }),
+  revisions: (pid: string, did: string, sid: string) => call<Revision[]>(`/api/projects/${pid}/documents/${did}/scenes/${sid}/revisions`),
+  publish: (pid: string, did: string, sid: string, revision: number) =>
+    post<{ library_id: string; revision: number; reviewed_at: string }>(`/api/projects/${pid}/documents/${did}/scenes/${sid}/publish`, { revision }),
+  extraction: (pid: string, did: string) => call<ExtractionRecord>(`/api/projects/${pid}/documents/${did}/extraction`),
+  batch: (pid: string, did: string) => post<{ signature: string; trace: Trace }>(`/api/projects/${pid}/documents/${did}/batch`, {}),
+  batchSave: (pid: string, did: string, signature: string) =>
+    post<{ report_id: string }>(`/api/projects/${pid}/documents/${did}/batch/save`, { signature }),
+  explanation: (req: DecisionReq & { mode: "evidence" | "structural" | "model" }) => post<Explanation>("/api/explanation", req),
+  traceReport: async (req: DecisionReq) => {
+    const res = await fetch("/api/trace/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
+    return res.text();
+  },
+  previewStart: (assetId: string, versionId: string, duration: number) =>
+    post<PreviewStatus>(`/api/assets/${assetId}/versions/${versionId}/preview`, { duration }),
+  previewStatus: () => call<PreviewStatus>("/api/preview"),
+  previewStop: () => post<PreviewStatus>("/api/preview/stop", {}),
   scenes: (pid: string, did: string) => call<Scene[]>(`/api/projects/${pid}/documents/${did}/scenes`),
   library: () => call<Library>("/api/library"),
   search: (req: MatchRequest) => post<SearchResponse>("/api/search", req),
-  trace: (req: MatchRequest & { asset_id: string; version_id: string }) => post<Record<string, unknown>>("/api/trace", req),
+  trace: (req: DecisionReq) => post<Record<string, unknown>>("/api/trace", req),
   createProject: (name: string) => post<Project>("/api/projects", { name }),
   reports: (pid: string) => call<Report[]>(`/api/projects/${pid}/reports`),
   report: (pid: string, rid: string) => call<ReportDetail>(`/api/projects/${pid}/reports/${rid}`),
   overview: () => call<Overview>("/api/overview"),
-  saveDecision: (req: MatchRequest & { asset_id: string; version_id: string }) =>
+  saveDecision: (req: DecisionReq) =>
     post<{ report_id: string; saved_to: string }>("/api/decisions", req),
 
   settings: () => call<Settings>("/api/settings"),
@@ -238,7 +315,10 @@ export const urls = {
   pdf: (pid: string, did: string, page?: number) => `/api/projects/${pid}/documents/${did}/file${page ? `#page=${page}` : ""}`,
   report: (pid: string, rid: string, format: "json" | "html", lang: Lang) =>
     `/api/projects/${pid}/reports/${rid}/download?format=${format}&lang=${lang}`,
-  frame: (c: Candidate) => `/api/assets/${c.asset_id}/versions/${c.version_id}/frame`,
+  frame: (c: Candidate, bust?: number) => `/api/assets/${c.asset_id}/versions/${c.version_id}/frame${bust ? `?v=${bust}` : ""}`,
+  extraction: (pid: string, did: string) => `/api/projects/${pid}/documents/${did}/extraction/download`,
+  batch: (pid: string, did: string, signature: string, format: "json" | "html", lang: Lang) =>
+    `/api/projects/${pid}/documents/${did}/batch/${signature}/download?format=${format}&lang=${lang}`,
   file: (c: Candidate, role: "scenario" | "road") => `/api/assets/${c.asset_id}/versions/${c.version_id}/files/${role}`,
 };
 

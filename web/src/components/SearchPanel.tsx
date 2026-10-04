@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Alert, Button, Empty, Form, Image, Input, Select, Table, Tabs, Tag, Tooltip, type TableColumnsType } from "antd";
+import { Alert, Button, Empty, Form, Input, Select, Table, Tabs, Tag, Tooltip, type TableColumnsType } from "antd";
 import { CheckCircleFilled, CloseCircleFilled, CloseOutlined, FileOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
-import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Library, type SearchResponse } from "../api";
+import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Library, type Scene, type SearchResponse } from "../api";
 import { dateTime, useT } from "../i18n";
 import { ArrowUpRight } from "./ArrowUpRight";
+import { PreviewPlayer } from "./PreviewPlayer";
 
 type Show = "all" | Level;
 
@@ -20,7 +21,10 @@ interface Props {
   searching: boolean;
   error: string | null;
   canSearch: boolean;
-  hasScene: boolean;
+  scene: Scene | null;
+  onClearScene: () => void;
+  esmini: boolean;
+  onSettings: () => void;
   activeKey: string | null;
   onActivate: (key: string) => void;
   checked: string[];
@@ -137,7 +141,7 @@ export function SearchPanel(p: Props) {
           value={p.query}
           onChange={(e) => p.onQuery(e.target.value)}
           onPressEnter={() => p.canSearch && p.onSearch()}
-          placeholder={p.hasScene ? t("添加关键词细化当前场景的检索", "Add keywords to refine the selected scene") : t("输入描述，按文本检索相似资产", "Describe a scenario to find similar assets by text")}
+          placeholder={p.scene ? t("添加关键词细化当前场景的检索", "Add keywords to refine the selected scene") : t("输入描述，按文本检索相似资产", "Describe a scenario to find similar assets by text")}
         />
         <Button type="primary" onClick={p.onSearch} disabled={!p.canSearch} loading={p.searching}>
           {t("检索", "Search")}
@@ -145,6 +149,14 @@ export function SearchPanel(p: Props) {
         <Button onClick={p.onReset}>{t("重置", "Reset")}</Button>
       </div>
       <div className="chips">
+        {p.scene && (
+          <Tooltip title={t("关闭后按文本自由检索；结论只作文本召回，不作复用判断。", "Close to search by free text; results are text recall only, not a reuse decision.")}>
+            <Tag className="chip scene-chip" closable closeIcon={<CloseOutlined />} onClose={(e) => { e.preventDefault(); p.onClearScene(); }}>
+              {t("场景", "Scene")}
+              <b className="ell">{p.scene.title}</b>
+            </Tag>
+          </Tooltip>
+        )}
         {chips.length ? (
           chips.map(([k, v]) => (
             <Tag
@@ -311,19 +323,7 @@ export function SearchPanel(p: Props) {
               />
             </div>
             <div className="pv-img">
-              {c.has_frame ? (
-                <Image src={urls.frame(c)} alt={t("仿真画面", "Simulation frame")} />
-              ) : (
-                <div className="img-empty">
-                  <b>{t("尚无仿真画面", "No simulation frame")}</b>
-                  <span>{t("播放一次仿真后会保存画面。", "A frame is saved after the simulation has played once.")}</span>
-                </div>
-              )}
-              {c.has_frame && (
-                <a className="small-link" href={urls.frame(c)} target="_blank" rel="noreferrer">
-                  {t("查看大图", "View larger")} <ArrowUpRight />
-                </a>
-              )}
+              <PreviewPlayer key={`${c.asset_id}/${c.version_id}`} cand={c} esmini={p.esmini} onSettings={p.onSettings} />
             </div>
             <div className="pv-road">
               <div className="hd">
