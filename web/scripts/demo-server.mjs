@@ -18,7 +18,9 @@ function python() {
 
 /** Model credentials from the developer's shell must not reach the demo service. */
 function cleanEnv(dataDir) {
-  const env = { ...process.env, OPENX_DATA_DIR: dataDir, PYTHONUTF8: "1" };
+  // Run this checkout's sources, so the service finds web/dist next to them however the package was installed.
+  const pythonPath = [path.join(REPO, "src"), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+  const env = { ...process.env, OPENX_DATA_DIR: dataDir, PYTHONUTF8: "1", PYTHONPATH: pythonPath };
   for (const key of ["OPENX_LLM_URL", "OPENX_LLM_MODEL", "OPENX_LLM_API_KEY", "DEEPSEEK_API_KEY"]) delete env[key];
   return env;
 }
