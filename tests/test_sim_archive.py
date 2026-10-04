@@ -93,7 +93,7 @@ def test_sim_archive_reports_missing_road_and_accepts_supplement() -> None:
 
 
 def test_sim_archive_resolves_scenariomanager_map_id_reference() -> None:
-    map_id = "235c2ca0-1db7-11f1-8053-fbed59545267"
+    map_id = "7f3a1c20-0b5e-4d2a-9c41-5e8d2b6f0a17"
     payload = {
         "caseDef": {"id": "case-001", "name": "Obstacle response"},
         "caseData": {
