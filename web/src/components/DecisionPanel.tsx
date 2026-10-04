@@ -17,6 +17,7 @@ import {
 } from "@ant-design/icons";
 import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang } from "../api";
 import { useT } from "../i18n";
+import { valueLabel } from "../vocab";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
 import { ExplanationDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
@@ -215,7 +216,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
           <span>{t("功能", "Function")}</span>
           <span>{[cand.classification.function_type].flat().join(", ") || "—"}</span>
           <span>{t("道路 / 目标", "Road / target")}</span>
-          <span>{[cand.classification.label_road_type, ...[cand.classification.label_target_type].flat()].filter(Boolean).join(" · ") || "—"}</span>
+          <span>{[cand.classification.label_road_type, ...[cand.classification.label_target_type].flat()].filter(Boolean).map((x) => valueLabel(String(x), lang)).join(" · ") || "—"}</span>
           <span>{t("来源需求", "Source requirement")}</span>
           <span>{scene ? `${scene.section_id} · ${t("页", "pages")} ${scene.pages?.join("–") ?? "—"}` : t("文本检索", "Text search")}</span>
           <span>{t("预计修改成本", "Estimated change cost")}</span>

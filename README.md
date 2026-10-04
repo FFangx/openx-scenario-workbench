@@ -7,22 +7,26 @@ English | [中文](README.zh-CN.md)
 
 Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets from files or ScenarioManager-compatible `.sim` archives, and ranks candidates using text, scenario structure, and road fit.
 
-**Try it:** start the app, switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public demo → Load public demo**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. Semantic search and simulation have separate dependencies below.
+**Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, start it on the [authored demo workspace](#demo-workspace). Semantic search and simulation have separate dependencies below.
 
-![Current PDF workflow with project navigation, a reviewed requirement, ranked assets and a reuse assessment](docs/images/workbench-en.jpg)
+![Workbench with a requirement queue, ranked assets and a reuse assessment](docs/images/workbench-en.jpg)
 
-*Actual running UI with an authored PDF and parser-test asset. Requirement facts were reviewed manually; the screenshot demonstrates retrieval and assessment, not model extraction or simulator execution.*
+*The running workbench on the authored demo workspace: the requirement was reviewed and saved as revision 2, candidates are ranked, and the selected one needs a change. The authored parser fixtures do not pass the XSD checks, so the workbench keeps showing the pending standard check instead of claiming direct reuse.*
+
+![Asset management with a real esmini frame of the public cut-in example](docs/images/assets-en.jpg)
+
+*Asset management after importing the public esmini cut-in example (MPL-2.0) and playing it once: the frame is rendered by esmini, not drawn.*
 
 ## Using the workbench
 
 | Page or action | What to do |
 | --- | --- |
-| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a row to review classification, source files, standard checks and version history. |
-| **Play simulation** | Select an asset and click **Play simulation**. An installed Windows esmini is detected automatically; use **Advanced preview settings** for a custom installation. |
-| **Text search** | Find similar assets with BGE-M3; this page does not make a reuse decision. |
-| **PDF workflow** | Create a project, configure the language model in **Settings**, import a PDF, select a scene and review its evidence and facts before searching. The selected-scene workspace has evidence, candidates and assessment columns. |
-| **Match entire PDF and summarize** | Match all scenes in the selected document and export or save a version-pinned JSON/HTML summary. |
-| **Overview** | Inspect library statistics and reopen saved project reports. |
+| **Workbench** | Create a project from the project menu, configure the language model in **Settings**, and import a PDF from the PDF card's **⋯** menu. Pick a requirement: its source evidence, the ranked candidates and the reuse assessment appear side by side. Review and edit its typed facts under **Requirement facts**, publish the revision, then save the decision. |
+| **Free-text search** | Close the scene chip above the candidates and describe a scenario. Results are text recall only; no reuse decision is made. |
+| **Play simulation** | Use **Play**, **Stop** or **Capture frame** in the candidate preview or the asset detail. An installed Windows esmini is detected automatically; choose a custom installation under **Settings → Local service**. |
+| **Match entire PDF** | From the PDF card's **⋯** menu, match all scenes of the document and download or save a version-pinned JSON/HTML summary. |
+| **Overview** | Library statistics, recent imports, and saved decisions and summaries with their downloads; reopen a requirement to continue its review. |
+| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a version to review its preview, classification, source files, standard export and history. The PDF requirement library lists published requirements. |
 
 Asset versions are shared across projects. PDF sources, scene revisions and decisions belong to the selected project.
 
@@ -30,7 +34,7 @@ Asset versions are shared across projects. PDF sources, scene revisions and deci
 
 ![OpenX Scenario Workbench architecture](docs/images/architecture-overview.svg)
 
-The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The parser, retrieval core, and decision logic remain independent of Streamlit.
+The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The React interface talks to a local FastAPI service; the parser, retrieval core and decision logic are plain Python shared with the command-line tools.
 
 [Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
@@ -49,7 +53,7 @@ The two input paths meet only through stable representations: a PDF-derived `Sce
 - Builds participant interaction signatures from type, ego-relative bearing, facing direction, and actor-owned actions.
 - Reports grounded reuse differences such as a mismatched scenario family or participant interaction, or a missing relation, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.
-- Provides separate Overview, Text search, PDF workflow and Asset management pages; selecting a PDF scene opens its three-column evidence-to-decision workspace.
+- Provides Workbench, Overview and Asset management pages in Chinese and English; the workbench shows evidence, candidates and the assessment of the selected requirement side by side, and long-running imports run as background jobs with live progress.
 - Exports a structured decision trace through the web UI; the inspection and search CLIs expose the same parser and retrieval core.
 - Loads a fixed revision of an upstream esmini example for a repeatable demo.
 - Stores immutable asset versions in a machine-local global library, keeps named projects and multiple PDFs, and exports version-pinned JSON and HTML decisions.
@@ -65,7 +69,7 @@ See [PDF migration and model setup](docs/PDF_MIGRATION.md) for scope, storage an
 
 ## Quick start
 
-Requires **Python 3.10 or newer**. Commands below are run from the repository root.
+Requires **Python 3.10 or newer** and **Node.js 20 or newer** (to build the interface once). Commands below are run from the repository root.
 
 ```bash
 git clone https://github.com/FFangx/openx-scenario-workbench.git
@@ -85,22 +89,34 @@ Activate the environment:
 source .venv/bin/activate
 ```
 
-Install and start:
+Install, build the interface, and start:
 
 ```bash
 python -m pip install ".[dev]"
-python -m streamlit run src/openx_workbench/app.py
+cd web && npm ci && npm run build && cd ..
+openx-web
 ```
 
-Open the local URL printed by Streamlit. Use **Asset management → Import assets** for the public demo or your own files. The public demo downloads a scenario and its road from GitHub; uploads accept `.sim`, `.xosc`, `.xodr`, and portable `.zip` dependency packages. A `.sim` case is admitted only when its referenced road is available inside the archive or among the supplemental uploads; task details list missing road filenames so they can be supplied on reimport.
+Open <http://127.0.0.1:8765>. The service listens on this computer only. Use **Asset management → Import assets** for the public demo or your own files. The public demo downloads a scenario and its road from GitHub; uploads accept `.sim`, `.xosc`, `.xodr`, and portable `.zip` dependency packages. A `.sim` case is admitted only when its referenced road is available inside the archive or among the supplemental uploads; task details list missing road filenames so they can be supplied on reimport.
 
 ### Optional capabilities
 
 - **BGE-M3 search:** install with `python -m pip install ".[semantic]"`. The UI defaults to BGE-M3; weights are downloaded on first use unless cached and are not included in the repository. Choose the hashing baseline explicitly for an offline smoke check without model weights.
 - **PDF extraction:** configure the model endpoint, key and model in **Settings**. Import sends document text to that service. For scanned PDFs, install and configure local OCR as described in [PDF migration](docs/PDF_MIGRATION.md).
 - **Standard checks:** run `openx-validate --install-schemas` once to download the pinned schema registry; later checks run locally. Both XOSC and XODR must pass before direct reuse can be confirmed.
-- **Simulation:** install esmini separately on Windows. Detection checks `OPENX_ESMINI_PATH`, PATH, managed folders and esmini folders in Downloads, Desktop, Documents and Program Files. In **Settings → Local services**, **Browse installation folder** opens a native folder picker and saves a valid installation automatically; **Auto-detect** restores automatic discovery. esmini is not bundled; some extensions and missing dependencies prevent playback.
+- **Simulation:** install esmini separately on Windows. Detection checks `OPENX_ESMINI_PATH`, PATH, managed folders and esmini folders in Downloads, Desktop, Documents and Program Files. In **Settings → Local service**, **Browse installation folder** opens a native folder picker and saves a valid installation automatically; **Detect automatically** restores automatic discovery. esmini is not bundled; some extensions and missing dependencies prevent playback.
 - **Windows desktop entry:** follow [desktop launcher setup](docs/DESKTOP_LAUNCHER.md) for shortcuts and tray controls. Daily use requires no terminal.
+
+### Demo workspace
+
+`scripts/seed_demo_workspace.py` fills an empty folder with an authored demo: six reuse assets, a project with two protocol PDFs (English and Chinese) and reviewed typed requirements. Nothing is downloaded and no model is called.
+
+```bash
+python scripts/seed_demo_workspace.py demo-data
+OPENX_DATA_DIR=demo-data openx-web
+```
+
+On Windows PowerShell set the variable with `$env:OPENX_DATA_DIR = "demo-data"`. The demo never touches your normal data folder.
 
 ### CLI and offline sample
 
@@ -146,7 +162,7 @@ Place related `.xosc` and `.xodr` files under one directory. Pairing resolves ea
 openx-search examples/esmini "cut-in SpeedAction relative distance"
 ```
 
-**Text search** exposes the same retrieval core. For a requirement-based assessment, open **PDF workflow**, select an imported scene and review its facts. Its text, structured constraints and source evidence become the retrieval query; the candidate and assessment columns explain matching evidence, blocking differences, required edits and traceability links.
+Free-text search in the workbench uses the same retrieval core. For a requirement-based assessment, select an imported scene in the workbench and review its facts. Its text, structured constraints and source evidence become the retrieval query; the candidate and assessment columns explain matching evidence, blocking differences, required edits and traceability links.
 
 For semantic retrieval and a reusable on-disk index:
 
@@ -159,9 +175,9 @@ Semantic retrieval uses **BAAI/bge-m3** (BGE-M3), with no automatic fallback to 
 
 The name/label and name-free structural routes share one encoder. Typed PDF facts directly control reuse decisions; unsupported or unknown requirements require review. See [alignment, validation and measured limits](docs/REUSE_ALIGNMENT.md).
 
-Both workbench retrieval pages default to BGE-M3 and persist explicit baseline
-choices. In the PDF workflow, **Match entire PDF and summarize** matches all current
-document scenes through the same retrieval engine. JSON/HTML summaries preserve
+The workbench defaults to BGE-M3; choose the hashing baseline under **Settings →
+Display & search**. **Match entire PDF** matches all current document scenes through
+the same retrieval engine. JSON/HTML summaries preserve
 source revisions, candidate versions and pending review states. Saved summaries
 reopen in Overview and pin all included asset versions.
 
@@ -173,7 +189,9 @@ After changing Python source files, reinstall with `python -m pip install ".[dev
 python -m pytest -q
 ```
 
-CI tests on Windows and Linux with Python 3.10 and 3.12 and builds the distribution. Automated tests use local fixtures and mocked downloads; the live public demo is checked separately.
+For interface work, run `openx-web` and, in `web/`, `npm run dev`; Vite serves the interface on port 5173 and forwards `/api` to the service. `npm run build` type-checks and builds; `npm run verify:ui` then runs the browser checks against a throwaway demo workspace (it starts its own service and never uses your data folder).
+
+CI tests on Windows and Linux with Python 3.10 and 3.12, builds the distribution, and builds and checks the web interface. Automated tests use local fixtures and mocked downloads; the live public demo is checked separately.
 
 ## License and examples
 

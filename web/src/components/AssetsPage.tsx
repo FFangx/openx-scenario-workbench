@@ -84,7 +84,7 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
                   )}
                   {pending > 0 && !busy && (
                     <div className="pending-strip">
-                      <span>{t(`${pending} 个版本待模型复核分类`, `${pending} versions await model classification`)}</span>
+                      <span>{t(`${pending} 个版本待模型复核分类`, `Versions awaiting model classification: ${pending}`)}</span>
                       <Button size="small" icon={<RobotOutlined />} onClick={() => modelClassify()}>{t("继续模型分类", "Resume model classification")}</Button>
                     </div>
                   )}

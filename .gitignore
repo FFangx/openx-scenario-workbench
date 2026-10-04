@@ -21,3 +21,6 @@ pdf_blobs/
 
 # Local design mockups and browser review artifacts
 .impeccable/
+
+# Demo workspace created by scripts/seed_demo_workspace.py
+demo-data/

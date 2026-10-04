@@ -4,12 +4,9 @@ Double-click **OpenX** on the desktop to start the local service and open the
 workbench in your default browser. Reopening the shortcut reuses the running
 instance. Startup waits for the service health check before opening the browser.
 
-The launcher opens the React workbench (`web/`, served by `openx_workbench.api`)
-when its bundle is built and the `web` extra is installed; otherwise it falls back
-to the Streamlit workbench. PDF and asset imports, requirement editing and esmini
-preview generation still live in the Streamlit workbench: open it from the tray
-with **打开经典工作台（导入与仿真预览）**, or run the launcher with `--classic`. It
-is started only on request and shares the same local data.
+The launcher starts `openx_workbench.api`, which serves the React workbench from
+`web/dist` together with its local API. If the bundle has not been built, the
+launcher stops with a message explaining how to build it.
 
 Use **OpenX - Stop** on the desktop, or **关闭 OpenX** in the tray menu, to stop
 the service and all preview workers it owns. Closing a browser tab leaves the
@@ -24,9 +21,9 @@ esmini processes by executable name, and never closes your browser.
 
 ## Install for a development checkout
 
-Install the `desktop` and `web` optional dependencies in the project's `.venv`
-(`uv pip install -e ".[desktop,web]"`), build the web bundle once with
-`cd web && npm install && npm run build`, then run `scripts/install_desktop.ps1`
+Install the package with the `desktop` extra in the project's `.venv`
+(`python -m pip install ".[desktop]"`), build the web bundle once with
+`cd web && npm ci && npm run build`, then run `scripts/install_desktop.ps1`
 once. Rebuilding the bundle needs no launcher restart; Python source changes
 restart the service on the next open. The script creates the two shortcuts using
 the checkout's `pythonw.exe` and generates their icon. Normal daily use needs no
@@ -41,7 +38,7 @@ not a standalone distributable executable.
 
 Logs live under `%LOCALAPPDATA%/OpenXScenarioWorkbench/launcher`, or under
 `OPENX_DATA_DIR/launcher` when overridden. `launcher.log` records lifecycle events;
-`web-service.log` and `service.log` contain the React and Streamlit service output. Startup failures show a tray notification
+`web-service.log` contains the service output. Startup failures show a tray notification
 and allow retrying from the tray. The launcher selects an available localhost port.
 Its separate control endpoint also binds only to localhost and requires a random
 per-run token; duplicate shortcuts use it to request open or stop.
@@ -50,6 +47,6 @@ The normal `OPENX_ESMINI_PATH`, model configuration and data-directory environme
 settings are inherited. Existing esmini path selection in the workbench remains
 available. This launcher does not bundle esmini, models, credentials or asset data.
 
-Validation includes real Streamlit start/health/restart/stop, exclusive instance
+Validation includes real web service start/health/restart/stop, exclusive instance
 locking, rejection of unauthenticated control requests, and termination of a real
 grandchild process when the owned job closes.

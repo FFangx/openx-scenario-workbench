@@ -7,13 +7,14 @@
    the selected model, then save. Listing models and completing a JSON request
    are separate checks. Some services do not implement `/models`; manual IDs
    remain supported.
-2. Create/select a project and import a PDF in **PDF workflow**. Scanned pages require the optional local OCR runtime described below.
+2. Create/select a project and import PDFs from the PDF card's **⋯ → Import PDFs** in the workbench; extraction runs as a background job with live progress. Scanned pages require the optional local OCR runtime described below.
    Import sends document text to the configured model. It parses blocks and the
    chapter tree first, then performs scene-first extraction and classification.
-3. Select a scene, inspect its own and shared clauses, structure, classification
-   and review issues. Edits create a revision; original page evidence is immutable.
-4. **Confirm and publish revision** adds a snapshot to the machine-wide PDF
-   requirement library. Find it under **Asset management → PDF requirements**,
+3. Select a scene and open **Requirement facts** to inspect its clauses, structure,
+   classification and review issues. **Edit facts** creates a revision; original
+   page evidence is immutable.
+4. **Confirm and publish** adds a snapshot to the machine-wide PDF
+   requirement library. Find it under **Asset management → PDF requirement library**,
    download the scene package or return to the source document. These requirements
    are distinct from runnable XOSC/XODR assets.
 5. Import `.sim`, `.xosc`/`.xodr`, or ZIP assets as before. Enable model
@@ -21,7 +22,7 @@
    rule/model/final audit, correct the labels, and confirm them. Classification
    never modifies the immutable scenario or road files.
 
-Old rule-extracted PDFs remain readable. **Re-extract with V2** creates a separate
+Old rule-extracted PDFs remain readable. **⋯ → Extraction record → Extract scenes again** creates a separate
 document result; old revisions and saved reports remain intact. The legacy parser
 is available explicitly to offline callers via `engine="legacy"`; the UI never
 silently falls back to it after a V2/model failure.

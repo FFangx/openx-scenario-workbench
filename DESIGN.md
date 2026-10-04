@@ -92,6 +92,8 @@ components:
 
 # Design System: OpenX Scenario Workbench
 
+> **Current implementation (2026-10-04).** The workbench is the React interface in `web/`. Its tokens live in `web/src/theme.ts` and `web/src/styles.css` and follow the approved three-column comp (requirements and evidence, asset search and candidates, reuse decision and traceability). The Streamlit app this record was first derived from has been retired; its principles below still apply, while its file references and measurements are historical.
+
 ## Overview
 
 ### Current design instructions (2026-10-03)
@@ -127,7 +129,7 @@ This is a source-grounded merge of the incumbent direction, approved through `.i
 - Native, labeled controls and coordinated light, dark and system appearance.
 - Real PDF imagery and esmini frames; explicit unavailable and unresolved states.
 
-This record derives from `app.py`, `shell.css`, `appearance.py`, `workflow.css` and `preview_frames.py`; later production overrides take precedence over earlier base styles. It records implementation, not a claim of browser or accessibility acceptance. `PRODUCT.md` supplies durable traceability and engineering-honesty principles; its older capability exclusions are not used to deny implemented playback or PDF extraction paths.
+This record derives from the retired Streamlit sources (`app.py`, `shell.css`, `appearance.py`, `workflow.css`) and `preview_frames.py`; later production overrides take precedence over earlier base styles. It records implementation, not a claim of browser or accessibility acceptance. `PRODUCT.md` supplies durable traceability and engineering-honesty principles; its older capability exclusions are not used to deny implemented playback or PDF extraction paths.
 
 ## Colors
 

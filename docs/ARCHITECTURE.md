@@ -2,7 +2,7 @@
 
 ## One inspection, two entry points
 
-`workflow.inspect_pair` validates filenames and empty inputs, then calls `parser.parse_bundle`. Both the CLI and Streamlit UI use this workflow. XML documents must have the expected OpenSCENARIO or OpenDRIVE root element.
+`workflow.inspect_pair` validates filenames and empty inputs, then calls `parser.parse_bundle`. The CLI and the asset catalog use this workflow. XML documents must have the expected OpenSCENARIO or OpenDRIVE root element.
 
 `parser.py` extracts selected XML elements into the dataclasses in `models.py`. The resulting `ParseBundle` has a scenario, a road summary, and warning codes. `to_dict()` produces the JSON representation used by both interfaces.
 
@@ -18,15 +18,32 @@
 | `pdf_pipeline.py` | Explicit legacy offline extraction for historical compatibility |
 | `pdf_tables.py` | Geometrically verified native cell spans; original slots retained on ambiguity |
 | `pdf_v2/`, `pdf_extraction.py` | Migrated V2 chapter tree, scene-first v6, typed structures and evidence validation |
-| `llm_service.py`, `model_ui.py` | Shared model configuration, credential protection, discovery and probes |
+| `llm_service.py` | Shared model configuration, credential protection, discovery and probes |
 | `classification.py` | Rule/model/final asset labels and manual review history |
 | `reuse.py` | Participant interaction signatures, grounded differences, and change cost |
 | `workflow.py` | Shared input validation and inspection |
 | `demo.py` | Fetch the pinned public example; no model dependency |
-| `i18n.py` | Chinese and English UI/warning labels |
-| `app.py` | Views, session state, JSON download |
+| `i18n.py` | Chinese and English CLI/warning labels |
+| `api.py`, `api_common.py` | FastAPI application, loopback guard, search/trace/decision routes, shared caches |
+| `api_workflow.py`, `api_assets.py`, `api_jobs.py`, `api_preview.py`, `api_settings.py` | Routes for the requirement workflow, asset management, background jobs, esmini preview and settings |
+| `jobs.py`, `import_jobs.py` | Process-owned background jobs (submit, poll, cancel); persisted asset-import status |
+| `preferences.py` | Machine-local language, appearance, encoder and esmini preferences |
+| `web/` | React + Ant Design workbench (TypeScript), served from `web/dist` by the API |
 | `cli.py` | JSON on stdout, diagnostics on stderr |
 | `search_cli.py` | Build and query an OpenX asset catalog from a directory |
+
+## Application layers
+
+The workbench is a local web application. `openx_workbench.api` (FastAPI) serves the built React interface from `web/dist` and a JSON API under `/api`. The API is a thin layer: routes validate input and call the same stores, matcher and parser the CLI uses, so retrieval order, reuse verdicts and exported traces do not depend on the interface.
+
+- **Stores.** `AssetStore` (immutable asset versions shared by all projects), `ProjectStore` (projects and version-pinned reports) and `PdfStore` (PDF sources and scene revisions) write atomically to the machine-local data folder (`OPENX_DATA_DIR`, by default `%LOCALAPPDATA%\OpenXScenarioWorkbench`).
+- **Background jobs.** PDF extraction, asset import and model classification outlive a request. `jobs.py` runs each in a daemon thread; the client receives a job snapshot at once, polls `GET /api/jobs/{id}` and may request a stop, which takes effect after the current step. One job per kind runs at a time. The asset-import status is persisted so a restart reports an interruption instead of a silent loss.
+- **Caches.** Parsed assets are reused until a stored version, its preview status or its classification changes; the retrieval index is keyed by the catalog fingerprint and encoder.
+- **Settings.** The model key never leaves the service; responses only say whether one is saved, and a saved key never follows an edited endpoint. Folder dialogs and "open folder" act on fixed, server-known folders on the same desktop.
+- **Loopback only.** The service binds to `127.0.0.1`. Requests with a foreign `Host` header (DNS rebinding) and writes with a foreign `Origin` (cross-site forms or fetches) are refused.
+- **Preview.** One esmini worker runs at a time in a separate process and serves an MJPEG stream on its own loopback port; the page embeds it in an `<img>`. Polling the status records whether the version played.
+
+The React client (`web/src`) keeps no business logic: it renders API data, keeps the interface language in `(中文, English)` pairs next to their use, and stores preferences on the server. `web/scripts/verify-ui.mjs` exercises the full interface against a throwaway workspace seeded by `scripts/seed_demo_workspace.py`.
 
 ## What the fields mean
 
@@ -86,6 +103,6 @@ These limits determine the next parser improvements in the [roadmap](../DEVELOPM
 
 ## Data flow and dependencies
 
-Uploaded files are read in memory by the local app. The parser makes no network requests. Public-demo mode downloads a fixed OpenSCENARIO/OpenDRIVE pair from GitHub and caches it through Streamlit. The optional download script also saves the upstream license.
+Uploaded files are read in memory by the local service. The parser makes no network requests. The public demo import downloads a fixed OpenSCENARIO/OpenDRIVE pair from GitHub and imports it like any upload. The optional download script also saves the upstream license.
 
 OpenX XML parsing, retrieval and structural decisions run without an API key. Default PDF scene extraction requires a configured model; legacy rule extraction remains an explicit offline API option. Lightweight retrieval has no model download. BGE semantic retrieval is an optional local dependency and downloads the model on first use. On-demand model explanations send the selected evidence payload to the configured service only when explicitly requested in the UI.

@@ -1,6 +1,6 @@
 # Local asset versions and esmini preview
 
-The Streamlit workbench now imports paired XOSC/XODR scenarios into a global,
+The workbench imports paired XOSC/XODR scenarios into a global,
 machine-local library. A SIM import retains the original archive, including its
 case JSON and other embedded files, alongside the generated XOSC and paired XODR.
 Each asset has a stable ID based on source and scenario names. Changed source or
@@ -13,22 +13,21 @@ from one SIM archive share one copy of the source archive.
 Asset management starts with a searchable asset table showing the latest version
 of each asset. Function, road, classification and preview filters narrow the
 visible rows; sorting and the latest-version control support larger libraries.
-Selecting a row opens a detail panel with overview, classification, source files
-and version history. No asset is selected automatically. Changing a search,
-filter, sort or version scope clears selection so a previous row index cannot
-open a different asset. Classification, preview, downloads and deletion apply
-to the exact selected version; history allows an
+Selecting a row opens a detail panel with overview and preview, classification,
+source files and version history. No asset is selected automatically. Selection
+follows the exact asset version, not a row position, so changing a search,
+filter or sort never opens a different asset. Classification, preview, downloads
+and deletion apply to the exact selected version; history allows an
 older version to be inspected. PDF requirements have their own library tab and
 can return to the original document and scene.
 
-The import workspace opens from the asset page and can be collapsed after files
-are submitted. Asset imports run in a background worker independent of page
-reruns. A compact task strip remains visible outside the collapsed import
-workspace, refreshing once per second with the current stage, saved or reused
-scenario count and classification progress. Current file, elapsed time, failures
-and SIM pairing reports expand in task details. The last task summary is restored
-in a new UI session. Saved assets become available before model classification
-finishes. The SIM summary
+**Import assets** opens a dialog for uploads or the public esmini example. The
+import runs as a background job on the service, so closing the dialog ("Continue
+in background") or the browser tab does not stop it. A job strip above the asset
+table shows the stage, saved or reused scenario count and classification
+progress; its details show the current file, elapsed time, errors and SIM pairing
+reports. The last job is shown again after a reload or service restart. Saved
+assets become available before model classification finishes. The SIM summary
 shows pairable versus total cases and missing road references; skipped cases are
 not reported as imported. Add the missing XODR files and reimport to include them.
 
@@ -49,11 +48,11 @@ are disabled while an import task is active.
 
 Data defaults to `%LOCALAPPDATA%/OpenXScenarioWorkbench` on Windows, outside
 the Git repository. Set `OPENX_DATA_DIR` to use another local directory. Never
-copy a private asset library into this public repository. The sidebar creates
-named local projects and restores the last selected one. Saving a PDF reuse
+copy a private asset library into this public repository. The project menu in
+the header creates named local projects and restores the last selected one. Saving a PDF reuse
 decision writes a report under the project and pins its exact asset version.
 Pinned versions cannot be deleted from Asset management.
-The home page lists saved decisions for the selected project and offers their
+Overview lists saved decisions for the selected project and offers their
 original JSON and HTML exports, even after scene revisions or newer asset imports.
 
 **Play simulation** starts a separate Python process that loads `esminiLib.dll`,
@@ -65,8 +64,8 @@ locations, including `%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini` and
 `~/.openx/tools/esmini`, plus esmini folders in Downloads, Desktop, Documents and
 Program Files. Versioned download folders are checked one level deep. The tool installation is separate from `OPENX_DATA_DIR`, so selecting a
 different asset store does not require configuring the simulator again. Normal
-playback shows tool readiness and one Play simulation action. Advanced preview
-settings offer a native folder browser for the installation root or its `bin`
+playback shows Play, Stop and Capture frame. **Settings → Local service** offers
+a native folder browser for the installation root or its `bin`
 directory; a valid choice is saved immediately. **Detect automatically** clears
 the saved override. An
 invalid explicit choice is rejected rather than falling back to another engine.
@@ -86,14 +85,15 @@ dependency path and checksum. A changed dependency creates a
 new asset version even when the XOSC and XODR are unchanged. A bare XOSC/XODR pair
 is still supported when it has no additional dependencies.
 
-Current scope: truthful global overview, separate text search and PDF workflow,
+Current scope: truthful global overview, a workbench that combines the PDF
+workflow with free-text search,
 asset management with historical-version inspection, local projects, saved
 version-pinned reuse decisions, JSON and readable HTML exports, and real inline
 preview. A project can now keep several uploaded PDFs; the PDF workflow offers
 per-document and all-scenes views. Fact edits create a numbered scene revision,
 while the original PDF and its page/section evidence remain unchanged. Exports
-identify the PDF document hash and scene revision. Text search displays similar
-assets only. Retrieval uses a persisted global vector index with FAISS recall
+identify the PDF document hash and scene revision. Free-text search (no selected
+requirement) displays similar assets only and never makes a reuse decision. Retrieval uses a persisted global vector index with FAISS recall
 when installed, followed by structural scoring. The strongest structural matches
 are retained even when they fall outside the semantic recall window. A PDF decision shows its
 immutable PDF evidence and parsed XOSC/XODR facts, and can request an on-demand

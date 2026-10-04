@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Alert, Button, Empty, Form, Input, Select, Table, Tabs, Tag, Tooltip, type TableColumnsType } from "antd";
 import { CheckCircleFilled, CloseCircleFilled, CloseOutlined, FileOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
-import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Library, type Scene, type SearchResponse } from "../api";
+import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Lang, type Library, type Scene, type SearchResponse } from "../api";
+import { valueLabel } from "../vocab";
 import { dateTime, useT } from "../i18n";
 import { ArrowUpRight } from "./ArrowUpRight";
 import { PreviewPlayer } from "./PreviewPlayer";
@@ -32,7 +33,7 @@ interface Props {
   active: Candidate | null;
 }
 
-const listText = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(", ") : v) || "—";
+const listText = (v: string | string[] | undefined, lang: Lang) => [v ?? []].flat().filter(Boolean).map((x) => valueLabel(x, lang)).join(", ") || "—";
 const metres = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`);
 
 export function SearchPanel(p: Props) {
@@ -334,9 +335,9 @@ export function SearchPanel(p: Props) {
                 <span>{t(`${c.road.road_count} 条道路 · ${c.road.junction_count} 个交叉口`, `${c.road.road_count} roads · ${c.road.junction_count} junctions`)}</span>
               </div>
               <div className="kv" style={{ gridTemplateColumns: "72px 1fr", marginTop: 6, paddingLeft: 4, rowGap: 3 }}>
-                <span>{facetLabel("function_type", lang)}</span><span>{listText(c.classification.function_type)}</span>
-                <span>{facetLabel("label_road_type", lang)}</span><span>{listText(c.classification.label_road_type)}</span>
-                <span>{facetLabel("label_target_type", lang)}</span><span>{listText(c.classification.label_target_type)}</span>
+                <span>{facetLabel("function_type", lang)}</span><span>{listText(c.classification.function_type, lang)}</span>
+                <span>{facetLabel("label_road_type", lang)}</span><span>{listText(c.classification.label_road_type, lang)}</span>
+                <span>{facetLabel("label_target_type", lang)}</span><span>{listText(c.classification.label_target_type, lang)}</span>
               </div>
               <a className="small-link" href={urls.file(c, "road")} target="_blank" rel="noreferrer">
                 {t("打开 XODR", "Open XODR")} <ArrowUpRight />
