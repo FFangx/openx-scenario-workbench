@@ -25,6 +25,8 @@ openx-evaluate = "openx_workbench.evaluation:main"
 openx-validate = "openx_workbench.schema_validation:main"
 openx-setup-ocr = "openx_workbench.ocr_setup:main"
 openx-web = "openx_workbench.api:main"
+openx-demo = "openx_workbench.demo_workspace:main"
+openx-ablation = "openx_workbench.ablation:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openx_workbench"]

@@ -1,0 +1,127 @@
+# Reuse evaluation and ablation
+
+This page measures how the workbench ranks library assets for a typed requirement
+and whether its reuse verdict is right, and which part of the ranking does the work.
+Everything runs on the authored [reuse benchmark](../examples/reuse-benchmark/)
+and is reproducible from this repository.
+
+**Short answer:** on this benchmark, names and text similarity are weak evidence;
+the structural comparison carries both retrieval and the verdict. Similarity
+computed over the same structural facts finds most right candidates, but cannot
+tell whether the top hit may be reused as is.
+
+## Benchmark
+
+| | |
+|---|---|
+| Library | 25 OpenSCENARIO assets on two authored OpenDRIVE roads (straight and curved, two lanes per direction) |
+| Families | AEB car-to-car (stationary, moving, braking), truck, motorcycle, cyclist and pedestrian cases, oncoming car, ACC follow/brake/cut-in/cut-out, BSM |
+| Variants | ego speed, night, rain, curve, an extra roadside pedestrian, and one asset whose target start position is not declared |
+| Requirements | 35 typed requirements, 19 in Chinese and 16 in English, each with a title and protocol-style text |
+| Expected best verdict | 24 direct, 7 modify, 1 review, 3 new build |
+
+Every asset is generated from its specification in
+[`benchmark.json`](../examples/reuse-benchmark/benchmark.json) by
+`scripts/build_reuse_benchmark.py`; a test fails if the committed files drift.
+Nothing comes from a test protocol, a company library or a third-party dataset.
+
+**Labels.** For every requirement, `relevant` names every asset that needs the
+least change, with the verdict a reviewer following the documented
+[reuse contract](REUSE_ALIGNMENT.md) expects; `confusers` add similar-looking
+assets and their verdicts (99 labelled pairs in total). Labels were declared
+from the asset specifications before running the system. The first run found one
+labelling mistake, not a system error: a child-crossing requirement states no time
+of day, so the night variant needs the same change as the day asset and is now
+also listed as relevant.
+
+## Rankers and conditions
+
+| Ranker | What orders the library |
+|---|---|
+| Name similarity | Cosine similarity of requirement text against asset text (title, labels, entity, action and road statistics) |
+| Structure-text similarity | Cosine similarity of the two canonical, name-free structure summaries: the same facts the rules use, compared by an encoder |
+| Structural rules only | Blocking differences, then estimated change cost; ties keep library order |
+| Rules + similarity | The workbench ranking: rules first, similarity only within an equal structural bucket |
+
+Each encoder ranker runs with the hashing baseline and with BGE-M3. Each run is
+repeated with **descriptive** asset names and with **opaque** names
+(`Asset 001` …), which removes the file names and descriptions a curated library
+may or may not have.
+
+## Metrics
+
+- **R@k, MRR**: rank of the first relevant asset, over the 32 requirements that have one.
+- **Decision accuracy**: the verdict for the top hit equals the expected best verdict,
+  and the top hit is relevant. Similarity rankers give no verdict; their decision is read
+  as "reuse the top hit". That can only be right for the 24 direct cases, so their
+  ceiling is 68.6 %.
+- **Unsafe reuse**: requirements whose top hit would be reused as is although it is not
+  a direct match.
+- **Verdict accuracy, false direct**: for rankers that give verdicts, agreement on all
+  labelled pairs, and `direct` verdicts on any asset outside the relevant direct set.
+
+## Results
+
+Recorded on 2026-10-04 on a Windows development machine (Python 3.12, BGE-M3 through
+sentence-transformers 5.7.0 on CPU). The [full report](evaluations/ablation-20261004.json)
+holds per-requirement rankings and verdicts.
+
+| Ranker | Encoder | Names | R@1 | R@3 | MRR | Decision acc. | Unsafe reuse | Verdict acc. | False direct |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Name similarity | hashing | descriptive | 50.0% | 56.2% | 0.597 | 40.0% | 21/35 | n/a | n/a |
+| Name similarity | BGE-M3 | descriptive | 59.4% | 84.4% | 0.729 | 45.7% | 19/35 | n/a | n/a |
+| Name similarity | hashing | opaque | 6.2% | 25.0% | 0.244 | 5.7% | 33/35 | n/a | n/a |
+| Name similarity | BGE-M3 | opaque | 28.1% | 59.4% | 0.465 | 14.3% | 30/35 | n/a | n/a |
+| Structure-text similarity | hashing | either | 96.9% | 96.9% | 0.977 | 68.6% | 11/35 | n/a | n/a |
+| Structure-text similarity | BGE-M3 | either | 87.5% | 96.9% | 0.924 | 60.0% | 14/35 | n/a | n/a |
+| Structural rules only | — | either | 100.0% | 100.0% | 1.000 | 100.0% | 0/35 | 100.0% | 0 |
+| Rules + similarity (workbench) | hashing or BGE-M3 | either | 100.0% | 100.0% | 1.000 | 100.0% | 0/35 | 100.0% | 0 |
+
+"Either" rows gave identical results with descriptive and opaque names.
+
+## What the numbers say
+
+1. **Names are unreliable evidence.** With good English names, name similarity puts a
+   right asset first for half (hashing) to 59 % (BGE-M3) of requirements. Hashing finds
+   29 % of the Chinese requirements against English names, BGE-M3 59 %. With opaque names
+   both collapse (6 % and 28 %).
+2. **The structural facts carry the retrieval signal.** Comparing canonical structure
+   summaries reaches 88–97 % R@1 whatever the names. BGE-M3 does worse than hashing here:
+   it blurs tokens that differ in one decisive word, ranking a stationary car above a
+   braking one and a left cut-in above a right one. Exact tokens suit this text better
+   than semantic smoothing.
+3. **Similarity cannot decide reuse.** Even the best similarity ranker would reuse a wrong
+   or unverified asset in 11 of 35 requirements: every case where the best asset needs a
+   change, needs review, or no asset fits. The structural verdict separates those cases
+   without a single false `direct`.
+4. **Within-bucket similarity changes nothing here.** Rules alone already reach 100 %. This
+   follows from how relevance is labelled (least change under the contract), so the
+   benchmark does not measure the value of the similarity tie-break among assets needing
+   the same change.
+
+## Limits
+
+- The verdict labels follow the same documented contract the rules implement. A 100 %
+  verdict accuracy shows the implementation is consistent with that contract on these
+  cases; it does not show that the contract matches every engineer's judgement.
+- Requirements enter as reviewed typed structures. PDF extraction errors, which dominate
+  real use, are not part of this benchmark.
+- 25 assets and 35 requirements are small and authored by the same person who wrote the
+  rules. A licensed public corpus with independently reviewed labels is still needed for a
+  business accuracy claim.
+- The assets are parser inputs, not certified executable scenarios; they are not checked
+  against the XSD here or run in esmini.
+- Query times in the report come from a development machine and are not a benchmark.
+
+## Reproduce
+
+```bash
+openx-ablation                          # hashing only, no model needed
+openx-ablation --encoders hashing bge --output report.json --markdown table.md
+python scripts/build_reuse_benchmark.py --check
+```
+
+`openx-ablation` exits non-zero if the workbench ranking gives a false `direct` or an
+unsafe reuse. `tests/test_reuse_benchmark.py` runs the hashing gate in CI, and
+`tests/test_demo_workspace.py` checks that the benchmark demo workspace, served through the
+API, reaches the same decisions.

@@ -18,6 +18,13 @@ To refresh: seed a new folder, run `openx-validate --install-schemas` and
 Keep evidence and check states visible; never relabel a pending check as a
 successful reuse or preview.
 
+`demo-en.gif` / `demo-zh.gif` step through four requirements of the authored
+[reuse benchmark](../../examples/reuse-benchmark/) in the running workbench: two
+direct structural matches (standard checks pending, since no XSD registry was
+installed for the recording), one needing parameter changes and one with no
+reusable asset. Regenerate them with `node scripts/demo-gif.mjs en|zh` in `web/`
+after `npm run build`; the script seeds its own throwaway workspace.
+
 `architecture-overview.svg` is the editable architecture illustration. It includes
 BGE-M3 recall, structural comparison, the XSD confirmation gate and all four
 assessment outcomes.

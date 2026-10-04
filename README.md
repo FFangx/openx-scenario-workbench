@@ -7,7 +7,7 @@ English | [中文](README.zh-CN.md)
 
 Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets from files or ScenarioManager-compatible `.sim` archives, and ranks candidates using text, scenario structure, and road fit.
 
-**Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, start it on the [authored demo workspace](#demo-workspace). Semantic search and simulation have separate dependencies below.
+**Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, run `openx-demo` after installing: it opens the workbench on an authored library of 25 assets and 35 reviewed requirements ([demo workspace](#demo-workspace)). Semantic search and simulation have separate dependencies below.
 
 ![Workbench with a requirement queue, ranked assets and a reuse assessment](docs/images/workbench-en.jpg)
 
@@ -37,6 +37,18 @@ Asset versions are shared across projects. PDF sources, scene revisions and deci
 The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. Vector recall finds candidates; explicit scenario and road constraints rerank them; source evidence and parsed candidate facts ground the final reuse decision. The React interface talks to a local FastAPI service; the parser, retrieval core and decision logic are plain Python shared with the command-line tools.
 
 [Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## Evaluation
+
+An authored [reuse benchmark](examples/reuse-benchmark/) of 25 assets and 35 Chinese and English requirements, labelled with their expected candidates and verdicts, measures retrieval and the reuse verdict, and an ablation shows which part of the ranking does the work:
+
+| Ranker | R@1 (descriptive names) | R@1 (opaque names) | Top hit wrongly reusable |
+|---|---:|---:|---:|
+| Name similarity (BGE-M3) | 59.4% | 28.1% | 19–30 of 35 |
+| Structure-text similarity (hashing) | 96.9% | 96.9% | 11 of 35 |
+| Workbench: structural rules, then similarity | 100% | 100% | 0 of 35 |
+
+Similarity over the structural facts finds most right assets, but cannot say when the best one still needs changes; the structural verdict makes no false `direct` call. The labels follow the documented reuse contract and the requirements enter as reviewed structures, so this checks consistency, not PDF extraction or engineering judgement. Method, full results and limits: [evaluation](docs/EVALUATION.md). Run it with `openx-ablation`.
 
 ## What it does
 
@@ -109,14 +121,19 @@ Open <http://127.0.0.1:8765>. The service listens on this computer only. Use **A
 
 ### Demo workspace
 
-`scripts/seed_demo_workspace.py` fills an empty folder with an authored demo: six reuse assets, a project with two protocol PDFs (English and Chinese) and reviewed typed requirements. Nothing is downloaded and no model is called.
+After the quick start install, one command starts the workbench on an authored demo and opens the browser:
 
 ```bash
-python scripts/seed_demo_workspace.py demo-data
-OPENX_DATA_DIR=demo-data openx-web
+openx-demo
 ```
 
-On Windows PowerShell set the variable with `$env:OPENX_DATA_DIR = "demo-data"`. The demo never touches your normal data folder.
+It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 25 assets and a project with an English and a Chinese protocol PDF whose 35 requirements are already reviewed. Pick a requirement to see its ranked candidates and verdict:
+
+![openx-demo stepping through four requirements: two direct matches, one needing parameter changes, one with no reusable asset](docs/images/demo-en.gif)
+
+Nothing is downloaded, no model is called, search uses the hashing baseline (switch to BGE-M3 in **Settings** if installed), and the folder is removed when you stop it with Ctrl+C. Run it from the repository root; it serves on <http://127.0.0.1:8770> so it can run beside your normal workbench.
+
+`openx-demo --data-dir demo-data` keeps the workspace for later runs; `--dataset fixtures` loads the six-asset parser fixtures used by the browser checks. To seed a folder without starting the service, run `python scripts/seed_demo_workspace.py demo-data --dataset benchmark` and start `openx-web` with `OPENX_DATA_DIR=demo-data` (PowerShell: `$env:OPENX_DATA_DIR = "demo-data"`). The demo never touches your normal data folder.
 
 ### CLI and offline sample
 

@@ -23,6 +23,9 @@
 | `reuse.py` | Participant interaction signatures, grounded differences, and change cost |
 | `workflow.py` | Shared input validation and inspection |
 | `demo.py` | Fetch the pinned public example; no model dependency |
+| `demo_workspace.py` | Seed the authored demo workspaces; `openx-demo` serves one from a temporary folder |
+| `evaluation.py`, `ablation.py` | Fixture regression gate; benchmark retrieval/verdict metrics and ranking ablation |
+| `checkout.py` | Locate the checkout holding `web/dist` and the examples after a normal install |
 | `i18n.py` | Chinese and English CLI/warning labels |
 | `api.py`, `api_common.py` | FastAPI application, loopback guard, search/trace/decision routes, shared caches |
 | `api_workflow.py`, `api_assets.py`, `api_jobs.py`, `api_preview.py`, `api_settings.py` | Routes for the requirement workflow, asset management, background jobs, esmini preview and settings |

@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = path.resolve(WEB, "..");
 
-function python() {
+export function python() {
   if (process.env.OPENX_PYTHON) return process.env.OPENX_PYTHON;
   const venv = process.platform === "win32" ? path.join(REPO, ".venv", "Scripts", "python.exe") : path.join(REPO, ".venv", "bin", "python");
   return fs.existsSync(venv) ? venv : "python";
@@ -25,11 +25,12 @@ function cleanEnv(dataDir) {
   return env;
 }
 
-export async function startDemo({ port = 8767, preferences = { language: "en", encoder: "hashing" } } = {}) {
+/** dataset: "fixtures" (six parser fixtures, used by the UI checks) or "benchmark" (examples/reuse-benchmark). */
+export async function startDemo({ port = 8767, dataset = "fixtures", preferences = { language: "en", encoder: "hashing" } } = {}) {
   if (!fs.existsSync(path.join(WEB, "dist", "index.html"))) throw new Error("web/dist is missing; run `npm run build` first.");
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openx-demo-"));
   const env = cleanEnv(dataDir);
-  const seeded = spawnSync(python(), [path.join(REPO, "scripts", "seed_demo_workspace.py"), dataDir], { env, encoding: "utf8" });
+  const seeded = spawnSync(python(), [path.join(REPO, "scripts", "seed_demo_workspace.py"), dataDir, "--dataset", dataset], { env, encoding: "utf8" });
   if (seeded.status !== 0) throw new Error(`Seeding failed:\n${seeded.stderr}`);
   const seed = JSON.parse(seeded.stdout.trim().split("\n").pop());
 
