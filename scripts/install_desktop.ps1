@@ -5,8 +5,9 @@ $pythonPath = Join-Path $repoPath '.venv\Scripts\python.exe'
 $pythonwPath = Join-Path $repoPath '.venv\Scripts\pythonw.exe'
 $entryPath = Join-Path $PSScriptRoot 'openx_desktop.pyw'
 if (-not (Test-Path -LiteralPath $pythonwPath)) { throw 'Create the project .venv first.' }
-& $pythonPath -c 'import pystray, streamlit'
+& $pythonPath -c 'import pystray, fastapi, uvicorn'
 if ($LASTEXITCODE -ne 0) { throw 'Install the desktop extra in the project environment first.' }
+if (-not (Test-Path -LiteralPath (Join-Path $repoPath 'web\dist\index.html'))) { throw 'Build the web interface first: npm ci and npm run build in the web folder.' }
 $iconPath = Join-Path $PSScriptRoot 'openx.ico'
 & $pythonPath -c 'import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[1]) / "src")); from openx_workbench.launcher import tray_image; tray_image().save(sys.argv[2])' $repoPath $iconPath
 if ($LASTEXITCODE -ne 0) { throw 'Could not create the OpenX icon.' }

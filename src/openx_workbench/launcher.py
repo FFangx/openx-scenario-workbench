@@ -24,13 +24,12 @@ from .windows_job import WindowsJob
 
 
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
-HEALTH = {"web": "/api/health", "streamlit": "/_stcore/health"}
+HEALTH = "/api/health"
 
 
 def web_available():
-    """The React workbench needs its built bundle and the optional web dependencies."""
-    from importlib.util import find_spec
-    return (WEB_DIST / "index.html").is_file() and all(find_spec(name) for name in ("fastapi", "uvicorn"))
+    """The workbench serves its built React bundle; a source checkout needs `npm run build` once."""
+    return (WEB_DIST / "index.html").is_file()
 
 
 def free_port():
@@ -40,7 +39,7 @@ def free_port():
 
 
 def source_revision():
-    """Detect source updates without relying on Streamlit's module reloads."""
+    """Detect source updates so an open service restarts with the current code."""
     package = Path(__file__).resolve().parent
     digest = hashlib.sha256()
     for path in sorted(package.rglob("*.py")):
@@ -92,11 +91,8 @@ def send_control(path, action):
 
 
 class Service:
-    def __init__(self, root, kind="streamlit"):
-        if kind not in HEALTH:
-            raise ValueError(f"Unknown service kind: {kind}")
+    def __init__(self, root):
         self.root = root
-        self.kind = kind
         self.process = None
         self.job = None
         self.url = ""
@@ -115,14 +111,13 @@ class Service:
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1]) + os.pathsep + env.get("PYTHONPATH", "")
         # Use python.exe with CREATE_NO_WINDOW, retaining functional stdout/stderr.
         python = Path(sys.executable).with_name("python.exe")
-        log_name = "service" if self.kind == "streamlit" else "web-service"
-        log_path = self.root / f"{log_name}.log"
+        log_path = self.root / "web-service.log"
         if log_path.exists() and log_path.stat().st_size > 5_000_000:
-            log_path.replace(self.root / f"{log_name}.previous.log")
+            log_path.replace(self.root / "web-service.previous.log")
         try:
             with log_path.open("ab") as log:
                 self.process = subprocess.Popen(
-                    [str(python), "-m", "openx_workbench.launcher", "--serve", str(port), "--ui", self.kind],
+                    [str(python), "-m", "openx_workbench.launcher", "--serve", str(port)],
                     stdin=subprocess.PIPE, stdout=log, stderr=log, env=env,
                     cwd=Path(__file__).resolve().parents[2], creationflags=subprocess.CREATE_NO_WINDOW | 4)
             # Child waits on stdin: assign ownership before it can spawn any workers.
@@ -131,16 +126,16 @@ class Service:
             self.process.stdin.write(b"start\n")
             self.process.stdin.close()
             self.source_revision = revision
-            logging.info("Service started: kind=%s pid=%s url=%s", self.kind, self.process.pid, self.url)
+            logging.info("Service started: pid=%s url=%s", self.process.pid, self.url)
         except Exception:
             self.stop()
             raise
 
     def ready(self):
         if self.process is None or self.process.poll() is not None:
-            raise RuntimeError("网页服务已退出，请查看 service.log。")
+            raise RuntimeError("网页服务已退出，请查看 web-service.log。")
         try:
-            with urlopen(self.url + HEALTH[self.kind], timeout=0.5) as response:
+            with urlopen(self.url + HEALTH, timeout=0.5) as response:
                 return response.status == 200
         except OSError:
             return False
@@ -158,14 +153,13 @@ class Service:
 
 
 class Launcher:
-    def __init__(self, root, *, no_browser=False, ui=None):
+    def __init__(self, root, *, no_browser=False):
+        if not web_available():
+            raise RuntimeError("网页界面尚未构建：请在 web 文件夹运行 npm ci 和 npm run build。 / "
+                               "The web interface is not built: run npm ci and npm run build in the web folder.")
         self.root = root
         self.no_browser = no_browser
-        ui = ui or ("web" if web_available() else "streamlit")
-        logging.info("Primary workbench: %s", ui)
-        self.service = Service(root, ui)
-        # The Streamlit workbench still owns imports and preview generation; start it only on request.
-        self.classic = Service(root, "streamlit") if ui == "web" else self.service
+        self.service = Service(root)
         self.done = threading.Event()
         self.guard = threading.Lock()
         self.icon = None
@@ -178,7 +172,7 @@ class Launcher:
                     self.send_error(403)
                     return
                 action = self.path.removeprefix("/")
-                if action not in {"open", "restart", "stop", "classic"}:
+                if action not in {"open", "restart", "stop"}:
                     self.send_error(404)
                     return
                 self.send_response(202)
@@ -193,18 +187,14 @@ class Launcher:
     def dispatch(self, action):
         if action == "stop":
             self.done.set()
-        elif action == "classic":
-            threading.Thread(target=self.open, kwargs={"service": self.classic}, daemon=True).start()
         else:
             threading.Thread(target=self.open, args=(action == "restart",), daemon=True).start()
 
-    def open(self, restart=False, service=None):
-        service = service or self.service
+    def open(self, restart=False):
+        service = self.service
         with self.guard:
             if self.done.is_set():
                 return
-            if restart and self.classic is not self.service and self.classic.process is not None:
-                self.classic.stop()  # restarted on its next open, with the current sources
             try:
                 if (restart or service.process is None or service.process.poll() is not None
                     or service.needs_restart()):
@@ -233,8 +223,6 @@ class Launcher:
             import pystray
             self.icon = pystray.Icon("OpenX", tray_image(), "OpenX · 启动中", pystray.Menu(
                 pystray.MenuItem("打开工作台", lambda: self.dispatch("open"), default=True),
-                *([pystray.MenuItem("打开经典工作台（导入与仿真预览）", lambda: self.dispatch("classic"))]
-                  if self.classic is not self.service else []),
                 pystray.MenuItem("重启服务", lambda: self.dispatch("restart")),
                 pystray.MenuItem("查看日志", lambda: os.startfile(str(self.root))),
                 pystray.Menu.SEPARATOR,
@@ -256,7 +244,6 @@ class Launcher:
             self.server.server_close()
             with self.guard:
                 self.service.stop()
-                self.classic.stop()
             record_path.unlink(missing_ok=True)
             if self.icon:
                 self.icon.stop()
@@ -268,21 +255,12 @@ def main():
     parser.add_argument("--headless", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--no-browser", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--serve", type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--ui", choices=sorted(HEALTH), help="Workbench to open (default: web when built).")
-    parser.add_argument("--classic", action="store_true", help="Open the Streamlit workbench.")
     args = parser.parse_args()
     if args.serve:
         if sys.stdin.readline().strip() != "start":
             return
-        if args.ui == "web":
-            import uvicorn
-            uvicorn.run("openx_workbench.api:app", host="127.0.0.1", port=args.serve, log_level="warning")
-            return
-        import runpy
-        sys.argv = ["streamlit", "run", str(Path(__file__).with_name("app.py")),
-                    "--server.address", "127.0.0.1", "--server.port", str(args.serve),
-                    "--server.headless", "true", "--browser.gatherUsageStats", "false"]
-        runpy.run_module("streamlit", run_name="__main__")
+        import uvicorn
+        uvicorn.run("openx_workbench.api:app", host="127.0.0.1", port=args.serve, log_level="warning")
         return
     if os.name != "nt":
         raise RuntimeError("This launcher currently supports Windows only.")
@@ -295,16 +273,14 @@ def main():
         if not lock.acquire():
             for _ in range(30):
                 try:
-                    action = "stop" if args.stop else "classic" if args.classic else "open"
+                    action = "stop" if args.stop else "open"
                     if send_control(root / "instance.json", action):
                         return
                 except (OSError, ValueError, KeyError):
                     time.sleep(0.1)
             raise RuntimeError("已有 OpenX 启动器未响应。请查看启动器日志。")
         if not args.stop:
-            launcher = Launcher(root, no_browser=args.no_browser, ui=args.ui)
-            if args.classic:
-                launcher.service = launcher.classic
+            launcher = Launcher(root, no_browser=args.no_browser)
             launcher.run(headless=args.headless)
     except Exception as exc:
         logging.exception("Launcher failed")

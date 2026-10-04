@@ -157,3 +157,11 @@ def test_model_classification_job_for_pending_versions(client, monkeypatch):
 def test_unknown_jobs(client):
     assert client.get("/api/jobs/missing").status_code == 404
     assert client.post("/api/jobs/missing/cancel").status_code == 404
+
+
+def test_a_partial_import_keeps_its_report_after_a_restart(client):
+    report = {"source_name": "authored.sim", "case_count": 3, "imported_count": 2,
+              "missing_road_references": ["missing-authored-road.xodr"]}
+    ImportJob(AssetStore()).update(status="completed", stage="classifying", saved=2, done=2, total=2, reports=[report])
+    listed = client.get("/api/jobs", params={"kind": "asset_import"}).json()
+    assert [(item["status"], item["saved"], item["reports"]) for item in listed] == [("completed", 2, [report])]

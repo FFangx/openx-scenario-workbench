@@ -1,6 +1,6 @@
-"""Retrieval and assessment steps shared by the Streamlit app and the HTTP API.
+"""Retrieval and assessment steps used by the HTTP API and the command-line tools.
 
-Kept free of Streamlit so the API can import it; callers own their caching of the returned index.
+Callers own their caching of the returned index.
 """
 
 from __future__ import annotations
@@ -55,8 +55,8 @@ def open_index(catalog: list[OpenXAsset], identity: tuple[str, str]) -> OpenXInd
 def scene_query(package: ScenePackage | None, text: str, *, skip_contained: bool = False) -> RetrievalQuery | None:
     """The scene's retrieval query with stripped free `text` appended.
 
-    The web client prefills its search box with the scene title, so it passes `skip_contained` to avoid
-    repeating text the query already holds; the Streamlit box only carries extra criteria.
+    The web client prefills its search box with the scene title, so the API passes `skip_contained` to avoid
+    repeating text the query already holds.
     """
     query = scene_package_to_query(package) if package else None
     text = text.strip()

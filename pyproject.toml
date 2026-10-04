@@ -10,11 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Junyu Fang" }]
-dependencies = ["streamlit>=1.64,<2", "pymupdf>=1.24,<2", "Pillow>=10,<13", "pydantic>=2,<3", "lxml>=5,<7", "xmlschema>=4.3,<5"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30", "python-multipart>=0.0.9", "pymupdf>=1.24,<2", "Pillow>=10,<13", "pydantic>=2,<3", "lxml>=5,<7", "xmlschema>=4.3,<5"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9", "ruff>=0.16,<1", "httpx>=0.27"]
-web = ["fastapi>=0.115,<1", "uvicorn>=0.30", "python-multipart>=0.0.9"]
 desktop = ["pystray>=0.19,<1; sys_platform == 'win32'"]
 semantic = ["sentence-transformers>=3,<6", "faiss-cpu>=1.14,<2"]
 ocr = ["paddleocr[doc-parser]>=3.7,<3.8", "paddlepaddle>=3.2,<3.3; sys_platform == 'win32'", "paddlepaddle>=3.2,<4; sys_platform != 'win32'"]
