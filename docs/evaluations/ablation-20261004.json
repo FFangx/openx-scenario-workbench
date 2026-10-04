@@ -3,16 +3,16 @@
   "benchmark_version": "2026-10-04",
   "scope": "Retrieval and reuse-verdict regression for typed requirements against a small authored library. It does not measure PDF extraction, simulator execution or ASAM conformance.",
   "assets": 25,
-  "cases": 35,
+  "cases": 36,
   "languages": {
     "zh": 19,
-    "en": 16
+    "en": 17
   },
   "expected_best": {
     "direct": 24,
     "modify": 7,
     "review": 1,
-    "new_build": 3
+    "new_build": 4
   },
   "runtime": {
     "python": "3.12.3",
@@ -30,8 +30,8 @@
       "ranker": "rules",
       "encoder": null,
       "naming": "descriptive",
-      "cases": 35,
-      "retrieval_cases": 32,
+      "cases": 36,
+      "retrieval_cases": 33,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -42,7 +42,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 99,
+      "labelled_pairs": 103,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -462,6 +462,18 @@
           "unsafe_reuse": false,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrm-50",
+          "decision": "new_build",
+          "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -469,19 +481,19 @@
       "ranker": "name",
       "encoder": "hashing-blake2b-512",
       "naming": "descriptive",
-      "mean_query_ms": 0.11,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.5,
-      "recall_at_3": 0.5625,
-      "recall_at_5": 0.75,
-      "mrr": 0.5971,
+      "mean_query_ms": 0.24,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.4848,
+      "recall_at_3": 0.5455,
+      "recall_at_5": 0.7273,
+      "mrr": 0.5816,
       "recall_at_1_by_language": {
         "zh": 0.2941,
-        "en": 0.7333
+        "en": 0.6875
       },
-      "decision_accuracy": 0.4,
-      "unsafe_reuse": 21,
+      "decision_accuracy": 0.3889,
+      "unsafe_reuse": 22,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -829,6 +841,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrs-50-roadside-ped",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 12
         }
       ]
     },
@@ -836,19 +858,19 @@
       "ranker": "structure-text",
       "encoder": "hashing-blake2b-512",
       "naming": "descriptive",
-      "mean_query_ms": 0.08,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.9688,
-      "recall_at_3": 0.9688,
+      "mean_query_ms": 0.17,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.9394,
+      "recall_at_3": 0.9394,
       "recall_at_5": 1.0,
-      "mrr": 0.9766,
+      "mrr": 0.9545,
       "recall_at_1_by_language": {
         "zh": 1,
-        "en": 0.9333
+        "en": 0.875
       },
-      "decision_accuracy": 0.6857,
-      "unsafe_reuse": 11,
+      "decision_accuracy": 0.6667,
+      "unsafe_reuse": 12,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -1196,6 +1218,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrs-50-roadside-ped",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 4
         }
       ]
     },
@@ -1203,9 +1235,9 @@
       "ranker": "full",
       "encoder": "hashing-blake2b-512",
       "naming": "descriptive",
-      "mean_query_ms": 1.39,
-      "cases": 35,
-      "retrieval_cases": 32,
+      "mean_query_ms": 3.59,
+      "cases": 36,
+      "retrieval_cases": 33,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -1216,7 +1248,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 99,
+      "labelled_pairs": 103,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -1636,6 +1668,18 @@
           "unsafe_reuse": false,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrm-50",
+          "decision": "new_build",
+          "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -1643,19 +1687,19 @@
       "ranker": "name",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "descriptive",
-      "mean_query_ms": 100.77,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.5938,
-      "recall_at_3": 0.8438,
-      "recall_at_5": 0.9375,
-      "mrr": 0.7292,
+      "mean_query_ms": 261.62,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.5758,
+      "recall_at_3": 0.8182,
+      "recall_at_5": 0.9394,
+      "mrr": 0.7147,
       "recall_at_1_by_language": {
         "zh": 0.5882,
-        "en": 0.6
+        "en": 0.5625
       },
-      "decision_accuracy": 0.4571,
-      "unsafe_reuse": 19,
+      "decision_accuracy": 0.4444,
+      "unsafe_reuse": 20,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -2003,6 +2047,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrs-50-roadside-ped",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 4
         }
       ]
     },
@@ -2010,19 +2064,19 @@
       "ranker": "structure-text",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "descriptive",
-      "mean_query_ms": 297.85,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.875,
-      "recall_at_3": 0.9688,
-      "recall_at_5": 1.0,
-      "mrr": 0.9245,
+      "mean_query_ms": 527.05,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.8485,
+      "recall_at_3": 0.9394,
+      "recall_at_5": 0.9697,
+      "mrr": 0.8995,
       "recall_at_1_by_language": {
         "zh": 0.8824,
-        "en": 0.8667
+        "en": 0.8125
       },
-      "decision_accuracy": 0.6,
-      "unsafe_reuse": 14,
+      "decision_accuracy": 0.5833,
+      "unsafe_reuse": 15,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -2370,6 +2424,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrs-50-roadside-ped",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 10
         }
       ]
     },
@@ -2377,9 +2441,9 @@
       "ranker": "full",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "descriptive",
-      "mean_query_ms": 396.69,
-      "cases": 35,
-      "retrieval_cases": 32,
+      "mean_query_ms": 631.15,
+      "cases": 36,
+      "retrieval_cases": 33,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -2390,7 +2454,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 99,
+      "labelled_pairs": 103,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -2808,6 +2872,18 @@
           "expected": "new_build",
           "decision_correct": true,
           "unsafe_reuse": false,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrm-50",
+          "decision": "new_build",
+          "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
           "false_direct": [],
           "verdict_errors": {}
         }
@@ -2817,8 +2893,8 @@
       "ranker": "rules",
       "encoder": null,
       "naming": "opaque",
-      "cases": 35,
-      "retrieval_cases": 32,
+      "cases": 36,
+      "retrieval_cases": 33,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -2829,7 +2905,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 99,
+      "labelled_pairs": 103,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -3249,6 +3325,18 @@
           "unsafe_reuse": false,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrm-50",
+          "decision": "new_build",
+          "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -3256,19 +3344,19 @@
       "ranker": "name",
       "encoder": "hashing-blake2b-512",
       "naming": "opaque",
-      "mean_query_ms": 0.09,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.0625,
-      "recall_at_3": 0.25,
-      "recall_at_5": 0.5312,
-      "mrr": 0.2437,
+      "mean_query_ms": 0.26,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.0606,
+      "recall_at_3": 0.2424,
+      "recall_at_5": 0.5152,
+      "mrr": 0.2397,
       "recall_at_1_by_language": {
         "zh": 0,
-        "en": 0.1333
+        "en": 0.125
       },
-      "decision_accuracy": 0.0571,
-      "unsafe_reuse": 33,
+      "decision_accuracy": 0.0556,
+      "unsafe_reuse": 34,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -3616,6 +3704,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ped-long-40",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 9
         }
       ]
     },
@@ -3623,19 +3721,19 @@
       "ranker": "structure-text",
       "encoder": "hashing-blake2b-512",
       "naming": "opaque",
-      "mean_query_ms": 0.09,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.9688,
-      "recall_at_3": 0.9688,
+      "mean_query_ms": 0.27,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.9394,
+      "recall_at_3": 0.9394,
       "recall_at_5": 1.0,
-      "mrr": 0.9766,
+      "mrr": 0.9545,
       "recall_at_1_by_language": {
         "zh": 1,
-        "en": 0.9333
+        "en": 0.875
       },
-      "decision_accuracy": 0.6857,
-      "unsafe_reuse": 11,
+      "decision_accuracy": 0.6667,
+      "unsafe_reuse": 12,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -3983,6 +4081,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrs-50-roadside-ped",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 4
         }
       ]
     },
@@ -3990,9 +4098,9 @@
       "ranker": "full",
       "encoder": "hashing-blake2b-512",
       "naming": "opaque",
-      "mean_query_ms": 1.35,
-      "cases": 35,
-      "retrieval_cases": 32,
+      "mean_query_ms": 4.97,
+      "cases": 36,
+      "retrieval_cases": 33,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -4003,7 +4111,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 99,
+      "labelled_pairs": 103,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -4423,6 +4531,18 @@
           "unsafe_reuse": false,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrm-50",
+          "decision": "new_build",
+          "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -4430,19 +4550,19 @@
       "ranker": "name",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "opaque",
-      "mean_query_ms": 109.91,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.2812,
-      "recall_at_3": 0.5938,
-      "recall_at_5": 0.6875,
-      "mrr": 0.4654,
+      "mean_query_ms": 267.04,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.2727,
+      "recall_at_3": 0.5758,
+      "recall_at_5": 0.6667,
+      "mrr": 0.4556,
       "recall_at_1_by_language": {
         "zh": 0.2353,
-        "en": 0.3333
+        "en": 0.3125
       },
-      "decision_accuracy": 0.1429,
-      "unsafe_reuse": 30,
+      "decision_accuracy": 0.1389,
+      "unsafe_reuse": 31,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -4790,6 +4910,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ped-near-40-night",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 7
         }
       ]
     },
@@ -4797,19 +4927,19 @@
       "ranker": "structure-text",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "opaque",
-      "mean_query_ms": 299.0,
-      "cases": 35,
-      "retrieval_cases": 32,
-      "recall_at_1": 0.875,
-      "recall_at_3": 0.9688,
-      "recall_at_5": 1.0,
-      "mrr": 0.9245,
+      "mean_query_ms": 464.03,
+      "cases": 36,
+      "retrieval_cases": 33,
+      "recall_at_1": 0.8485,
+      "recall_at_3": 0.9394,
+      "recall_at_5": 0.9697,
+      "mrr": 0.8995,
       "recall_at_1_by_language": {
         "zh": 0.8824,
-        "en": 0.8667
+        "en": 0.8125
       },
-      "decision_accuracy": 0.6,
-      "unsafe_reuse": 14,
+      "decision_accuracy": 0.5833,
+      "unsafe_reuse": 15,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -5157,6 +5287,16 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrs-50-roadside-ped",
+          "decision": "direct",
+          "expected": "new_build",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 10
         }
       ]
     },
@@ -5164,9 +5304,9 @@
       "ranker": "full",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "opaque",
-      "mean_query_ms": 400.67,
-      "cases": 35,
-      "retrieval_cases": 32,
+      "mean_query_ms": 655.1,
+      "cases": 36,
+      "retrieval_cases": 33,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -5177,7 +5317,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 99,
+      "labelled_pairs": 103,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -5595,6 +5735,18 @@
           "expected": "new_build",
           "decision_correct": true,
           "unsafe_reuse": false,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "follow-ped-beside-en",
+          "language": "en",
+          "top": "aeb-ccrm-50",
+          "decision": "new_build",
+          "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
           "false_direct": [],
           "verdict_errors": {}
         }

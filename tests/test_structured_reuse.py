@@ -7,7 +7,8 @@ import pytest
 
 from openx_workbench.catalog import AssetFile, build_catalog
 from openx_workbench.retrieval import HashingEncoder, OpenXIndex
-from openx_workbench.scene_package import ScenePackage, scene_package_to_query
+from openx_workbench.reuse_structured import participant_differences
+from openx_workbench.scene_package import ParticipantSignature, ScenePackage, scene_package_to_query
 
 
 def authored_asset(*, speed=10, final_speed=10, function="AEB", weather="dry"):
@@ -251,3 +252,87 @@ def test_opposite_position_and_junction_cannot_be_direct():
     asset = authored_asset()
     asset.bundle.road.junction_count = 1
     assert search(requirement(), asset)[0].reuse_level == "modify"
+
+
+def _signature(text):
+    kind, rest = text.split("@")
+    bearing, facing, actions = rest.split(":")
+    return ParticipantSignature(kind, bearing, facing, tuple(actions.split("+")))
+
+
+def _blocking(requested, candidates):
+    differences = participant_differences(
+        tuple(map(_signature, requested)), tuple(map(_signature, candidates))
+    )
+    return sum(item.blocking for item in differences), differences
+
+
+def test_participants_are_paired_for_the_fewest_blocking_differences():
+    # Key order puts the pedestrian first; pairing it first used up the matching vehicle.
+    count, differences = _blocking(
+        ["pedestrian@alongside_left:crossing:static", "vehicle@front_same_lane:same:cruise"],
+        ["vehicle@front_same_lane:same:cruise", "vehicle@rear_same_lane:same:cruise"],
+    )
+    assert count == 1
+    assert [(item.requested, item.candidate) for item in differences] == [
+        ("pedestrian@alongside_left:crossing:static", "vehicle@rear_same_lane:same:cruise")
+    ]
+    count, differences = _blocking(
+        ["pedestrian@alongside_left:crossing:static", "vehicle@front_same_lane:same:cruise"],
+        ["vehicle@front_same_lane:same:cruise"],
+    )
+    assert count == 1 and differences[0].action == "add participant"
+    assert differences[0].requested.startswith("pedestrian")
+
+
+def test_pairing_prefers_the_cheaper_change_among_equally_blocking_pairings():
+    count, differences = _blocking(
+        ["vehicle@front_same_lane:same:stop", "vehicle@front_same_lane:same:cruise"],
+        ["vehicle@front_same_lane:same:cruise", "vehicle@front_same_lane:same:stop"],
+    )
+    assert count == 0 and differences == []
+
+
+def test_large_participant_sets_are_paired_optimally():
+    # Eight requested participants: too many to enumerate, solved as an assignment problem.
+    requested = ["pedestrian@alongside_left:crossing:static"] + [
+        f"vehicle@{bearing}:same:cruise"
+        for bearing in ("front_same_lane", "front_left", "front_right", "rear_same_lane",
+                        "rear_left", "rear_right", "alongside_right")
+    ]
+    candidates = requested[1:] + ["vehicle@rear_same_lane:opposite:cruise"]
+    count, differences = _blocking(requested, candidates)
+    assert count == 1
+    assert [item.requested for item in differences if item.blocking] == [requested[0]]
+
+
+def test_assignment_solver_agrees_with_enumeration():
+    import random
+
+    from openx_workbench import reuse_structured
+
+    vocabulary = (("vehicle", "pedestrian", "unknown"), ("front_same_lane", "rear_left", "unknown"),
+                  ("same", "crossing", "unknown"), ("cruise", "static", "stop", "unknown"))
+    generator = random.Random(7)
+
+    def draw(count):
+        return tuple(ParticipantSignature(*(generator.choice(options) for options in vocabulary[:3]),
+                                          (generator.choice(vocabulary[3]),)) for _ in range(count))
+
+    def total(requested, candidates, pairing):
+        differences = [item for expected, column in zip(requested, pairing) for item in
+                       reuse_structured._pair_differences(expected, candidates[column] if column is not None else None)]
+        differences += [reuse_structured._extra_difference(actual) for column, actual in enumerate(candidates)
+                        if column not in pairing]
+        blocking, cost, unverified = reuse_structured._score(differences)
+        return blocking, round(cost, 6), unverified
+
+    for _ in range(300):
+        requested, candidates = draw(generator.randint(1, 5)), draw(generator.randint(0, 5))
+        table = [[reuse_structured._score(reuse_structured._pair_differences(e, a)) for a in candidates]
+                 for e in requested]
+        absent = [reuse_structured._score(reuse_structured._pair_differences(e, None)) for e in requested]
+        extra = [reuse_structured._score([reuse_structured._extra_difference(a)]) for a in candidates]
+        enumerated = reuse_structured._enumerate(table, absent, extra)
+        assigned = reuse_structured._assign(table, absent, extra)
+        assert total(requested, candidates, assigned) == total(requested, candidates, enumerated)

@@ -42,7 +42,7 @@ def test_assets_carry_the_specified_interaction():
 
 def test_labels_are_consistent():
     _, cases = load_benchmark(BENCHMARK)
-    assert len(cases) == 35
+    assert len(cases) == 36
     for case, _ in cases:
         assert not set(case["relevant"]) & set(case.get("confusers", {}))
         assert case["best_level"] in {"direct", "modify", "review", "new_build"}
@@ -67,7 +67,7 @@ def test_opaque_names_defeat_similarity_but_not_structure():
     assert by_key[("full", "opaque")]["recall_at_1"] == by_key[("full", "descriptive")]["recall_at_1"] == 1
     # Similarity alone cannot say when the top hit needs changes.
     assert by_key[("structure-text", "descriptive")]["unsafe_reuse"] > 0
-    assert report["expected_best"] == {"direct": 24, "modify": 7, "review": 1, "new_build": 3}
+    assert report["expected_best"] == {"direct": 24, "modify": 7, "review": 1, "new_build": 4}
 
 
 def test_benchmark_rejects_unknown_labels(tmp_path):

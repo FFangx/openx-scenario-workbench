@@ -4,7 +4,7 @@
 
 ``fixtures`` (the default, used by the browser checks) holds six parser fixtures
 and eight requirements; ``benchmark`` holds the 25-asset reuse benchmark and its
-35 requirements. See openx_workbench/demo_workspace.py. Nothing is downloaded
+36 requirements. See openx_workbench/demo_workspace.py. Nothing is downloaded
 and no model is called.
 """
 

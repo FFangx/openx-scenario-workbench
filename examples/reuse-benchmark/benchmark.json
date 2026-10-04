@@ -306,6 +306,14 @@
                    "participants": [{"kind": "行人", "bearing": "正后方", "facing": "横向", "actions": ["静止"]}],
                    "params": {"target_speeds_kph": [0]}},
      "relevant": {}, "best_level": "new_build",
-     "confusers": {"aeb-ped-static-20": "new_build"}}
+     "confusers": {"aeb-ped-static-20": "new_build"}},
+    {"id": "follow-ped-beside-en", "language": "en", "title": "Slower car ahead with a pedestrian beside the ego",
+     "text": "The ego car at 50 km/h closes on a car driving at 20 km/h ahead in its lane while a pedestrian stands still at the left road edge level with the ego.",
+     "structure": {"tested_function": "AEB", "road_class": "直道", "ego_actions": ["匀速行驶"],
+                   "participants": [{"kind": "乘用车", "bearing": "正前方", "facing": "同向", "actions": ["匀速行驶"]},
+                                    {"kind": "行人", "bearing": "左并排", "facing": "横向", "actions": ["静止"]}],
+                   "params": {"ego_speed_kph": 50, "target_speeds_kph": [20, 0]}},
+     "relevant": {"aeb-ccrm-50": "new_build"},
+     "confusers": {"aeb-ccrs-50-roadside-ped": "new_build", "aeb-ccrs-50": "new_build", "aeb-ped-static-20": "new_build"}}
   ]
 }

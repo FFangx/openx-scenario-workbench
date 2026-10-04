@@ -27,7 +27,7 @@ def client_for(monkeypatch):
 
 def test_benchmark_demo_reaches_the_labelled_decisions(tmp_path, client_for):
     client, summary = client_for(tmp_path / "demo", "benchmark")
-    assert summary["assets"] == 25 and sum(item["scenes"] for item in summary["documents"]) == 35
+    assert summary["assets"] == 25 and sum(item["scenes"] for item in summary["documents"]) == 36
     cases = {case["title"]: case for case in json.loads(BENCHMARK.read_text(encoding="utf-8"))["cases"]}
     project = summary["project_id"]
     seen = set()
@@ -44,7 +44,7 @@ def test_benchmark_demo_reaches_the_labelled_decisions(tmp_path, client_for):
             if case["relevant"]:
                 assert top["xosc"].removesuffix(".xosc") in case["relevant"], case["id"]
             seen.add(case["id"])
-    assert len(seen) == 35
+    assert len(seen) == 36
 
 
 def test_fixture_demo_keeps_the_ui_check_workspace(tmp_path, client_for):

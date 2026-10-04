@@ -3,7 +3,7 @@
 Two datasets, both written for this repository (MIT) and read from the checkout:
 
 - ``benchmark``: the 25-asset reuse benchmark in examples/reuse-benchmark, with
-  an English and a Chinese protocol PDF holding its 35 reviewed requirements.
+  an English and a Chinese protocol PDF holding its 36 reviewed requirements.
 - ``fixtures``: the six parser fixtures in tests/fixtures/reuse and eight
   requirements. Small and stable; the browser checks in web/scripts use it.
 
