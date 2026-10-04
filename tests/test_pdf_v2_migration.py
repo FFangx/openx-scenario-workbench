@@ -162,10 +162,13 @@ def test_scan_and_truncated_response_never_publish_empty_success(tmp_path):
     assert not list((tmp_path / "model_cache").glob("*.json"))
 
 
-def test_prompt_v6_is_frozen_and_chain_parser_is_selected():
+def test_prompts_are_frozen_and_chain_parser_is_selected():
+    from openx_workbench.pdf_extraction import PROMPT_VERSION
     from openx_workbench.pdf_v2.scene_proposer import resolve_scene_prompt
     from openx_workbench.pdf_v2.parser import _resolve_heading_decoder
     assert "tested_function" in resolve_scene_prompt("scene-first-prompt-v6")
+    assert "\"speed_kph\"" not in resolve_scene_prompt("scene-first-prompt-v6")
+    assert PROMPT_VERSION == "scene-first-prompt-v7" and '"speed_kph": null' in resolve_scene_prompt(PROMPT_VERSION)
     assert _resolve_heading_decoder(None) == "chain"
 
 

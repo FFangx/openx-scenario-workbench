@@ -50,7 +50,7 @@ export interface Scene {
   queue_status?: "pending" | "confirmed" | "assessed";
 }
 
-export interface Participant { kind: string; bearing: string; facing: string; actions: string[]; age?: string; [key: string]: unknown }
+export interface Participant { kind: string; bearing: string; facing: string; actions: string[]; age?: string; speed_kph?: number | null; [key: string]: unknown }
 
 export interface SceneStructure {
   road_class: string;

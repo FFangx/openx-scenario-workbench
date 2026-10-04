@@ -419,6 +419,27 @@ _PROMPT_SCENE_FIRST_V6 = (
     .replace(_V5_EXAMPLE_PARAMS_TAIL, _V6_EXAMPLE_PARAMS_TAIL)
 )
 
+_V6_AGE_LINES = """    - 非行人参与者一律填「未知」
+"""
+
+_V7_AGE_AND_SPEED_LINES = """    - 非行人参与者一律填「未知」
+  speed_kph（这个参与者自己的初始速度，数字，km/h；文档没写留 null）
+    - 「目标车以 20 km/h 行驶」→ 这辆目标车填 20；文档写明静止的目标填 0
+    - 多个目标速度不同时，逐个填在对应的参与者上；
+      分不清哪个速度属于哪个参与者就留 null，只写进 params.target_speeds_kph
+"""
+
+_V7_EXAMPLE_PARTICIPANT = (
+    '          {"kind": "乘用车", "bearing": "正前方", "facing": "同向",'
+    ' "actions": ["静止"], "age": "未知", "speed_kph": null}\n'
+)
+
+_PROMPT_SCENE_FIRST_V7 = (
+    _PROMPT_SCENE_FIRST_V6
+    .replace(_V6_AGE_LINES, _V7_AGE_AND_SPEED_LINES)
+    .replace(_V5_EXAMPLE_PARTICIPANT, _V7_EXAMPLE_PARTICIPANT)
+)
+
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
     "scene-first-prompt-v2": _PROMPT_SCENE_FIRST_V2,
@@ -426,6 +447,7 @@ _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v4": _PROMPT_SCENE_FIRST_V4,
     "scene-first-prompt-v5": _PROMPT_SCENE_FIRST_V5,
     "scene-first-prompt-v6": _PROMPT_SCENE_FIRST_V6,
+    "scene-first-prompt-v7": _PROMPT_SCENE_FIRST_V7,
 }
 
 _FROZEN_PROMPT_SHA256: dict[str, str] = {
@@ -451,6 +473,10 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
 
     "scene-first-prompt-v6": (
         "3f54e06e035a3891191c39437bdd4966e4902d4288ca59f564f4213c93436f5d"
+    ),
+
+    "scene-first-prompt-v7": (
+        "dc279fa0d19751439643ec4a670918a4aadecfb2430fe97765494825baa5fcac"
     ),
 }
 

@@ -3,8 +3,8 @@
     python scripts/seed_demo_workspace.py <empty-folder> [--dataset fixtures|benchmark]
 
 ``fixtures`` (the default, used by the browser checks) holds six parser fixtures
-and eight requirements; ``benchmark`` holds the 25-asset reuse benchmark and its
-36 requirements. See openx_workbench/demo_workspace.py. Nothing is downloaded
+and eight requirements; ``benchmark`` holds the 26-asset reuse benchmark and its
+38 requirements. See openx_workbench/demo_workspace.py. Nothing is downloaded
 and no model is called.
 """
 

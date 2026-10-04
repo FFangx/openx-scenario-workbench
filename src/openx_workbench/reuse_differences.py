@@ -68,10 +68,17 @@ def parameter_differences(
 
 
 def target_speed_differences(
-    requested: tuple[float, ...], candidate: tuple[float, ...]
+    requested: tuple[float, ...], candidate: tuple[float, ...], participants: int
 ) -> list[ReuseDifference]:
+    """Speeds not bound to participants, both sorted.
+
+    A list with one speed per requested participant is compared with its duplicates; a
+    shorter one names distinct values only ("all targets stand still": [0]).
+    """
     if not requested:
         return []
+    if len(requested) != participants:
+        requested, candidate = tuple(sorted(set(requested))), tuple(sorted(set(candidate)))
     if len(requested) == len(candidate) and all(
         abs(left - right) <= policy.TARGET_SPEED_TOLERANCE_KPH
         for left, right in zip(requested, candidate)

@@ -121,9 +121,12 @@ def compare_structure(
         replace(difference, verified=difference.candidate != "not extracted")
         for difference in parameter_differences(query.parameters, values)
     )
-    differences.extend(
-        target_speed_differences(query.target_speeds_kph, candidate.target_speeds_kph)
-    )
+    if not any(item.speed_kph is not None for item in query.participant_signatures):
+        # Speeds not bound to participants (older revisions) are compared as a multiset.
+        differences.extend(
+            target_speed_differences(query.target_speeds_kph, candidate.target_speeds_kph,
+                                     len(query.participant_signatures))
+        )
     differences.extend(environment_differences(query.environment, candidate.environment))
     return tuple(differences)
 
@@ -172,7 +175,20 @@ def _pair_differences(expected: ParticipantSignature, actual: ParticipantSignatu
     if not mismatch and (expected.has_unknown or actual.has_unknown):
         result.append(ReuseDifference("participant_topology", signature, actual.key(), "verify participant facts",
                                       cost=policy.COST_VERIFY_PARTICIPANT, verified=False))
+    if not mismatch and expected.speed_kph is not None:
+        result.extend(_speed_difference(expected, actual))
     return result
+
+
+def _speed_difference(expected: ParticipantSignature, actual: ParticipantSignature) -> list[ReuseDifference]:
+    requested = f"{expected.key()} speed={expected.speed_kph:g} km/h"
+    if actual.speed_kph is None:
+        return [ReuseDifference("parameter", requested, "not extracted", "set participant initial speed",
+                                cost=policy.COST_PARAMETER, verified=False)]
+    if abs(actual.speed_kph - expected.speed_kph) > policy.TARGET_SPEED_TOLERANCE_KPH:
+        return [ReuseDifference("parameter", requested, f"speed={actual.speed_kph:g} km/h",
+                                "set participant initial speed", cost=policy.COST_PARAMETER)]
+    return []
 
 
 def _extra_difference(actual: ParticipantSignature) -> ReuseDifference:

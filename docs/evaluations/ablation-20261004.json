@@ -2,15 +2,15 @@
   "benchmark": "OpenX reuse benchmark",
   "benchmark_version": "2026-10-04",
   "scope": "Retrieval and reuse-verdict regression for typed requirements against a small authored library. It does not measure PDF extraction, simulator execution or ASAM conformance.",
-  "assets": 25,
-  "cases": 36,
+  "assets": 26,
+  "cases": 38,
   "languages": {
-    "zh": 19,
-    "en": 17
+    "zh": 20,
+    "en": 18
   },
   "expected_best": {
-    "direct": 24,
-    "modify": 7,
+    "direct": 25,
+    "modify": 8,
     "review": 1,
     "new_build": 4
   },
@@ -30,8 +30,8 @@
       "ranker": "rules",
       "encoder": null,
       "naming": "descriptive",
-      "cases": 36,
-      "retrieval_cases": 33,
+      "cases": 38,
+      "retrieval_cases": 35,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -42,7 +42,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 103,
+      "labelled_pairs": 109,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -474,6 +474,30 @@
           "first_relevant_rank": 1,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "modify",
+          "expected": "modify",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -481,19 +505,19 @@
       "ranker": "name",
       "encoder": "hashing-blake2b-512",
       "naming": "descriptive",
-      "mean_query_ms": 0.24,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.4848,
-      "recall_at_3": 0.5455,
-      "recall_at_5": 0.7273,
-      "mrr": 0.5816,
+      "mean_query_ms": 0.12,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.4,
+      "recall_at_3": 0.5714,
+      "recall_at_5": 0.6857,
+      "mrr": 0.5419,
       "recall_at_1_by_language": {
-        "zh": 0.2941,
-        "en": 0.6875
+        "zh": 0.2778,
+        "en": 0.5294
       },
-      "decision_accuracy": 0.3889,
-      "unsafe_reuse": 22,
+      "decision_accuracy": 0.3158,
+      "unsafe_reuse": 26,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -503,17 +527,17 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 11
+          "first_relevant_rank": 12
         },
         {
           "case": "ccrs-50-any-light-en",
           "language": "en",
-          "top": "aeb-ccrs-50-roadside-ped",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 5
+          "first_relevant_rank": 6
         },
         {
           "case": "ccrs-40-zh",
@@ -523,7 +547,7 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 18
+          "first_relevant_rank": 19
         },
         {
           "case": "ccrs-50-night-zh",
@@ -538,12 +562,12 @@
         {
           "case": "ccrs-50-curve-en",
           "language": "en",
-          "top": "aeb-ccrs-50-curve",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "direct",
-          "decision_correct": true,
-          "unsafe_reuse": false,
-          "first_relevant_rank": 1
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
         },
         {
           "case": "ccrm-50-zh",
@@ -558,12 +582,12 @@
         {
           "case": "ccrb-50-en",
           "language": "en",
-          "top": "aeb-ccrs-50-roadside-ped",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 11
+          "first_relevant_rank": 12
         },
         {
           "case": "ccrb-50-rain-zh",
@@ -573,7 +597,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 19
+          "first_relevant_rank": 20
         },
         {
           "case": "truck-static-en",
@@ -593,7 +617,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 4
+          "first_relevant_rank": 5
         },
         {
           "case": "cyclist-long-en",
@@ -673,17 +697,17 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 5
+          "first_relevant_rank": 6
         },
         {
           "case": "acc-follow-en",
           "language": "en",
-          "top": "acc-follow-60",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "direct",
-          "decision_correct": true,
-          "unsafe_reuse": false,
-          "first_relevant_rank": 1
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
         },
         {
           "case": "acc-brake-zh",
@@ -753,17 +777,17 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 10
+          "first_relevant_rank": 11
         },
         {
           "case": "ccrb-70-en",
           "language": "en",
-          "top": "acc-follow-brake-60",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 17
+          "first_relevant_rank": 18
         },
         {
           "case": "ped-near-60-night-zh",
@@ -773,7 +797,7 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 7
+          "first_relevant_rank": 8
         },
         {
           "case": "acc-follow-80-zh",
@@ -783,17 +807,17 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 4
+          "first_relevant_rank": 5
         },
         {
           "case": "cyclist-cross-rain-en",
           "language": "en",
-          "top": "aeb-cyclist-cross-30",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 1
+          "first_relevant_rank": 2
         },
         {
           "case": "truck-brake-en",
@@ -850,7 +874,27 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 12
+          "first_relevant_rank": 13
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 1
         }
       ]
     },
@@ -858,19 +902,19 @@
       "ranker": "structure-text",
       "encoder": "hashing-blake2b-512",
       "naming": "descriptive",
-      "mean_query_ms": 0.17,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.9394,
-      "recall_at_3": 0.9394,
+      "mean_query_ms": 0.15,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.9429,
+      "recall_at_3": 0.9429,
       "recall_at_5": 1.0,
-      "mrr": 0.9545,
+      "mrr": 0.9571,
       "recall_at_1_by_language": {
         "zh": 1,
-        "en": 0.875
+        "en": 0.8824
       },
-      "decision_accuracy": 0.6667,
-      "unsafe_reuse": 12,
+      "decision_accuracy": 0.6579,
+      "unsafe_reuse": 13,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -1228,6 +1272,26 @@
           "decision_correct": false,
           "unsafe_reuse": true,
           "first_relevant_rank": 4
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 1
         }
       ]
     },
@@ -1235,9 +1299,9 @@
       "ranker": "full",
       "encoder": "hashing-blake2b-512",
       "naming": "descriptive",
-      "mean_query_ms": 3.59,
-      "cases": 36,
-      "retrieval_cases": 33,
+      "mean_query_ms": 3.5,
+      "cases": 38,
+      "retrieval_cases": 35,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -1248,7 +1312,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 103,
+      "labelled_pairs": 109,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -1680,6 +1744,30 @@
           "first_relevant_rank": 1,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "modify",
+          "expected": "modify",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -1687,19 +1775,19 @@
       "ranker": "name",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "descriptive",
-      "mean_query_ms": 261.62,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.5758,
-      "recall_at_3": 0.8182,
-      "recall_at_5": 0.9394,
-      "mrr": 0.7147,
+      "mean_query_ms": 177.75,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.5714,
+      "recall_at_3": 0.8286,
+      "recall_at_5": 0.9429,
+      "mrr": 0.715,
       "recall_at_1_by_language": {
-        "zh": 0.5882,
-        "en": 0.5625
+        "zh": 0.5556,
+        "en": 0.5882
       },
-      "decision_accuracy": 0.4444,
-      "unsafe_reuse": 20,
+      "decision_accuracy": 0.4211,
+      "unsafe_reuse": 22,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -1729,7 +1817,7 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 11
+          "first_relevant_rank": 12
         },
         {
           "case": "ccrs-50-night-zh",
@@ -1934,12 +2022,12 @@
         {
           "case": "bsm-zh",
           "language": "zh",
-          "top": "bsm-rear-left-60",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "direct",
-          "decision_correct": true,
-          "unsafe_reuse": false,
-          "first_relevant_rank": 1
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
         },
         {
           "case": "roadside-ped-en",
@@ -2056,7 +2144,27 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 4
+          "first_relevant_rank": 5
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 1
         }
       ]
     },
@@ -2064,19 +2172,19 @@
       "ranker": "structure-text",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "descriptive",
-      "mean_query_ms": 527.05,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.8485,
-      "recall_at_3": 0.9394,
-      "recall_at_5": 0.9697,
-      "mrr": 0.8995,
+      "mean_query_ms": 439.22,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.8,
+      "recall_at_3": 0.9429,
+      "recall_at_5": 0.9714,
+      "mrr": 0.8767,
       "recall_at_1_by_language": {
-        "zh": 0.8824,
-        "en": 0.8125
+        "zh": 0.8333,
+        "en": 0.7647
       },
-      "decision_accuracy": 0.5833,
-      "unsafe_reuse": 15,
+      "decision_accuracy": 0.5526,
+      "unsafe_reuse": 17,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -2434,6 +2542,26 @@
           "decision_correct": false,
           "unsafe_reuse": true,
           "first_relevant_rank": 10
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
         }
       ]
     },
@@ -2441,9 +2569,9 @@
       "ranker": "full",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "descriptive",
-      "mean_query_ms": 631.15,
-      "cases": 36,
-      "retrieval_cases": 33,
+      "mean_query_ms": 634.36,
+      "cases": 38,
+      "retrieval_cases": 35,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -2454,7 +2582,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 103,
+      "labelled_pairs": 109,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -2881,6 +3009,30 @@
           "top": "aeb-ccrm-50",
           "decision": "new_build",
           "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "modify",
+          "expected": "modify",
           "decision_correct": true,
           "unsafe_reuse": false,
           "first_relevant_rank": 1,
@@ -2893,8 +3045,8 @@
       "ranker": "rules",
       "encoder": null,
       "naming": "opaque",
-      "cases": 36,
-      "retrieval_cases": 33,
+      "cases": 38,
+      "retrieval_cases": 35,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -2905,7 +3057,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 103,
+      "labelled_pairs": 109,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -3337,6 +3489,30 @@
           "first_relevant_rank": 1,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "modify",
+          "expected": "modify",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -3344,19 +3520,19 @@
       "ranker": "name",
       "encoder": "hashing-blake2b-512",
       "naming": "opaque",
-      "mean_query_ms": 0.26,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.0606,
-      "recall_at_3": 0.2424,
-      "recall_at_5": 0.5152,
-      "mrr": 0.2397,
+      "mean_query_ms": 0.29,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.0857,
+      "recall_at_3": 0.2286,
+      "recall_at_5": 0.5143,
+      "mrr": 0.2522,
       "recall_at_1_by_language": {
         "zh": 0,
-        "en": 0.125
+        "en": 0.1765
       },
-      "decision_accuracy": 0.0556,
-      "unsafe_reuse": 34,
+      "decision_accuracy": 0.0526,
+      "unsafe_reuse": 36,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -3376,7 +3552,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 8
+          "first_relevant_rank": 9
         },
         {
           "case": "ccrs-40-zh",
@@ -3406,7 +3582,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 17
+          "first_relevant_rank": 18
         },
         {
           "case": "ccrm-50-zh",
@@ -3421,12 +3597,12 @@
         {
           "case": "ccrb-50-en",
           "language": "en",
-          "top": "acc-cutout-60",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 15
+          "first_relevant_rank": 16
         },
         {
           "case": "ccrb-50-rain-zh",
@@ -3606,7 +3782,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 3
+          "first_relevant_rank": 4
         },
         {
           "case": "ccrm-60-zh",
@@ -3626,7 +3802,7 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 15
+          "first_relevant_rank": 16
         },
         {
           "case": "ped-near-60-night-zh",
@@ -3656,7 +3832,7 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 21
+          "first_relevant_rank": 22
         },
         {
           "case": "truck-brake-en",
@@ -3699,7 +3875,7 @@
         {
           "case": "reverse-ped-zh",
           "language": "zh",
-          "top": "aeb-ccrm-50-unplaced",
+          "top": "bsm-rear-left-60-lead",
           "decision": "direct",
           "expected": "new_build",
           "decision_correct": false,
@@ -3713,7 +3889,27 @@
           "expected": "new_build",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 9
+          "first_relevant_rank": 10
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "aeb-ped-long-40",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 24
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 1
         }
       ]
     },
@@ -3721,19 +3917,19 @@
       "ranker": "structure-text",
       "encoder": "hashing-blake2b-512",
       "naming": "opaque",
-      "mean_query_ms": 0.27,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.9394,
-      "recall_at_3": 0.9394,
+      "mean_query_ms": 0.34,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.9429,
+      "recall_at_3": 0.9429,
       "recall_at_5": 1.0,
-      "mrr": 0.9545,
+      "mrr": 0.9571,
       "recall_at_1_by_language": {
         "zh": 1,
-        "en": 0.875
+        "en": 0.8824
       },
-      "decision_accuracy": 0.6667,
-      "unsafe_reuse": 12,
+      "decision_accuracy": 0.6579,
+      "unsafe_reuse": 13,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -4091,6 +4287,26 @@
           "decision_correct": false,
           "unsafe_reuse": true,
           "first_relevant_rank": 4
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 1
         }
       ]
     },
@@ -4098,9 +4314,9 @@
       "ranker": "full",
       "encoder": "hashing-blake2b-512",
       "naming": "opaque",
-      "mean_query_ms": 4.97,
-      "cases": 36,
-      "retrieval_cases": 33,
+      "mean_query_ms": 5.73,
+      "cases": 38,
+      "retrieval_cases": 35,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -4111,7 +4327,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 103,
+      "labelled_pairs": 109,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -4543,6 +4759,30 @@
           "first_relevant_rank": 1,
           "false_direct": [],
           "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "modify",
+          "expected": "modify",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
         }
       ]
     },
@@ -4550,19 +4790,19 @@
       "ranker": "name",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "opaque",
-      "mean_query_ms": 267.04,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.2727,
-      "recall_at_3": 0.5758,
-      "recall_at_5": 0.6667,
-      "mrr": 0.4556,
+      "mean_query_ms": 204.3,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.2571,
+      "recall_at_3": 0.5429,
+      "recall_at_5": 0.6286,
+      "mrr": 0.4306,
       "recall_at_1_by_language": {
-        "zh": 0.2353,
-        "en": 0.3125
+        "zh": 0.2222,
+        "en": 0.2941
       },
-      "decision_accuracy": 0.1389,
-      "unsafe_reuse": 31,
+      "decision_accuracy": 0.1316,
+      "unsafe_reuse": 33,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -4592,7 +4832,7 @@
           "expected": "modify",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 14
+          "first_relevant_rank": 15
         },
         {
           "case": "ccrs-50-night-zh",
@@ -4612,7 +4852,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 19
+          "first_relevant_rank": 20
         },
         {
           "case": "ccrm-50-zh",
@@ -4642,7 +4882,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 19
+          "first_relevant_rank": 20
         },
         {
           "case": "truck-static-en",
@@ -4742,7 +4982,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 20
+          "first_relevant_rank": 21
         },
         {
           "case": "acc-follow-en",
@@ -4802,7 +5042,7 @@
           "expected": "direct",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 25
+          "first_relevant_rank": 26
         },
         {
           "case": "roadside-ped-en",
@@ -4882,7 +5122,7 @@
           "expected": "review",
           "decision_correct": false,
           "unsafe_reuse": true,
-          "first_relevant_rank": 2
+          "first_relevant_rank": 3
         },
         {
           "case": "tricycle-static-zh",
@@ -4920,6 +5160,26 @@
           "decision_correct": false,
           "unsafe_reuse": true,
           "first_relevant_rank": 7
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "acc-cutout-60",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 20
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "aeb-ccrb-50",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 6
         }
       ]
     },
@@ -4927,19 +5187,19 @@
       "ranker": "structure-text",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "opaque",
-      "mean_query_ms": 464.03,
-      "cases": 36,
-      "retrieval_cases": 33,
-      "recall_at_1": 0.8485,
-      "recall_at_3": 0.9394,
-      "recall_at_5": 0.9697,
-      "mrr": 0.8995,
+      "mean_query_ms": 452.47,
+      "cases": 38,
+      "retrieval_cases": 35,
+      "recall_at_1": 0.8,
+      "recall_at_3": 0.9429,
+      "recall_at_5": 0.9714,
+      "mrr": 0.8767,
       "recall_at_1_by_language": {
-        "zh": 0.8824,
-        "en": 0.8125
+        "zh": 0.8333,
+        "en": 0.7647
       },
-      "decision_accuracy": 0.5833,
-      "unsafe_reuse": 15,
+      "decision_accuracy": 0.5526,
+      "unsafe_reuse": 17,
       "per_case": [
         {
           "case": "ccrs-50-zh",
@@ -5297,6 +5557,26 @@
           "decision_correct": false,
           "unsafe_reuse": true,
           "first_relevant_rank": 10
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60",
+          "decision": "direct",
+          "expected": "modify",
+          "decision_correct": false,
+          "unsafe_reuse": true,
+          "first_relevant_rank": 2
         }
       ]
     },
@@ -5304,9 +5584,9 @@
       "ranker": "full",
       "encoder": "sentence-transformers:BAAI/bge-m3",
       "naming": "opaque",
-      "mean_query_ms": 655.1,
-      "cases": 36,
-      "retrieval_cases": 33,
+      "mean_query_ms": 621.16,
+      "cases": 38,
+      "retrieval_cases": 35,
       "recall_at_1": 1.0,
       "recall_at_3": 1.0,
       "recall_at_5": 1.0,
@@ -5317,7 +5597,7 @@
       },
       "decision_accuracy": 1.0,
       "unsafe_reuse": 0,
-      "labelled_pairs": 103,
+      "labelled_pairs": 109,
       "verdict_accuracy": 1.0,
       "false_direct": 0,
       "per_case": [
@@ -5744,6 +6024,30 @@
           "top": "aeb-ccrm-50",
           "decision": "new_build",
           "expected": "new_build",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-zh",
+          "language": "zh",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "direct",
+          "expected": "direct",
+          "decision_correct": true,
+          "unsafe_reuse": false,
+          "first_relevant_rank": 1,
+          "false_direct": [],
+          "verdict_errors": {}
+        },
+        {
+          "case": "bsm-lead-swapped-en",
+          "language": "en",
+          "top": "bsm-rear-left-60-lead",
+          "decision": "modify",
+          "expected": "modify",
           "decision_correct": true,
           "unsafe_reuse": false,
           "first_relevant_rank": 1,

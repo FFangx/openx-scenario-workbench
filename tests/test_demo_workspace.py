@@ -27,7 +27,7 @@ def client_for(monkeypatch):
 
 def test_benchmark_demo_reaches_the_labelled_decisions(tmp_path, client_for):
     client, summary = client_for(tmp_path / "demo", "benchmark")
-    assert summary["assets"] == 25 and sum(item["scenes"] for item in summary["documents"]) == 36
+    assert summary["assets"] == 26 and sum(item["scenes"] for item in summary["documents"]) == 38
     cases = {case["title"]: case for case in json.loads(BENCHMARK.read_text(encoding="utf-8"))["cases"]}
     project = summary["project_id"]
     seen = set()
@@ -38,13 +38,13 @@ def test_benchmark_demo_reaches_the_labelled_decisions(tmp_path, client_for):
             result = client.post("/api/search", json={"project_id": project, "document_id": document["document_id"],
                                                       "scene_id": scene["scene_id"], "encoder": "hashing"}).json()
             top = result["results"][0]
-            assert result["library_size"] == 25
+            assert result["library_size"] == 26
             expected = set(case["relevant"].values()) or {case["best_level"]}
             assert top["structural_level"] in expected, case["id"]
             if case["relevant"]:
                 assert top["xosc"].removesuffix(".xosc") in case["relevant"], case["id"]
             seen.add(case["id"])
-    assert len(seen) == 36
+    assert len(seen) == 38
 
 
 def test_fixture_demo_keeps_the_ui_check_workspace(tmp_path, client_for):

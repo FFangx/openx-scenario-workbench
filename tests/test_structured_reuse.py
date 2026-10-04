@@ -336,3 +336,55 @@ def test_assignment_solver_agrees_with_enumeration():
         enumerated = reuse_structured._enumerate(table, absent, extra)
         assigned = reuse_structured._assign(table, absent, extra)
         assert total(requested, candidates, assigned) == total(requested, candidates, enumerated)
+
+
+def _bound(text, speed):
+    return replace(_signature(text), speed_kph=speed)
+
+
+def test_speeds_bound_to_participants_follow_the_pairing():
+    front, rear = "vehicle@front_same_lane:same:cruise", "vehicle@rear_left:same:cruise"
+    candidates = (_bound(front, 50), _bound(rear, 80))
+    assert participant_differences((_bound(front, 50), _bound(rear, 80)), candidates) == []
+    swapped = participant_differences((_bound(front, 80), _bound(rear, 50)), candidates)
+    assert [(item.category, item.candidate, item.verified) for item in swapped] == [
+        ("parameter", "speed=50 km/h", True), ("parameter", "speed=80 km/h", True)]
+    # Identical participants are paired by speed, not by position.
+    assert participant_differences((_bound(front, 80), _bound(front, 50)), (_bound(front, 50), _bound(front, 80))) == []
+    unread = participant_differences((_bound(front, 50),), (_signature(front),))
+    assert [(item.candidate, item.verified) for item in unread] == [("not extracted", False)]
+
+
+def test_requirement_speeds_bind_to_participants_or_fall_back_to_the_list():
+    participant = requirement().structure["participants"][0]
+    bound = search(requirement(participants=[{**participant, "speed_kph": 36}], params={}), authored_asset())[0]
+    assert bound.reuse_level == "direct"
+    assert not [item for item in bound.differences if item.category == "parameter"]
+    wrong = search(requirement(participants=[{**participant, "speed_kph": 50}]), authored_asset())[0]
+    assert wrong.reuse_level == "modify"
+    assert [item.requested for item in wrong.differences] == [
+        "vehicle@front_same_lane:same:cruise speed=50 km/h"]
+
+
+def test_an_unbound_speed_list_counts_duplicates_only_when_it_has_one_speed_per_participant():
+    from openx_workbench.reuse_differences import target_speed_differences
+
+    assert target_speed_differences((0.0,), (0.0, 0.0), participants=2) == []
+    assert target_speed_differences((30.0, 30.0), (30.0,), participants=2)
+    assert target_speed_differences((30.0,), (30.0, 30.0), participants=1)
+
+
+def test_participant_speed_is_optional_in_the_stored_structure():
+    from openx_workbench.pdf_v2.scene_schemas import SceneStructure, parse_scene_structure
+
+    stored = requirement().structure
+    assert SceneStructure.model_validate(stored).model_dump(mode="json")["participants"] == [
+        {**stored["participants"][0], "age": "未知"}]
+    with pytest.raises(ValueError):
+        SceneStructure.model_validate({**stored, "participants": [{**stored["participants"][0], "speed_kph": -1}]})
+    dropped = set()
+    parsed = parse_scene_structure({"participants": [
+        {"kind": "乘用车", "speed_kph": "20"}, {"kind": "行人", "speed_kph": "fast"},
+        {"kind": "行人", "speed_kph": -3}]}, dropped)
+    assert [item.speed_kph for item in parsed.participants] == [20.0, None, None]
+    assert dropped == {"participant_speed='fast'", "participant_speed=-3"}

@@ -38,8 +38,8 @@ class ScenePackage:
 class ParticipantSignature:
     """One non-ego participant as matching sees it: kind, ego-relative bearing and facing, behaviors.
 
-    `actor` names the asset entity it was read from (empty for a requirement); it is
-    not part of the signature's identity. Any component may be "unknown".
+    `actor` names the asset entity it was read from (empty for a requirement). Neither it nor the
+    speed is part of the signature's identity. Any component may be "unknown".
     """
 
     kind: str
@@ -47,6 +47,8 @@ class ParticipantSignature:
     facing: str
     actions: tuple[str, ...]
     actor: str = field(default="", compare=False)
+    # Initial speed of this participant, compared after pairing; None when not stated or not read.
+    speed_kph: float | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if not self.actions:
@@ -186,9 +188,10 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         ):
             raise ValueError(f"{key} must contain finite nonnegative values.")
     participants = structure["participants"]
+    speeds = [participant.get("speed_kph") for participant in participants]
     signatures = []
     unverified = []
-    for participant in participants:
+    for participant, speed in zip(participants, speeds):
         signatures.append(
             ParticipantSignature(
                 kind=STRUCTURE_KINDS[participant["kind"]],
@@ -197,6 +200,7 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
                 # A requirement that names no behavior leaves it open, unlike an asset.
                 actions=tuple(sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"]))
                 or ("unknown",),
+                speed_kph=float(speed) if speed is not None else None,
             )
         )
         if participant["age"] != "未知":
@@ -275,7 +279,10 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             for item in structure["ego_actions"]
             if item != "未知"
         ),
-        target_speeds_kph=tuple(sorted(set(params["target_speeds_kph"]))),
+        # Speeds bound to participants replace the unbound list; either way duplicates count.
+        target_speeds_kph=tuple(sorted(float(speed) for speed in speeds if speed is not None))
+        if any(speed is not None for speed in speeds)
+        else tuple(sorted(params["target_speeds_kph"])),
         environment=environment,
         unverified=tuple(unverified),
     )

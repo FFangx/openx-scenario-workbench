@@ -1,11 +1,12 @@
 """Adapted ScenarioManager V2 core; see docs/PDF_MIGRATION.md."""
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from .models import SectionTree
 
@@ -91,6 +92,16 @@ class SceneParticipant(BaseModel):
     actions: tuple[ParticipantAction, ...] = ()
 
     age: PedestrianAge = "未知"
+    # This participant's own initial speed. Optional, and left out of the stored structure when
+    # unset, so revisions saved before it existed read back unchanged.
+    speed_kph: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+    @model_serializer(mode="wrap")
+    def _omit_unset_speed(self, handler):
+        data = handler(self)
+        if isinstance(data, dict) and data.get("speed_kph") is None:
+            data.pop("speed_kph", None)
+        return data
 
     def signature_actions(self) -> tuple[str, ...]:
 
@@ -328,6 +339,13 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
             dropped.add(f"{field}={value!r}")
             return None
 
+    def _speed(value: object) -> float | None:
+        speed = _number(value, "participant_speed")
+        if speed is not None and not (math.isfinite(speed) and speed >= 0):
+            dropped.add(f"participant_speed={value!r}")
+            return None
+        return speed
+
     participants: list[SceneParticipant] = []
     for item in raw.get("participants") or ():
         if not isinstance(item, dict):
@@ -340,6 +358,7 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
                 facing=_pick(item.get("facing"), _FACING_VALUES, "facing", "未知"),
                 actions=_pick_many(item.get("actions"), _PARTICIPANT_ACTION_VALUES, "action"),
                 age=_pick(item.get("age"), _AGE_VALUES, "age", "未知"),
+                speed_kph=_speed(item.get("speed_kph")),
             )
         )
 

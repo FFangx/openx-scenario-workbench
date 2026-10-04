@@ -103,11 +103,11 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
           <div className="sec-title facts-sub">{t("其他参与者", "Other participants")}</div>
           <table className="fact-sheet actors">
             <thead>
-              <tr>{[t("参与者类型", "Participant"), t("方位", "Bearing"), t("朝向", "Facing"), t("动作", "Actions")].map((h) => <th key={h} scope="col">{h}</th>)}</tr>
+              <tr>{[t("参与者类型", "Participant"), t("方位", "Bearing"), t("朝向", "Facing"), t("动作", "Actions"), t("速度（km/h）", "Speed (km/h)")].map((h) => <th key={h} scope="col">{h}</th>)}</tr>
             </thead>
             <tbody>
               {participants.map((a, i) => (
-                <tr key={i}>{(["kind", "bearing", "facing", "actions"] as const).map((k) => <td key={k}>{value(a[k])}</td>)}</tr>
+                <tr key={i}>{(["kind", "bearing", "facing", "actions", "speed_kph"] as const).map((k) => <td key={k}>{value(a[k])}</td>)}</tr>
               ))}
             </tbody>
           </table>

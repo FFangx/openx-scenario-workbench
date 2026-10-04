@@ -21,14 +21,31 @@ def bundle_scenario_families(bundle: ParseBundle) -> set[str]:
     return canonical_scenario_families(scenario.name or scenario.description or "")
 
 
-def actor_actions(bundle: ParseBundle, actor: str) -> set[str]:
-    """Distinguish an initialization speed from subsequent speed events."""
-    actions = [
+def _actions_of(bundle: ParseBundle, actor: str) -> list:
+    return [
         item
         for item in bundle.scenario.actions
         if actor.casefold()
         in {name.strip().casefold() for name in (item.actor or "").split(",")}
     ]
+
+
+def actor_initial_speed_kph(bundle: ParseBundle, actor: str) -> float | None:
+    """The actor's initialization speed, when the scenario sets exactly one."""
+    values = {
+        item.target_value
+        for item in _actions_of(bundle, actor)
+        if item.kind == "SpeedAction" and item.phase == "init"
+    }
+    if len(values) != 1:
+        return None
+    value = values.pop()
+    return value * 3.6 if value is not None and math.isfinite(value) else None
+
+
+def actor_actions(bundle: ParseBundle, actor: str) -> set[str]:
+    """Distinguish an initialization speed from subsequent speed events."""
+    actions = _actions_of(bundle, actor)
     result = {
         "lane_change"
         for item in actions
@@ -80,20 +97,12 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
         if "junction" in roads
         else ({"curve"} if "curve" in roads else roads)
     )
-    speeds = [
-        item.target_value * 3.6
-        for item in bundle.scenario.actions
-        if item.kind == "SpeedAction"
-        and item.phase == "init"
-        and item.target_value is not None
-        and item.actor
-        and item.actor.casefold() != "ego"
-    ]
+    participants = bundle_participant_signatures(bundle, semantic=True)
     return RetrievalQuery(
         text="",
         structured=True,
         tested_function=asset.classification.get("function_type", ""),
-        participant_signatures=bundle_participant_signatures(bundle, semantic=True),
+        participant_signatures=participants,
         ego_actions=frozenset(actor_actions(bundle, "ego")),
         trigger_kinds=frozenset(triggers),
         road_features=frozenset(roads),
@@ -104,7 +113,7 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
             )
             if values
         ),
-        target_speeds_kph=tuple(sorted(set(speeds))),
+        target_speeds_kph=tuple(sorted(item.speed_kph for item in participants if item.speed_kph is not None)),
         environment=tuple(
             (key, str(value))
             for key, value in sorted(bundle.scenario.environment.items())
@@ -194,6 +203,7 @@ def bundle_participant_signatures(
                         else actions.get(actor, set())
                     )
                 ),
+                speed_kph=actor_initial_speed_kph(bundle, actor),
             )
         )
     return tuple(sorted(signatures, key=ParticipantSignature.key))

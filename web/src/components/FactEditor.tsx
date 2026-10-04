@@ -89,6 +89,7 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
     { key: "bearing", title: t("相对方位", "Bearing"), width: 112, render: (_: unknown, a: Participant, i: number) => <Select size="small" value={a.bearing} options={options("bearing")} onChange={(v) => setActor(i, { bearing: v })} style={{ width: "100%" }} /> },
     { key: "facing", title: t("朝向", "Facing"), width: 86, render: (_: unknown, a: Participant, i: number) => <Select size="small" value={a.facing} options={options("facing")} onChange={(v) => setActor(i, { facing: v })} style={{ width: "100%" }} /> },
     { key: "actions", title: t("动作", "Actions"), render: (_: unknown, a: Participant, i: number) => <Select size="small" mode="multiple" value={a.actions} options={options("participant_actions")} onChange={(v) => setActor(i, { actions: v })} style={{ width: "100%" }} /> },
+    { key: "speed", title: t("速度 km/h", "Speed km/h"), width: 76, render: (_: unknown, a: Participant, i: number) => <InputNumber size="small" min={0} value={a.speed_kph ?? null} onChange={(v) => setActor(i, { speed_kph: v ?? null })} aria-label={t("参与者速度（km/h）", "Participant speed (km/h)")} style={{ width: "100%" }} /> },
     { key: "age", title: t("年龄", "Age"), width: 80, render: (_: unknown, a: Participant, i: number) => <Select size="small" value={a.age ?? "未知"} options={options("age")} onChange={(v) => setActor(i, { age: v })} style={{ width: "100%" }} /> },
     { key: "x", width: 36, render: (_: unknown, __: Participant, i: number) => <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t("删除参与者", "Remove participant")} onClick={() => set({ participants: actors.filter((_, j) => j !== i) })} /> },
   ];
@@ -143,7 +144,7 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
                   <span className="sec-title">{t("其他参与者", "Other participants")}</span>
                   <Button size="small" icon={<PlusOutlined />} onClick={() => set({ participants: [...actors, { ...EMPTY_ACTOR }] })} disabled={useJson}>{t("添加参与者", "Add participant")}</Button>
                 </div>
-                <p className="muted">{t("原文未说明的字段请保留未知。", "Keep facts the source does not state as unknown.")}</p>
+                <p className="muted">{t("原文未说明的字段请保留未知。填写了参与者速度时，按参与者逐个比较速度。", "Keep facts the source does not state as unknown. Once a participant has a speed, speeds are compared per participant.")}</p>
                 <Table<Participant> size="small" pagination={false} rowKey={(_, i) => String(i)} dataSource={actors} columns={actorColumns} className="actor-editor"
                   locale={{ emptyText: t("没有其他参与者", "No other participants") }} />
               </fieldset>

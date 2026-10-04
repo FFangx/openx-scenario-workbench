@@ -56,7 +56,10 @@
      "participants": [{"name": "T1", "type": "car", "lane": -1, "ds": 30, "kph": 60, "story": [{"type": "lane_change", "to": -2, "at": 3}]},
                       {"name": "T2", "type": "car", "lane": -1, "ds": 120, "kph": 0}]},
     {"id": "bsm-rear-left-60", "title": "BSM faster car approaching in the left adjacent lane, 80 km/h, ego 60 km/h", "function": "BSM", "road": "straight", "ego_kph": 60, "ego_lane": -2,
-     "participants": [{"name": "T1", "type": "car", "lane": -1, "ds": -15, "kph": 80}]}
+     "participants": [{"name": "T1", "type": "car", "lane": -1, "ds": -15, "kph": 80}]},
+    {"id": "bsm-rear-left-60-lead", "title": "BSM car overtaking in the left adjacent lane at 80 km/h behind a lead car at 50 km/h, ego 60 km/h", "function": "BSM", "road": "straight", "ego_kph": 60, "ego_lane": -2,
+     "participants": [{"name": "T1", "type": "car", "lane": -1, "ds": -15, "kph": 80},
+                      {"name": "T2", "type": "car", "lane": -2, "ds": 40, "kph": 50}]}
   ],
   "cases": [
     {"id": "ccrs-50-zh", "language": "zh", "title": "静止前车，主车 50 km/h",
@@ -228,7 +231,7 @@
                    "participants": [{"kind": "乘用车", "bearing": "左后方", "facing": "同向", "actions": ["匀速行驶"]}],
                    "params": {"ego_speed_kph": 60, "target_speeds_kph": [80]}},
      "relevant": {"bsm-rear-left-60": "direct"},
-     "confusers": {"acc-cutin-left-80": "new_build"}},
+     "confusers": {"acc-cutin-left-80": "new_build", "bsm-rear-left-60-lead": "modify"}},
     {"id": "roadside-ped-en", "language": "en", "title": "Stationary car with a roadside pedestrian",
      "text": "A car stands still in the ego lane while a pedestrian waits at the right roadside next to it; ego approaches at 50 km/h.",
      "structure": {"tested_function": "AEB", "road_class": "直道", "ego_actions": ["匀速行驶"],
@@ -314,6 +317,22 @@
                                     {"kind": "行人", "bearing": "左并排", "facing": "横向", "actions": ["静止"]}],
                    "params": {"ego_speed_kph": 50, "target_speeds_kph": [20, 0]}},
      "relevant": {"aeb-ccrm-50": "new_build"},
-     "confusers": {"aeb-ccrs-50-roadside-ped": "new_build", "aeb-ccrs-50": "new_build", "aeb-ped-static-20": "new_build"}}
+     "confusers": {"aeb-ccrs-50-roadside-ped": "new_build", "aeb-ccrs-50": "new_build", "aeb-ped-static-20": "new_build"}},
+    {"id": "bsm-lead-zh", "language": "zh", "title": "盲区监测：前方慢车时左后方车辆超车",
+     "text": "盲区监测：主车以 60 km/h 跟随本车道前方 50 km/h 的车辆，左侧相邻车道后方车辆以 80 km/h 超越主车。",
+     "structure": {"tested_function": "BSM", "road_class": "直道", "ego_actions": ["匀速行驶"],
+                   "participants": [{"kind": "乘用车", "bearing": "正前方", "facing": "同向", "actions": ["匀速行驶"], "speed_kph": 50},
+                                    {"kind": "乘用车", "bearing": "左后方", "facing": "同向", "actions": ["匀速行驶"], "speed_kph": 80}],
+                   "params": {"ego_speed_kph": 60, "target_speeds_kph": [50, 80]}},
+     "relevant": {"bsm-rear-left-60-lead": "direct"},
+     "confusers": {"bsm-rear-left-60": "new_build", "acc-follow-60": "new_build"}},
+    {"id": "bsm-lead-swapped-en", "language": "en", "title": "Blind spot: slower car behind on the left, faster lead car",
+     "text": "Blind spot, ego at 60 km/h: the lead car pulls away at 80 km/h; a car behind in the left lane drops back at 50 km/h.",
+     "structure": {"tested_function": "BSM", "road_class": "直道", "ego_actions": ["匀速行驶"],
+                   "participants": [{"kind": "乘用车", "bearing": "正前方", "facing": "同向", "actions": ["匀速行驶"], "speed_kph": 80},
+                                    {"kind": "乘用车", "bearing": "左后方", "facing": "同向", "actions": ["匀速行驶"], "speed_kph": 50}],
+                   "params": {"ego_speed_kph": 60, "target_speeds_kph": [50, 80]}},
+     "relevant": {"bsm-rear-left-60-lead": "modify"},
+     "confusers": {"bsm-rear-left-60": "new_build"}}
   ]
 }

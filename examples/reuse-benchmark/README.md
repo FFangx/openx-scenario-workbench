@@ -3,8 +3,8 @@
 An authored library and requirement set for evaluating OpenX reuse retrieval and
 verdicts. Results and method: [docs/EVALUATION.md](../../docs/EVALUATION.md).
 
-- `benchmark.json`: the single source. 25 asset specifications (ego, participants,
-  lanes, speeds, story events, environment) and 36 typed requirements in Chinese and
+- `benchmark.json`: the single source. 26 asset specifications (ego, participants,
+  lanes, speeds, story events, environment) and 38 typed requirements in Chinese and
   English with their expected candidates and verdicts.
 - `assets/*.xosc`, `roads/*.xodr`: rendered from `benchmark.json` by
   `python scripts/build_reuse_benchmark.py`. Do not edit them by hand; change the
