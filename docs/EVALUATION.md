@@ -82,7 +82,8 @@ holds per-requirement rankings and verdicts.
 Rerun on 2026-10-05 after the two-stage ranking: all workbench rows are unchanged
 (100 %, 0 unsafe, 0 false direct, both encoders, both namings). The only moved baseline
 is BGE-M3 structure-text similarity, now 77.1 % R@1 / 91.4 % R@3, because the
-structure summaries carry the SIM structure facts added the same day.
+structure summaries carry the SIM structure facts added the same day. Rerun again after the
+difference tiers, lane facts and information gate (same day): workbench rows unchanged.
 
 ## What the numbers say
 
