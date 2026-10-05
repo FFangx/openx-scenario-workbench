@@ -12,7 +12,9 @@ from openx_workbench.retrieval import (
     SentenceTransformerEncoder,
     bundle_to_query,
     bundle_query_text,
+    rank_candidates,
 )
+from openx_workbench.reuse_differences import ReuseDifference
 from openx_workbench.reuse_facts import bundle_participant_relations
 from openx_workbench.scene_package import EvidenceRef, ScenePackage, scene_package_to_query
 
@@ -262,6 +264,36 @@ def test_matching_family_with_one_missing_action_is_modify_and_ranks_first():
     assert [(item.category, item.requested) for item in result.differences] == [
         ("action", "lane_change")
     ]
+
+
+def test_two_stage_ranking_lets_a_standout_name_lead_only_among_structurally_tied_reviews():
+    def review(cost):
+        return (ReuseDifference("participant", "x", "unknown", "verify", cost=cost, verified=False),)
+
+    modify = (ReuseDifference("parameter", "x", "y", "set", cost=0.5),)
+    blocked = (ReuseDifference("family", "x", "y", "rebuild", blocking=True, cost=10),)
+    # 0 verified; 1-3 tied reviews (cost within 1.0 of the cheapest); 4 a costlier review;
+    # 5 blocked; 6-19 filler reviews. Only 3 and 5 have standout names.
+    differences = [modify, review(4), review(4.5), review(5), review(9), blocked] + [review(20)] * 14
+    similarities = [0.1, 0.2, 0.1, 0.9, 0.1, 0.95] + [0.1] * 14
+    scores = [0.0] * len(differences)
+
+    order = rank_candidates(differences, similarities, scores)
+
+    assert order[:6] == [0, 3, 1, 2, 5, 4]
+
+
+def test_two_stage_ranking_keeps_structural_order_without_a_standout_name():
+    differences = [(ReuseDifference("participant", "x", "unknown", "verify", cost=cost, verified=False),)
+                   for cost in (5, 4.5, 4)]
+    assert rank_candidates(differences, [0.9, 0.5, 0.1], [0.0] * 3) == [2, 1, 0]
+
+
+def test_two_stage_ranking_leaves_new_builds_in_structural_order():
+    differences = [(ReuseDifference("family", "x", "y", "rebuild", blocking=True, cost=cost),) for cost in (10, 12)]
+    differences += [(ReuseDifference("family", "x", "y", "rebuild", blocking=True, cost=30),)] * 18
+    similarities = [0.1, 0.9] + [0.1] * 18
+    assert rank_candidates(differences, similarities, [0.0] * 20)[:2] == [0, 1]
 
 
 def test_lane_positions_produce_ego_relative_participant_relations():

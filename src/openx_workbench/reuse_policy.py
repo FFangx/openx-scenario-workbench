@@ -48,14 +48,22 @@ TARGET_SPEED_TOLERANCE_KPH = 0.5
 MOVING_SPEED_MPS = 0.3  # speeds up to this (about 1 km/h) are standstill; targets are compared to 0.1 m/s
 
 # ---------- ranking ----------
-# Candidates are ordered by (blocking differences, change cost, -score). The score
-# only orders candidates inside one structural bucket and for free-text search.
+# Two stages (retrieval.rank_candidates): structure decides the verdict and puts
+# verified candidates first; among structurally tied review candidates a standout
+# name or text match leads; then the other standout matches; then the rest by
+# (blocking differences, change cost, -score). The score also orders free-text search.
 
 WEIGHT_SEMANTIC = 0.55  # encoder similarity of requirement and asset text
 WEIGHT_SCENARIO = 0.30  # overlap of participants, behaviors, triggers and function
 WEIGHT_ROAD = 0.15  # overlap of road features
 REASON_SCENARIO_MIN = 0.66  # scenario overlap shown as "scenario structure match"
 REASON_ROAD_MIN = 0.75  # road overlap shown as "road structure match"
-RECALL_MIN = 100  # semantic recall size for a structured query: max(RECALL_MIN, top_k * RECALL_FACTOR)
-RECALL_FACTOR = 20
-STRUCTURE_RECALL = 50  # extra candidates recalled through the structure-text vectors
+# Review candidates costing at most this much more than the cheapest review candidate are
+# structurally tied (one road change, or two parameters).
+NAME_TIE_COST = 1.0
+# A name or text similarity this many standard deviations above the library mean is a
+# standout match. Relative, so it holds for any encoder; libraries under 8 assets cannot
+# reach it and keep the structural order. Tuned on a private real-standard evaluation
+# (2026-10-05): with names it lifts BGE-M3 R@1, with opaque names it leaves R@1 unchanged.
+NAME_STANDOUT_Z = 2.5
+NAME_RECALL = 10  # standout matches among this many most similar assets are recalled

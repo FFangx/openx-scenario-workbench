@@ -33,7 +33,7 @@ def test_batch_uses_one_encoding_call_and_matches_single_verdicts():
               StoredScene(doc, "two", 2, requirement(lane_marking="实线"))]
     encoder.calls.clear()
     batch = match_document(doc, scenes, index, {})
-    assert len(encoder.calls) == 1 and len(encoder.calls[0]) == 4
+    assert len(encoder.calls) == 1 and len(encoder.calls[0]) == 2  # one query text per scene
     assert batch["counts"] == {"standards": 1, "partial": 1}
     for scene, entry in zip(scenes, batch["entries"]):
         single = index.search("", query=scene_package_to_query(scene.package))[0]

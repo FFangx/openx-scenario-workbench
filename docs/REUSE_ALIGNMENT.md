@@ -30,9 +30,19 @@ It does not introduce a second ingestion, model or indexing stack.
 - Environment labels follow coarse ScenarioManager conventions: precipitation
   intensity distinguishes active rain/snow, 06:00–18:00 denotes daytime and visibility
   up to 350 m denotes the fog-test category. Raw fog visibility is retained.
-- Names/accepted labels and name-free structure have independent recall routes using
-  the same encoder. Blocking differences and explicit change costs govern final
-  ranking. Existing exhaustive structural bucket inclusion is retained.
+- Ranking has two stages (2026-10-05, `retrieval.rank_candidates`). Every asset is
+  compared structurally, and structure alone gives the verdict. Verified verdicts
+  (direct, modify, major modify) lead by change cost. Review candidates whose cost is
+  within `NAME_TIE_COST` of the cheapest review are structurally tied; among them a
+  standout name or text match (`NAME_STANDOUT_Z` standard deviations above the library
+  mean similarity) goes first. The other standout matches among the `NAME_RECALL` most
+  similar assets follow, then everything else by blocking differences, change cost and
+  score. When every candidate is a new build, structure alone orders them. Before,
+  the order was blocking differences, change cost, score, so a cost difference of half
+  a parameter pushed the asset a library names for the requirement below an unrelated
+  one. The threshold is relative: a library whose names say nothing rarely produces an
+  outlier and stays close to the structural order. The structure-text vectors remain
+  in the index for the ablation baseline only.
 - Confirmed asset labels reach retrieval and function comparison. Rule suggestions
   and unaccepted low-confidence results cannot certify a function. Classification
   excludes Ego from targets and uses vehicle categories for motorcycles/trucks.

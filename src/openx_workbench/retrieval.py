@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import re
+import statistics
 import sys
 from array import array
 from collections import Counter
@@ -353,109 +354,108 @@ class OpenXIndex:
             query = bundle_to_query(query_bundle)
         if query is not None:
             text = query.text
-        query_vector = self.encoder.encode(text)
-        structure_vector = self.encoder.encode(query_structure_text(query)) if query else None
-        return self._search_vectors(query_vector, structure_vector, query, top_k)
+        return self._search_vectors(self.encoder.encode(text), query, top_k)
 
     def search_many(self, queries: list[RetrievalQuery], top_k: int = 5) -> list[list[RetrievalResult]]:
         if top_k <= 0 or not self.assets:
             return [[] for _ in queries]
-        texts = [text for query in queries for text in (query.text, query_structure_text(query))]
-        vectors = self.encoder.encode_many(texts)
-        if len(vectors) != len(texts):
+        vectors = self.encoder.encode_many([query.text for query in queries])
+        if len(vectors) != len(queries):
             raise ValueError("The embedding model returned an unexpected vector count.")
-        return [self._search_vectors(vectors[2 * i], vectors[2 * i + 1], query, top_k)
-                for i, query in enumerate(queries)]
+        return [self._search_vectors(vector, query, top_k) for vector, query in zip(vectors, queries)]
 
-    def _search_vectors(self, query_vector, structure_vector, query, top_k):
-        ranked: list[RetrievalResult] = []
-        recall_size = (
-            min(len(self.assets), max(policy.RECALL_MIN, top_k * policy.RECALL_FACTOR))
-            if query
-            else min(len(self.assets), top_k)
-        )
-        recalled = dict(self.recall(query_vector, recall_size))
-        if query:
-            for index, _ in self.recall(
-                structure_vector, min(len(self.assets), policy.STRUCTURE_RECALL), structure=True
-            ):
-                if index not in recalled:
-                    recalled[index] = sum(
-                        left * right
-                        for left, right in zip(query_vector, self.vectors[index])
-                    )
-        differences_by_index = {}
-        if query:
-            # Structural compatibility is the primary ordering contract. Include
-            # its best buckets even when semantic recall misses them, keeping
-            # ties so semantic scores can still decide within a structural bucket.
-            differences_by_index = {
-                index: compare_query_to_asset(
-                    query, asset, candidate_structure=self.structures[index]
+    def _search_vectors(self, query_vector, query, top_k):
+        if query is None:
+            return [
+                RetrievalResult(
+                    asset=self.assets[index],
+                    score=round(max(0.0, min(1.0, similarity)), 4),
+                    vector_score=round(similarity, 4),
+                    scenario_score=0.0,
+                    road_score=0.0,
+                    reuse_level="review",
+                    reasons=_reasons(None, self.assets[index].bundle),
+                    review_kind="recall",
                 )
-                for index, asset in enumerate(self.assets)
-            }
-            structural_keys = {
-                index: (
-                    sum(item.blocking for item in differences),
-                    change_cost(differences),
-                )
-                for index, differences in differences_by_index.items()
-            }
-            cutoff = sorted(structural_keys.values())[min(top_k, len(self.assets)) - 1]
-            for index, key in structural_keys.items():
-                if key <= cutoff and index not in recalled:
-                    recalled[index] = sum(
-                        left * right
-                        for left, right in zip(query_vector, self.vectors[index])
-                    )
-        for asset_index, vector_score in recalled.items():
-            asset = self.assets[asset_index]
-            scenario_score = (
-                _scenario_query_score(query, asset.bundle, self.structures[asset_index])
-                if query
-                else 0.0
+                for index, similarity in self.recall(query_vector, min(len(self.assets), top_k))
+            ]
+        # Every asset is compared structurally and scored; only the returned ones are explained.
+        similarity = dict(self.recall(query_vector, len(self.assets)))
+        similarities = [similarity[index] for index in range(len(self.assets))]
+        differences = [
+            compare_query_to_asset(query, asset, candidate_structure=self.structures[index])
+            for index, asset in enumerate(self.assets)
+        ]
+        parts = [
+            (
+                _scenario_query_score(query, asset.bundle, self.structures[index]),
+                _road_query_score(query, asset.bundle),
             )
-            road_score = _road_query_score(query, asset.bundle) if query else 0.0
-            if query:
-                score = (
-                    policy.WEIGHT_SEMANTIC * vector_score
-                    + policy.WEIGHT_SCENARIO * scenario_score
-                    + policy.WEIGHT_ROAD * road_score
-                )
-            else:
-                score = vector_score
-            score = round(max(0.0, min(1.0, score)), 4)
-            differences = differences_by_index[asset_index] if query else ()
-            reuse_level = (
-                classify_reuse_level(differences) if query is not None else "review"
-            )
+            for index, asset in enumerate(self.assets)
+        ]
+        scores = [
+            round(max(0.0, min(1.0, policy.WEIGHT_SEMANTIC * similarities[index]
+                               + policy.WEIGHT_SCENARIO * scenario + policy.WEIGHT_ROAD * road)), 4)
+            for index, (scenario, road) in enumerate(parts)
+        ]
+        ranked = []
+        for index in rank_candidates(differences, similarities, scores)[:top_k]:
+            level = classify_reuse_level(differences[index])
             ranked.append(
                 RetrievalResult(
-                    asset=asset,
-                    score=score,
-                    vector_score=round(vector_score, 4),
-                    scenario_score=round(scenario_score, 4),
-                    road_score=round(road_score, 4),
-                    reuse_level=reuse_level,
-                    reasons=_reasons(query, asset.bundle, self.structures[asset_index]),
-                    differences=differences,
-                    review_kind=review_kind(query, self.structures[asset_index]) if reuse_level == "review" else "",
-                    estimated_change_cost=(
-                        change_cost(differences) if query is not None else None
-                    ),
+                    asset=self.assets[index],
+                    score=scores[index],
+                    vector_score=round(similarities[index], 4),
+                    scenario_score=round(parts[index][0], 4),
+                    road_score=round(parts[index][1], 4),
+                    reuse_level=level,
+                    reasons=_reasons(query, self.assets[index].bundle, self.structures[index]),
+                    differences=differences[index],
+                    review_kind=review_kind(query, self.structures[index]) if level == "review" else "",
+                    estimated_change_cost=change_cost(differences[index]),
                 )
             )
-        if query is None:
-            return sorted(ranked, key=lambda item: item.score, reverse=True)[:top_k]
-        return sorted(
-            ranked,
-            key=lambda item: (
-                sum(difference.blocking for difference in item.differences),
-                change_cost(item.differences),
-                -item.score,
-            ),
-        )[:top_k]
+        return ranked
+
+
+def rank_candidates(
+    differences: list[tuple[ReuseDifference, ...]], similarities: list[float], scores: list[float]
+) -> list[int]:
+    """Two-stage order of a structured query's candidates, as indices into the arguments.
+
+    Structure decides the verdict and leads: candidates it verifies (direct, modify,
+    major_modify) come first, cheapest first. Review candidates within NAME_TIE_COST of
+    the cheapest one are structurally tied; among them a standout name or text match
+    (similarity NAME_STANDOUT_Z standard deviations above the library mean) goes first.
+    Then come the remaining standout matches among the NAME_RECALL most similar assets,
+    whatever their verdict, fewest blocking differences first. Everything else keeps
+    the structural order: blocking differences, change cost, then score. When no
+    candidate is verified or reviewable, every one is a new build and structure alone
+    picks the closest base.
+    """
+    count = len(differences)
+    blocking = [sum(item.blocking for item in items) for items in differences]
+    costs = [change_cost(items) for items in differences]
+    levels = [classify_reuse_level(items) for items in differences]
+    structural = sorted(range(count), key=lambda index: (blocking[index], costs[index], -scores[index]))
+    mean, spread = statistics.fmean(similarities), statistics.pstdev(similarities)
+    standout = {
+        index for index in range(count)
+        if spread > 0 and (similarities[index] - mean) / spread >= policy.NAME_STANDOUT_Z
+    }
+    verified = [index for index in structural if levels[index] in ("direct", "modify", "major_modify")]
+    review = [index for index in structural if levels[index] == "review"]
+    tied = [index for index in review if costs[index] <= costs[review[0]] + policy.NAME_TIE_COST]
+    # Stable: candidates without a standout name keep their structural order.
+    tied.sort(key=lambda index: (0, -similarities[index]) if index in standout else (1, 0.0))
+    placed = {*verified, *tied}
+    by_name = sorted(range(count), key=lambda index: -similarities[index])[:policy.NAME_RECALL] if placed else []
+    named = sorted(
+        (index for index in by_name if index in standout and index not in placed),
+        key=lambda index: (blocking[index], -similarities[index]),
+    )
+    placed.update(named)
+    return verified + tied + named + [index for index in structural if index not in placed]
 
 
 def bundle_query_text(bundle: ParseBundle) -> str:
