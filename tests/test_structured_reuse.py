@@ -446,6 +446,11 @@ def test_a_requirement_without_participants_is_never_reused_as_is():
     result = search(misuse, asset)[0]
     assert result.reuse_level == "review"
     assert {item.category for item in result.differences if not item.verified and item.tier == "core"} >= {"story"}
-    single = search(requirement(participants=[]), asset)[0]  # an AEB test with no participant stated
-    assert single.reuse_level in {"modify", "major_modify"}
-    assert any(item.category == "procedure" and item.tier == "adjustable" for item in single.differences)
+    # Even testing the same function, a story with no participant proves nothing.
+    assert search(requirement(participants=[]), asset)[0].reuse_level == "review"
+
+
+def test_a_driver_intervention_test_needs_an_asset_with_driver_inputs():
+    result = search(requirement(test_intent="驾驶员干预试验"), authored_asset())[0]
+    assert result.reuse_level == "new_build"
+    assert [item.requested for item in result.differences if item.blocking] == ["driver_intervention"]

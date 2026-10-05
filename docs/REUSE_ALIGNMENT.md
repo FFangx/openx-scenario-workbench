@@ -30,11 +30,12 @@ It does not introduce a second ingestion, model or indexing stack.
   costed. An unverified core fact makes a review; an unverified adjustable fact is
   listed as "confirm when changing" and makes a modification. Unknown categories are
   core.
-- Information gate: a requirement with no participant or occlusion is never reused as
-  is. Without a tested function it is a review (two near-empty stories always match);
-  with one, a single-vehicle test of that function is at best a modification whose
-  procedure is confirmed. Before the gate, misuse tests with no participant were matched
-  `direct` to any asset testing the same function.
+- Information gate: a requirement with no participant or occlusion is a review, even
+  when both sides test the same function. Two near-empty stories always match: before
+  the gate, misuse tests were matched `direct` to any asset testing the same function and
+  a traffic-light test was offered a static-obstacle asset.
+- A driver-intervention requirement against an asset without driver inputs is blocking:
+  another kind of test. The other way round, removing the inputs is a change.
 - Lanes (2026-10-05): the parser reads the most driving lanes one direction and both
   directions offer on one cross-section, and the line types drawn on driving lanes
   (`solid`, `broken`). A requirement's lane count is a lower bound: 单向 N counts one
@@ -53,9 +54,10 @@ It does not introduce a second ingestion, model or indexing stack.
   intensity distinguishes active rain/snow, 06:00–18:00 denotes daytime and visibility
   up to 350 m denotes the fog-test category. Raw fog visibility is retained.
 - Ranking has two stages (2026-10-05, `retrieval.rank_candidates`). Every asset is
-  compared structurally, and structure alone gives the verdict. Verified verdicts
-  (direct, modify, major modify) lead by change cost. Review candidates whose cost is
-  within `NAME_TIE_COST` of the cheapest review are structurally tied; among them a
+  compared structurally, and structure alone gives the verdict. Direct and modify
+  verdicts lead by change cost; a major modification is close to a new build and does
+  not lead. Review candidates whose cost is within `NAME_TIE_COST` of the cheapest
+  review are structurally tied; among them a
   standout name or text match (`NAME_STANDOUT_Z` standard deviations above the library
   mean similarity) goes first. The other standout matches among the `NAME_RECALL` most
   similar assets follow, then everything else by blocking differences, change cost and

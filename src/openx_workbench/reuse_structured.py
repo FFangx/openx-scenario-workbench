@@ -34,16 +34,12 @@ def compare_structure(
     )
     if not (query.participant_signatures or query.occlusions):
         # Information gate: with no participant or interaction stated, two near-empty stories
-        # always "match", which proves nothing. Without a tested function either, it is a review;
-        # with one, a single-vehicle test of that function is reused only after its procedure
-        # (speeds, path) is confirmed, never as is.
-        differences.append(
-            ReuseDifference("procedure", f"single-vehicle {query.tested_function} test",
-                            "procedure not compared", "confirm the test procedure", cost=0, verified=False)
-            if query.tested_function else
-            ReuseDifference("story", "participants or tested function", "not stated in the requirement",
-                            "decide by hand whether this is the same test", verified=False)
-        )
+        # always "match", which proves nothing, even when both test the same function (a
+        # traffic-light test matched a static-obstacle test that way). A person decides.
+        differences.append(ReuseDifference(
+            "story", "participants or interaction", "not stated in the requirement",
+            "decide by hand whether this is the same test", verified=False,
+        ))
     differences.extend(_occlusion_differences(query, candidate))
     differences.extend(_intent_differences(query, candidate))
     for value in candidate.unverified:
@@ -193,12 +189,16 @@ def _occlusion_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> 
 def _intent_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
     differences = []
     if query.driver_intervention is not None and query.driver_intervention != candidate.driver_intervention:
+        # A driver-intervention test is another kind of test than a functional one: an asset
+        # without driver inputs cannot be made into one by a small change (blocking). The
+        # other way, removing the driver inputs leaves the functional test (a change).
         differences.append(ReuseDifference(
             "ego_action",
             "driver_intervention" if query.driver_intervention else "no driver_intervention",
             "driver_intervention" if candidate.driver_intervention else "no driver_intervention",
-            "add driver input override" if query.driver_intervention else "remove driver input override",
-            cost=policy.COST_BEHAVIOR,
+            "build a driver-intervention test" if query.driver_intervention else "remove driver input override",
+            blocking=bool(query.driver_intervention),
+            cost=policy.COST_PARTICIPANT if query.driver_intervention else policy.COST_BEHAVIOR,
         ))
     if query.parking_operation and query.parking_operation != candidate.parking_operation:
         differences.append(ReuseDifference(

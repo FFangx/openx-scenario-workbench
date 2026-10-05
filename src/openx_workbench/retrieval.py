@@ -423,8 +423,8 @@ def rank_candidates(
 ) -> list[int]:
     """Two-stage order of a structured query's candidates, as indices into the arguments.
 
-    Structure decides the verdict and leads: candidates it verifies (direct, modify,
-    major_modify) come first, cheapest first. Review candidates within NAME_TIE_COST of
+    Structure decides the verdict and leads: direct and modify candidates come first,
+    cheapest first (a major modification is close to a new build and does not lead). Review candidates within NAME_TIE_COST of
     the cheapest one are structurally tied; among them a standout name or text match
     (similarity NAME_STANDOUT_Z standard deviations above the library mean) goes first.
     Then come the remaining standout matches among the NAME_RECALL most similar assets,
@@ -443,7 +443,8 @@ def rank_candidates(
         index for index in range(count)
         if spread > 0 and (similarities[index] - mean) / spread >= policy.NAME_STANDOUT_Z
     }
-    verified = [index for index in structural if levels[index] in ("direct", "modify", "major_modify")]
+    # A major modification is close to a new build: it does not outrank a reviewable candidate.
+    verified = [index for index in structural if levels[index] in ("direct", "modify")]
     review = [index for index in structural if levels[index] == "review"]
     tied = [index for index in review if costs[index] <= costs[review[0]] + policy.NAME_TIE_COST]
     # Stable: candidates without a standout name keep their structural order.

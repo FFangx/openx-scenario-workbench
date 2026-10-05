@@ -41,7 +41,6 @@ TIER_BY_CATEGORY = {
     "parameter": TIER_ADJUSTABLE,
     "trigger": TIER_ADJUSTABLE,
     "environment": TIER_ADJUSTABLE,
-    "procedure": TIER_ADJUSTABLE,  # a single-vehicle test: its procedure is confirmed while reusing
 }
 # Requirement items the comparison cannot check yet ("unverified"), by "key=value", then by key.
 # Only a functional test intent is a note: a misuse or activation-boundary test is another kind

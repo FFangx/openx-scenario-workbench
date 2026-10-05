@@ -41,7 +41,7 @@ also listed as relevant.
 | Name similarity | Cosine similarity of requirement text against asset text (title, labels, entity, action and road statistics) |
 | Structure-text similarity | Cosine similarity of the two canonical, name-free structure summaries: the same facts the rules use, compared by an encoder |
 | Structural rules only | Blocking differences, then estimated change cost; ties keep library order |
-| Rules + similarity | The workbench ranking (two stages, since 2026-10-05): verified verdicts first by change cost; among review candidates within `NAME_TIE_COST` of the cheapest, a standout name or text match (`NAME_STANDOUT_Z` standard deviations above the library mean) leads; then the other standout matches; then the rest by rules. With only new builds, rules alone. |
+| Rules + similarity | The workbench ranking (two stages, since 2026-10-05): direct and modify verdicts first by change cost; among review candidates within `NAME_TIE_COST` of the cheapest, a standout name or text match (`NAME_STANDOUT_Z` standard deviations above the library mean) leads; then the other standout matches; then the rest by rules. With only new builds, rules alone. |
 
 Each encoder ranker runs with the hashing baseline and with BGE-M3. Each run is
 repeated with **descriptive** asset names and with **opaque** names
