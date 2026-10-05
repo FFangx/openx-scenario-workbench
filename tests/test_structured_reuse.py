@@ -454,3 +454,19 @@ def test_a_driver_intervention_test_needs_an_asset_with_driver_inputs():
     result = search(requirement(test_intent="驾驶员干预试验"), authored_asset())[0]
     assert result.reuse_level == "new_build"
     assert [item.requested for item in result.differences if item.blocking] == ["driver_intervention"]
+
+
+def test_the_tested_function_is_a_setting_not_a_rebuild():
+    asset = authored_asset(function="AEB")
+    switched = search(requirement(tested_function="FCW"), asset)[0]
+    assert switched.reuse_level == "modify"
+    assert [(item.category, item.blocking, item.tier) for item in switched.differences
+            if item.category == "function"] == [("function", False, "adjustable")]
+    unknown = search(requirement(), authored_asset(function="未知"))[0]
+    assert unknown.reuse_level == "modify"
+    assert any(item.category == "function" and not item.verified for item in unknown.differences)
+
+
+def test_a_parking_requirement_needs_a_parking_asset():
+    result = search(requirement(parking_operation="泊入"), authored_asset())[0]
+    assert result.reuse_level == "new_build"

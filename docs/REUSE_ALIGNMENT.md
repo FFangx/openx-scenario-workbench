@@ -22,14 +22,22 @@ It does not introduce a second ingestion, model or indexing stack.
   an extra participant removed); `review` for an unverified core fact; `new_build` for
   any blocking difference. All numbers and tiers live in `reuse_policy.py`.
 - Every difference has a tier, after the ScenarioManager layering (story > map >
-  parameters, 2026-07-27). **Core**: tested function, participants, behaviors,
-  occlusion, road type, lane count and lane lines, venue, a misuse or activation-boundary
-  test intent, unresolved asset parameters. **Adjustable**: speeds, TTC, distances,
+  parameters, 2026-07-27). **Core**: participants, behaviors, occlusion, road type,
+  lane count and lane lines, venue, a misuse or activation-boundary test intent,
+  unresolved asset parameters. **Adjustable**: tested function, speeds, TTC, distances,
   triggers, environment, lateral direction. **Note**: a functional test intent and the
   end condition, which describe the evaluation and are listed but never compared or
   costed. An unverified core fact makes a review; an unverified adjustable fact is
   listed as "confirm when changing" and makes a modification. Unknown categories are
   core.
+- The tested function is a setting of the reuse, not part of the scenario (2026-10-05):
+  a story built for AEB serves FCW or ACC after the system and its scoring are switched.
+  Most of it lives outside the scenario file: on the 230 assets with confirmed function
+  labels, standard OpenSCENARIO content alone tells the function family for 33 %; the
+  rest needs simulator-specific commands (`EnableXXX`) that other libraries may not
+  write. So a different function is a change (`COST_FUNCTION`) and an unknown one is
+  confirmed while reusing; neither blocks. A parking requirement against a driving
+  asset stays blocking through the parking operation.
 - Information gate: a requirement with no participant or occlusion is a review, even
   when both sides test the same function. Two near-empty stories always match: before
   the gate, misuse tests were matched `direct` to any asset testing the same function and

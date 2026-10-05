@@ -59,6 +59,9 @@ def compare_structure(
         )
     if query.tested_function:
         actual = candidate.tested_function
+        # The tested function is a setting of the reuse (which system is switched on, how it is
+        # scored), not part of the scenario: a story built for AEB serves FCW as well. Many
+        # libraries never write it into the file, so unknown is confirmed while reusing.
         if actual in {"", "未知", "unknown"}:
             differences.append(
                 ReuseDifference(
@@ -66,6 +69,7 @@ def compare_structure(
                     query.tested_function,
                     "unknown",
                     "confirm tested function",
+                    cost=policy.COST_PARAMETER,
                     verified=False,
                 )
             )
@@ -75,9 +79,8 @@ def compare_structure(
                     "function",
                     query.tested_function,
                     actual,
-                    "change tested function",
-                    True,
-                    policy.COST_FUNCTION,
+                    "switch the tested function and its scoring",
+                    cost=policy.COST_FUNCTION,
                 )
             )
     if "motorway" in query.road_features:
@@ -201,9 +204,12 @@ def _intent_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> lis
             cost=policy.COST_PARTICIPANT if query.driver_intervention else policy.COST_BEHAVIOR,
         ))
     if query.parking_operation and query.parking_operation != candidate.parking_operation:
+        # Parking in against parking out is a change; a driving scenario is no parking test at all.
         differences.append(ReuseDifference(
             "ego_action", query.parking_operation, candidate.parking_operation or "no parking",
-            "change parking operation", cost=policy.COST_BEHAVIOR,
+            "change parking operation" if candidate.parking_operation else "build a parking test",
+            blocking=not candidate.parking_operation,
+            cost=policy.COST_BEHAVIOR if candidate.parking_operation else policy.COST_PARTICIPANT,
         ))
     return differences
 

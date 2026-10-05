@@ -14,7 +14,7 @@ import math
 # differences first). Integral values stay ints: they are serialized into traces.
 
 COST_SCENARIO_FAMILY = 10  # a different scenario family (car-to-car vs car-to-VRU)
-COST_FUNCTION = 10  # the candidate tests a different function (AEB vs ACC)
+COST_FUNCTION = 2  # switch the tested function and its scoring (AEB vs FCW); the story is unchanged
 COST_PARTICIPANT = 8  # a required participant is missing or interacts differently
 COST_ENTITY = 6  # legacy keywords: a required entity class is absent
 COST_EXTRA_PARTICIPANT = 3  # the candidate has a participant the requirement does not
@@ -38,6 +38,7 @@ TIER_CORE, TIER_ADJUSTABLE, TIER_NOTE = "core", "adjustable", "note"
 # An unresolved parameter reference in the asset ("parameter_resolution") stays core: what the
 # file does at all is unclear until it is resolved.
 TIER_BY_CATEGORY = {
+    "function": TIER_ADJUSTABLE,  # a setting of the reuse, rarely in the file (2026-10-05)
     "parameter": TIER_ADJUSTABLE,
     "trigger": TIER_ADJUSTABLE,
     "environment": TIER_ADJUSTABLE,
