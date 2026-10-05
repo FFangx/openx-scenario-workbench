@@ -15,6 +15,7 @@ from .reuse_differences import (
     target_speed_differences,
 )
 from .reuse_facts import asset_structure_query, bundle_parameters
+from .scene_facts import asset_environment
 from .scene_package import ParticipantSignature, RetrievalQuery
 
 ENUMERATION_LIMIT = 6  # up to 6! = 720 participant pairings are enumerated; beyond, solve the assignment problem
@@ -26,11 +27,13 @@ def compare_structure(
     candidate = candidate or asset_structure_query(asset)
     differences = (
         participant_differences(
-            query.participant_signatures, candidate.participant_signatures
+            query.participant_signatures, candidate.participant_signatures, candidate.scenery_signatures
         )
         if query.participant_signatures
         else []
     )
+    differences.extend(_occlusion_differences(query, candidate))
+    differences.extend(_intent_differences(query, candidate))
     for value in candidate.unverified:
         differences.append(ReuseDifference(
             "parameter_resolution", "resolved scenario parameters", value,
@@ -112,8 +115,8 @@ def compare_structure(
                     verified="unknown" not in candidate.ego_actions,
                 )
             )
-    values = bundle_parameters(asset.bundle, initial_only=True)
-    visibility = asset.bundle.scenario.environment.get("fog_visibility_m")
+    values = bundle_parameters(asset.bundle)
+    visibility = asset_environment(asset.bundle).get("fog_visibility_m")
     if isinstance(visibility, (float, int)):
         values["fog_visibility_m"] = (float(visibility),)
     # A parameter the XML reader cannot find is unverified rather than a known change.
@@ -131,21 +134,58 @@ def compare_structure(
     return tuple(differences)
 
 
+def _occlusion_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
+    placed = all(item.bearing != "unknown"
+                 for item in (*candidate.participant_signatures, *candidate.scenery_signatures))
+    return [
+        ReuseDifference("relation", f"{blocker} occludes {target}", "not found",
+                        "place an occluding participant", cost=policy.COST_RELATION, verified=placed)
+        for blocker, target in sorted(query.occlusions - candidate.occlusions)
+    ]
+
+
+def _intent_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
+    differences = []
+    if query.driver_intervention is not None and query.driver_intervention != candidate.driver_intervention:
+        differences.append(ReuseDifference(
+            "ego_action",
+            "driver_intervention" if query.driver_intervention else "no driver_intervention",
+            "driver_intervention" if candidate.driver_intervention else "no driver_intervention",
+            "add driver input override" if query.driver_intervention else "remove driver input override",
+            cost=policy.COST_BEHAVIOR,
+        ))
+    if query.parking_operation and query.parking_operation != candidate.parking_operation:
+        differences.append(ReuseDifference(
+            "ego_action", query.parking_operation, candidate.parking_operation or "no parking",
+            "change parking operation", cost=policy.COST_BEHAVIOR,
+        ))
+    return differences
+
+
+def _static_obstacles(expected: ParticipantSignature, actual: ParticipantSignature) -> bool:
+    """Both are standing obstacles: which way an obstacle faces is not compared."""
+    return all(item.kind == "obstacle" and set(item.actions) == {"static"} for item in (expected, actual))
+
+
+def _facing(signature: ParticipantSignature, other: ParticipantSignature) -> str:
+    return "any" if _static_obstacles(signature, other) else signature.facing
+
+
 def _conflicts(expected: ParticipantSignature, actual: ParticipantSignature) -> tuple[int, bool, int]:
     """(known identity conflicts, known behavior conflict, unknown components of `actual`).
 
     An unknown component never proves a conflict. A stop satisfies a requested speed change.
     """
     identity = zip(
-        (expected.kind, expected.bearing, expected.facing),
-        (actual.kind, actual.bearing, actual.facing),
+        (expected.kind, expected.bearing, _facing(expected, actual)),
+        (actual.kind, actual.bearing, _facing(actual, expected)),
     )
     mismatches = sum(left != right and "unknown" not in {left, right} for left, right in identity)
     known_actions = set(expected.actions) - {"unknown"}
     absent = known_actions - set(actual.actions)
     if set(actual.actions) == {"stop"} and known_actions == {"speed_change"}:
         absent = set()
-    unknowns = sum(item == "unknown" for item in (actual.kind, actual.bearing, actual.facing)) + (
+    unknowns = sum(item == "unknown" for item in (actual.kind, actual.bearing, _facing(actual, expected))) + (
         "unknown" in actual.actions
     )
     return mismatches, bool(absent and "unknown" not in actual.actions), unknowns
@@ -172,7 +212,10 @@ def _pair_differences(expected: ParticipantSignature, actual: ParticipantSignatu
         if extra_actions:
             result.append(ReuseDifference("action", signature, actual.key(), "remove additional participant behavior",
                                           cost=policy.COST_BEHAVIOR))
-    if not mismatch and (expected.has_unknown or actual.has_unknown):
+    if not mismatch and any(
+        "unknown" in (item.kind, item.bearing, _facing(item, other), *item.actions)
+        for item, other in ((expected, actual), (actual, expected))
+    ):
         result.append(ReuseDifference("participant_topology", signature, actual.key(), "verify participant facts",
                                       cost=policy.COST_VERIFY_PARTICIPANT, verified=False))
     if not mismatch and expected.speed_kph is not None:
@@ -203,16 +246,20 @@ def _score(differences: list[ReuseDifference]) -> tuple[int, float, int]:
 
 
 def _pair(
-    requested: tuple[ParticipantSignature, ...], candidates: tuple[ParticipantSignature, ...]
+    requested: tuple[ParticipantSignature, ...], candidates: tuple[ParticipantSignature, ...],
+    scenery: int = 0,
 ) -> list[int | None]:
     """The candidate index paired with each requested participant (None: none left).
 
     Pairing is one-to-one, so participant multiplicity counts. Among all pairings it picks the one
-    whose differences rank best, the same order candidates are ranked by.
+    whose differences rank best, the same order candidates are ranked by. The last `scenery`
+    candidates are scenery groups: they may stand for a requested participant, but cost nothing
+    when left unpaired.
     """
     table = [[_score(_pair_differences(expected, actual)) for actual in candidates] for expected in requested]
     absent = [_score(_pair_differences(expected, None)) for expected in requested]
-    extra = [_score([_extra_difference(actual)]) for actual in candidates]
+    extra = [_score([_extra_difference(actual)]) if index < len(candidates) - scenery else (0, 0, 0)
+             for index, actual in enumerate(candidates)]
     if max(len(requested), len(candidates)) <= ENUMERATION_LIMIT:
         return _enumerate(table, absent, extra)
     return _assign(table, absent, extra)
@@ -288,12 +335,14 @@ def _hungarian(matrix: list[list[int]]) -> list[int]:
 
 
 def participant_differences(
-    requested: tuple[ParticipantSignature, ...], candidates: tuple[ParticipantSignature, ...]
+    requested: tuple[ParticipantSignature, ...], candidates: tuple[ParticipantSignature, ...],
+    scenery: tuple[ParticipantSignature, ...] = (),
 ) -> list[ReuseDifference]:
-    pairing = _pair(requested, candidates)
+    pool = (*candidates, *scenery)
+    pairing = _pair(requested, pool, len(scenery))
     result = []
     for expected, column in zip(requested, pairing):
-        result.extend(_pair_differences(expected, candidates[column] if column is not None else None))
+        result.extend(_pair_differences(expected, pool[column] if column is not None else None))
     paired = set(pairing)
     result.extend(_extra_difference(actual) for column, actual in enumerate(candidates) if column not in paired)
     return result

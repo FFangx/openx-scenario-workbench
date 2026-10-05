@@ -1364,8 +1364,12 @@ export interface components {
             category: string | null;
             /** Kind */
             kind: string;
+            /** Model */
+            model: string | null;
             /** Name */
             name: string;
+            /** Width */
+            width: number | null;
         };
         /** CandidateRoad */
         CandidateRoad: {

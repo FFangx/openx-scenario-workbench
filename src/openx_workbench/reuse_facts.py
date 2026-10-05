@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-import math
-
 from . import reuse_policy as policy
 from .catalog import OpenXAsset
-from .models import ParseBundle
+from .models import EntityIR, ParseBundle
 from .reuse_geometry import _adjacent_lane, _bearing, _relative_facing, _relative_offset
+from .scene_facts import (
+    actor_behaviors,
+    asset_environment,
+    command_facts,
+    driver_overrides,
+    is_scenery,
+    occlusions,
+    scene_speed_mps,
+)
 from .scene_package import (
     ParticipantSignature,
     RetrievalQuery,
@@ -21,71 +28,23 @@ def bundle_scenario_families(bundle: ParseBundle) -> set[str]:
     return canonical_scenario_families(scenario.name or scenario.description or "")
 
 
-def _actions_of(bundle: ParseBundle, actor: str) -> list:
-    return [
-        item
-        for item in bundle.scenario.actions
-        if actor.casefold()
-        in {name.strip().casefold() for name in (item.actor or "").split(",")}
-    ]
-
-
-def actor_initial_speed_kph(bundle: ParseBundle, actor: str) -> float | None:
-    """The actor's initialization speed, when the scenario sets exactly one."""
-    values = {
-        item.target_value
-        for item in _actions_of(bundle, actor)
-        if item.kind == "SpeedAction" and item.phase == "init"
-    }
-    if len(values) != 1:
-        return None
-    value = values.pop()
-    return value * 3.6 if value is not None and math.isfinite(value) else None
+def actor_speed_kph(bundle: ParseBundle, actor: str) -> float | None:
+    """The speed the actor reaches in the scenario (see scene_facts.scene_speed_mps)."""
+    value = scene_speed_mps(bundle, actor)
+    return value * 3.6 if value is not None else None
 
 
 def actor_actions(bundle: ParseBundle, actor: str) -> set[str]:
-    """Distinguish an initialization speed from subsequent speed events."""
-    actions = _actions_of(bundle, actor)
-    result = {
-        "lane_change"
-        for item in actions
-        if item.kind == "LaneChangeAction" and item.phase == "story"
-    }
-    if any(
-        item.phase == "story" and item.kind not in {"SpeedAction", "LaneChangeAction"}
-        for item in actions
-    ):
-        result.add("unknown")
-    initial = [
-        item.target_value
-        for item in actions
-        if item.kind == "SpeedAction" and item.phase == "init"
-    ]
-    events = [
-        item.target_value
-        for item in actions
-        if item.kind == "SpeedAction" and item.phase == "story"
-    ]
-    if not initial or any(
-        value is None or not math.isfinite(value) for value in initial + events
-    ):
-        result.add("unknown")
-        return result
-    current = initial[-1]
-    if len(set(initial)) != 1:
-        result.add("unknown")
-        return result
-    if current < 0:
-        result.add("reverse")
-    elif all(abs(value - current) <= policy.CONSTANT_SPEED_TOLERANCE_MPS for value in events):
-        result.add("static" if current == 0 else "cruise")
-    elif current > 0 and events == [0]:
-        result.add("stop")
-    else:
-        result.add("speed_change")
-        if len(events) > 1:
-            result.add("unknown")
-    return result
+    """The actor's behaviors in the typed requirement vocabulary (see scene_facts.actor_behaviors)."""
+    return actor_behaviors(bundle, actor)
+
+
+def asset_tested_function(asset: OpenXAsset) -> str:
+    """An accepted classification, else the function a simulator command switches on."""
+    accepted = asset.classification.get("function_type", "")
+    if accepted and accepted != "未知":
+        return accepted
+    return command_facts(asset.bundle)["function"]
 
 
 def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
@@ -98,25 +57,28 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
         else ({"curve"} if "curve" in roads else roads)
     )
     participants = bundle_participant_signatures(bundle, semantic=True)
+    ego = command_facts(bundle)
     return RetrievalQuery(
         text="",
         structured=True,
-        tested_function=asset.classification.get("function_type", ""),
+        tested_function=asset_tested_function(asset),
         participant_signatures=participants,
+        scenery_signatures=bundle_scenery_signatures(bundle),
+        occlusions=occlusions(bundle, _entity_kind),
+        driver_intervention=bool(driver_overrides(bundle)),
+        parking_operation=ego["parking"],
         ego_actions=frozenset(actor_actions(bundle, "ego")),
         trigger_kinds=frozenset(triggers),
         road_features=frozenset(roads),
         parameters=tuple(
             (key, values[0])
-            for key, values in sorted(
-                bundle_parameters(bundle, initial_only=True).items()
-            )
+            for key, values in sorted(bundle_parameters(bundle).items())
             if values
         ),
         target_speeds_kph=tuple(sorted(item.speed_kph for item in participants if item.speed_kph is not None)),
         environment=tuple(
             (key, str(value))
-            for key, value in sorted(bundle.scenario.environment.items())
+            for key, value in sorted(asset_environment(bundle).items())
             if key in {"weather", "time_of_day"}
         ),
         unverified=tuple(
@@ -126,9 +88,7 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
     )
 
 
-def bundle_parameters(
-    bundle: ParseBundle, *, initial_only: bool = False
-) -> dict[str, tuple[float, ...]]:
+def bundle_parameters(bundle: ParseBundle) -> dict[str, tuple[float, ...]]:
     values: dict[str, list[float]] = {}
     for trigger in bundle.scenario.triggers:
         if trigger.value is None:
@@ -138,17 +98,9 @@ def bundle_parameters(
         elif trigger.kind in {"RelativeDistanceCondition", "DistanceCondition"}:
             values.setdefault("distance_m", []).append(trigger.value)
 
-    ego_speeds = [
-        action.target_value * 3.6
-        for action in bundle.scenario.actions
-        if action.actor
-        and action.actor.casefold() == "ego"
-        and action.target_value is not None
-        and (action.target_value >= 0 if initial_only else action.target_value > 0)
-        and (action.phase == "init" if initial_only else True)
-    ]
-    if ego_speeds:
-        values["ego_speed_kph"] = [ego_speeds[0]]
+    ego_speed = actor_speed_kph(bundle, "ego")
+    if ego_speed is not None:
+        values["ego_speed_kph"] = [ego_speed]
     return {
         name: tuple(sorted(set(round(value, 4) for value in candidates)))
         for name, candidates in values.items()
@@ -156,9 +108,9 @@ def bundle_parameters(
 
 
 def bundle_participant_signatures(
-    bundle: ParseBundle, *, semantic: bool = False
+    bundle: ParseBundle, *, semantic: bool = False, scenery: bool = False
 ) -> tuple[ParticipantSignature, ...]:
-    """Non-ego participants in key order.
+    """Non-ego traffic participants in key order; with `scenery`, the scenery props instead.
 
     `semantic` reads behaviors as the typed vocabulary (cruise, stop, ...) of a
     requirement; otherwise as keyword features of the action names.
@@ -178,7 +130,7 @@ def bundle_participant_signatures(
     signatures: list[ParticipantSignature] = []
     for entity in scenario.entities:
         actor = entity.name.casefold()
-        if actor == "ego":
+        if actor == "ego" or is_scenery(entity) != scenery:
             continue
         target = positions.get(actor)
         offset = (
@@ -191,9 +143,10 @@ def bundle_participant_signatures(
                 actor=entity.name,
                 kind=_participant_kind(entity.kind, entity.category),
                 bearing=_bearing(*offset) if offset is not None else "unknown",
+                # A prop has no direction of travel: its model's heading is not a fact.
                 facing=(
                     _relative_facing(ego, target, bundle.road_geometry)
-                    if ego is not None and target is not None
+                    if ego is not None and target is not None and not scenery
                     else "unknown"
                 ),
                 actions=tuple(
@@ -203,10 +156,19 @@ def bundle_participant_signatures(
                         else actions.get(actor, set())
                     )
                 ),
-                speed_kph=actor_initial_speed_kph(bundle, actor),
+                speed_kph=actor_speed_kph(bundle, actor),
             )
         )
     return tuple(sorted(signatures, key=ParticipantSignature.key))
+
+
+def bundle_scenery_signatures(bundle: ParseBundle) -> tuple[ParticipantSignature, ...]:
+    """Scenery props grouped by where they stand: 27 cones ahead are one obstacle ahead.
+
+    Props can stand for a requested obstacle, but are never extra participants.
+    """
+    return tuple(sorted(set(bundle_participant_signatures(bundle, semantic=True, scenery=True)),
+                        key=ParticipantSignature.key))
 
 
 def bundle_participant_relations(bundle: ParseBundle) -> set[str]:
@@ -236,6 +198,10 @@ def bundle_participant_relations(bundle: ParseBundle) -> set[str]:
         if _adjacent_lane(ego, target):
             relations.add("adjacent_lane")
     return relations
+
+
+def _entity_kind(entity: EntityIR) -> str:
+    return _participant_kind(entity.kind, entity.category)
 
 
 def _participant_kind(kind: str, category: str | None) -> str:

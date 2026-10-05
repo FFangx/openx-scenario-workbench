@@ -273,6 +273,8 @@ class CandidateEntity(Shape):
     name: str
     kind: str
     category: str | None
+    model: str | None
+    width: float | None
 
 
 class CandidateScenario(Shape):

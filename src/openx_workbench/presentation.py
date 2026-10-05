@@ -41,6 +41,11 @@ LABELS = {
     "ahead": "正前方", "behind": "正后方", "same": "同向", "opposite": "对向",
     "dry": "晴天", "rain": "雨天", "fog": "雾天", "snow": "雪天", "day": "日间", "night": "夜间",
     "combined": "综合相似度",
+    "relation": "参与者关系", "occludes": "遮挡", "not found": "未发现",
+    "place an occluding participant": "布置遮挡参与者",
+    "driver_intervention": "驾驶员干预", "no driver_intervention": "无驾驶员干预",
+    "add driver input override": "添加驾驶员输入接管", "remove driver input override": "移除驾驶员输入接管",
+    "park_in": "泊入", "park_out": "泊出", "no parking": "无泊车操作", "change parking operation": "调整泊车操作",
 }
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):
     LABELS.update({value: key for key, value in vocabulary.items()})

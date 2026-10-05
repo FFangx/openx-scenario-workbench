@@ -41,16 +41,106 @@ KNOWN_ACTIONS = {
 }
 
 
+# Elements that only group the action that does something.
+_ACTION_WRAPPERS = {
+    "Action", "PrivateAction", "GlobalAction", "UserDefinedAction", "LongitudinalAction",
+    "LateralAction", "ControllerAction", "RoutingAction", "InfrastructureAction", "TrafficAction",
+    "ParameterAction", "VariableAction", "AppearanceAction", "EntityAction",
+}
+
+
 def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story") -> ActionIR:
     kind_node = next((child for child in node.iter() if _local(child) in KNOWN_ACTIONS), None)
+    element = next((child for child in node.iter()
+                    if _local(child).endswith("Action") and _local(child) not in _ACTION_WRAPPERS), None)
     speed = _first(node, "AbsoluteTargetSpeed")
+    dynamics = _first(node, "SpeedActionDynamics")
+    command = _first(node, "CustomCommandAction")
     return ActionIR(
         name,
         _local(kind_node) if kind_node is not None else "Action",
         actor,
         _float(speed.get("value") if speed is not None else None),
         phase,
+        element=_local(element) if element is not None else "",
+        shape=dynamics.get("dynamicsShape") if dynamics is not None else None,
+        command=((command.text or command.get("content") or "").strip() or None) if command is not None else None,
+        overrides=_overrides(node),
     )
+
+
+def _overrides(node: ET.Element) -> dict[str, str]:
+    """Active driver-input overrides: OpenSCENARIO 1.0 channels (Brake, Gear, ...) or 1.1+ Override*Action."""
+    result: dict[str, str] = {}
+    for override in _all(node, "OverrideControllerValueAction"):
+        for channel in override:
+            name = _local(channel).removeprefix("Override").removesuffix("Action")
+            if channel.get("active", "").casefold() != "true":
+                continue
+            value = channel.get("value") or channel.get("number")
+            if value is None:
+                inner = next((item for item in channel.iter() if item is not channel and
+                              (item.get("value") or item.get("number")) is not None), None)
+                value = (inner.get("value") or inner.get("number")) if inner is not None else ""
+            result[name] = value
+    return result
+
+
+def _environment_reading(environment: ET.Element) -> dict[str, str | float]:
+    """Weather, time of day and fog range declared by one Environment."""
+    reading: dict[str, str | float] = {}
+    precipitation = _first(environment, "Precipitation")
+    fog = _first(environment, "Fog")
+    clock = _first(environment, "TimeOfDay")
+    sun = _first(environment, "Sun")
+    if precipitation is not None:
+        kind = precipitation.get("precipitationType")
+        intensity = _float(precipitation.get("intensity") or precipitation.get("precipitationIntensity"))
+        if kind == "dry":
+            reading["weather"] = "dry"
+        elif kind in {"rain", "snow"} and intensity is not None and intensity >= 0:
+            reading["weather"] = kind if intensity > 0 else "dry"
+    visibility = _float(fog.get("visualRange")) if fog is not None else None
+    if visibility is not None:
+        reading["fog_visibility_m"] = visibility
+        # Match ScenarioManager's coarse test-weather convention; retain
+        # the raw range for requirements that specify exact visibility.
+        if 0 < visibility <= 350 and reading.get("weather") in {None, "dry"}:
+            reading["weather"] = "fog"
+    if clock is not None:
+        from datetime import datetime
+        try:
+            hour = datetime.fromisoformat(clock.get("dateTime", "").replace("Z", "+00:00")).hour
+            reading["time_of_day"] = "day" if 6 <= hour < 18 else "night"
+        except ValueError:
+            pass
+    if "time_of_day" not in reading and sun is not None:
+        elevation = _float(sun.get("elevation"))
+        if elevation is not None:
+            reading["time_of_day"] = "day" if elevation > 0 else "night"
+    return reading
+
+
+def _merge_environments(readings: list[dict[str, str | float]]) -> dict[str, str | float]:
+    """One environment from every declared one (initial and story changes).
+
+    A story that turns rain or fog on is a rain or fog scenario. Conflicting
+    readings (rain and fog, or day and night) stay unknown.
+    """
+    merged: dict[str, str | float] = {}
+    weathers = {item["weather"] for item in readings if "weather" in item}
+    adverse = weathers - {"dry"}
+    if len(adverse) == 1:
+        merged["weather"] = adverse.pop()
+    elif weathers == {"dry"}:
+        merged["weather"] = "dry"
+    times = {item["time_of_day"] for item in readings if "time_of_day" in item}
+    if len(times) == 1:
+        merged["time_of_day"] = times.pop()
+    ranges = [item["fog_visibility_m"] for item in readings if "fog_visibility_m" in item]
+    if ranges:
+        merged["fog_visibility_m"] = min(ranges)
+    return merged
 
 
 def parse_xosc(data: bytes | str) -> ScenarioIR:
@@ -78,6 +168,7 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
         action.source_path = paths[node]
         event = enclosing(node, "Event")
         action.event_path = paths[event] if event is not None else ""
+        action.event_name = event.get("name", "") if event is not None else ""
         scenario.actions.append(action)
     header = _first(root, "FileHeader")
     logic_file = _first(root, "LogicFile")
@@ -92,18 +183,23 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
     )
 
     for obj in _all(root, "ScenarioObject"):
-        kind, category = "reference", None
+        kind, category, model, width = "reference", None, None, None
         for child in list(obj):
             child_name = _local(child)
             if child_name in {"Vehicle", "Pedestrian", "MiscObject"}:
                 kind = child_name.lower()
                 category = child.get("vehicleCategory") or child.get("pedestrianCategory") or child.get("miscObjectCategory")
+                properties = {item.get("name"): item.get("value") for item in _all(child, "Property")}
+                model = properties.get("model") or child.get("model3d") or child.get("name")
+                model = model if model and model != "default" else None
+                dimensions = _first(child, "Dimensions")
+                width = _float(dimensions.get("width")) if dimensions is not None else None
                 break
             if child_name == "CatalogReference":
                 kind = "catalog_reference"
                 category = child.get("catalogName")
                 break
-        scenario.entities.append(EntityIR(obj.get("name", "unnamed"), kind, category))
+        scenario.entities.append(EntityIR(obj.get("name", "unnamed"), kind, category, model, width))
 
     # Initialization actions are grouped under Private by entity.
     for private in _all(root, "Private"):
@@ -187,35 +283,8 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
                         ),
                     )
                 )
-    # Multiple environments may change during playback. Only a single declared
-    # environment is evidence for a constant requirement; otherwise leave unknown.
-    environments = list(_all(root, "Environment"))
-    if len(environments) == 1:
-        environment = environments[0]
-        precipitation = _first(environment, "Precipitation")
-        fog = _first(environment, "Fog")
-        clock = _first(environment, "TimeOfDay")
-        if precipitation is not None:
-            kind = precipitation.get("precipitationType")
-            intensity = _float(precipitation.get("intensity"))
-            if kind == "dry":
-                scenario.environment["weather"] = "dry"
-            elif kind in {"rain", "snow"} and intensity is not None and intensity >= 0:
-                scenario.environment["weather"] = kind if intensity > 0 else "dry"
-        visibility = _float(fog.get("visualRange")) if fog is not None else None
-        if visibility is not None:
-            scenario.environment["fog_visibility_m"] = visibility
-            # Match ScenarioManager's coarse test-weather convention; retain
-            # the raw range for requirements that specify exact visibility.
-            if 0 < visibility <= 350 and scenario.environment.get("weather") in {None, "dry"}:
-                scenario.environment["weather"] = "fog"
-        if clock is not None:
-            from datetime import datetime
-            try:
-                hour = datetime.fromisoformat(clock.get("dateTime", "").replace("Z", "+00:00")).hour
-                scenario.environment["time_of_day"] = "day" if 6 <= hour < 18 else "night"
-            except ValueError:
-                pass
+    scenario.environment = _merge_environments(
+        [_environment_reading(environment) for environment in _all(root, "Environment")])
     return scenario
 
 

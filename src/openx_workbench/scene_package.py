@@ -82,6 +82,14 @@ class RetrievalQuery:
     target_speeds_kph: tuple[float, ...] = ()
     environment: tuple[tuple[str, str], ...] = ()
     unverified: tuple[str, ...] = ()
+    # Scenery props (cones, barriers) grouped by position: they can stand for a
+    # requested obstacle but are not participants. Only an asset has them.
+    scenery_signatures: tuple[ParticipantSignature, ...] = ()
+    # (occluder kind, occluded kind) pairs, e.g. ("vehicle", "pedestrian").
+    occlusions: frozenset[tuple[str, str]] = frozenset()
+    # A driver-intervention test (driver inputs override the system); None: not stated.
+    driver_intervention: bool | None = None
+    parking_operation: str = ""  # park_in / park_out
 
 
 STRUCTURE_KINDS = {
@@ -148,6 +156,7 @@ STRUCTURE_ROADS = {
     "交叉口": "junction",
     "高速路": "motorway",
 }
+STRUCTURE_PARKING = {"泊入": "park_in", "泊出": "park_out"}
 STRUCTURE_TRIGGERS = {
     "TTC": "ttc",
     "相对距离": "distance",
@@ -158,20 +167,24 @@ STRUCTURE_TRIGGERS = {
 
 def query_structure_text(query: RetrievalQuery) -> str:
     """Name-free canonical text shared by requirement and asset recall routes."""
-    return json.dumps(
-        {
-            "function": query.tested_function,
-            "participants": sorted(item.key() for item in query.participant_signatures),
-            "ego_actions": sorted(query.ego_actions),
-            "road": sorted(query.road_features),
-            "triggers": sorted(query.trigger_kinds),
-            "params": query.parameters,
-            "target_speeds": query.target_speeds_kph,
-            "environment": query.environment,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
+    content = {
+        "function": query.tested_function,
+        # Scenery reads as the obstacles a requirement names.
+        "participants": sorted(item.key() for item in (*query.participant_signatures, *query.scenery_signatures)),
+        "ego_actions": sorted(query.ego_actions),
+        "road": sorted(query.road_features),
+        "triggers": sorted(query.trigger_kinds),
+        "params": query.parameters,
+        "target_speeds": query.target_speeds_kph,
+        "environment": query.environment,
+    }
+    if query.occlusions:
+        content["occlusions"] = sorted(f"{blocker}>{target}" for blocker, target in query.occlusions)
+    if query.driver_intervention:
+        content["driver_intervention"] = True
+    if query.parking_operation:
+        content["parking"] = query.parking_operation
+    return json.dumps(content, ensure_ascii=False, sort_keys=True)
 
 
 def _structured_query(package: ScenePackage) -> RetrievalQuery:
@@ -231,17 +244,20 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         )
         if params[key] in mapping
     )
+    occlusions = frozenset(
+        (STRUCTURE_KINDS[item["subject"]], STRUCTURE_KINDS[item["object"]])
+        for item in structure["relations"] if item["relation"] == "遮挡"
+    )
+    # A driver-intervention test is read from the asset's driver-input overrides;
+    # the other intents (functional, false activation, boundary) are not.
+    intervention = structure["test_intent"] == "驾驶员干预试验"
     # Keep unsupported declared requirements visible in the verdict. They must
     # never disappear just because the XML reader does not yet understand them.
-    for key in (
-        "relations",
-        "venue_features",
-        "lane_marking",
-        "parking_operation",
-        "test_intent",
-    ):
+    for key in ("venue_features", "lane_marking"):
         if structure[key] and structure[key] != "未知":
             unverified.append(f"{key}={structure[key]}")
+    if structure["test_intent"] not in {"未知", "驾驶员干预试验"}:
+        unverified.append(f"test_intent={structure['test_intent']}")
     for key in (
         "lateral_direction",
         "curve_radius_m",
@@ -285,6 +301,9 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         else tuple(sorted(params["target_speeds_kph"])),
         environment=environment,
         unverified=tuple(unverified),
+        occlusions=occlusions,
+        driver_intervention=True if intervention else (False if structure["test_intent"] != "未知" else None),
+        parking_operation=STRUCTURE_PARKING.get(structure["parking_operation"], ""),
     )
     if not any(
         (
@@ -297,6 +316,9 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             query.environment,
             query.trigger_kinds,
             query.unverified,
+            query.occlusions,
+            query.driver_intervention,
+            query.parking_operation,
         )
     ):
         query = replace(query, unverified=("no extracted structural requirements",))

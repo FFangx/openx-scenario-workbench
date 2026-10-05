@@ -45,7 +45,7 @@ FACING_OPPOSITE_MIN = 5 * math.pi / 6  # from 150° faces the opposite way; betw
 
 PARAMETER_TOLERANCE = {"ttc_s": 0.05, "distance_m": 0.1, "ego_speed_kph": 0.5}
 TARGET_SPEED_TOLERANCE_KPH = 0.5
-CONSTANT_SPEED_TOLERANCE_MPS = 0.01  # story speed events this close to the initial speed keep it "cruise"
+MOVING_SPEED_MPS = 0.3  # speeds up to this (about 1 km/h) are standstill; targets are compared to 0.1 m/s
 
 # ---------- ranking ----------
 # Candidates are ordered by (blocking differences, change cost, -score). The score

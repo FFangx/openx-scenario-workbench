@@ -24,13 +24,12 @@ It does not introduce a second ingestion, model or indexing stack.
 - A `review` assessment is saved only when the reviewer confirms each open item with a
   reason. The verdict stays `review`; the reasons are kept in the trace
   (`reuse.review_signoff`) and shown as "confirmed after review".
-- Initialization speed is separate from story speed events. A single positive-to-zero
-  target establishes stopping; complex events or unresolved speed actions require
-  review. Function labels describe an accepted classification, not ASAM certification.
+- Speeds and environments are read as described in "SIM structure facts" below
+  (2026-10-05). Function labels describe an accepted classification or a simulator
+  command that switches the function on, not ASAM certification.
 - Environment labels follow coarse ScenarioManager conventions: precipitation
   intensity distinguishes active rain/snow, 06:00–18:00 denotes daytime and visibility
-  up to 350 m denotes the fog-test category. Raw fog visibility is retained. Multiple
-  environments remain unknown; this is not a weather-transition interpreter.
+  up to 350 m denotes the fog-test category. Raw fog visibility is retained.
 - Names/accepted labels and name-free structure have independent recall routes using
   the same encoder. Blocking differences and explicit change costs govern final
   ranking. Existing exhaustive structural bucket inclusion is retained.
@@ -45,6 +44,43 @@ It does not introduce a second ingestion, model or indexing stack.
   deletion and PDF revision/publication use one reentrant cross-process store guard.
   Failed report writes release their own references; deleted versions cannot acquire
   new report pins. A process crash after pinning can leave a conservative orphan pin.
+
+## SIM structure facts (2026-10-05)
+
+ScenarioManager libraries carry their meaning in details a reading by element type
+misses. `scene_facts.py` re-derives ScenarioManager's structure rules on the parsed
+scenario (not on SIM JSON); none of them reads a scenario's name.
+
+- **Import.** Each SIM case keeps a `.case.json` sidecar with its map name and
+  environment presets. A case whose road is a simulator built-in map (not packed in
+  the archive) is still imported: its road type is read from the map name, it is
+  marked "road file missing", it can be matched, and it cannot be previewed, exported
+  as a standard copy or confirmed as `direct`.
+- **Scenery.** A `MiscObject` (cone, barrier, carton) is scenery, not a participant.
+  Props are counted by 3D model and lane, and grouped by position: a group can stand
+  for a requested obstacle but is never an extra participant. A standing obstacle's
+  facing is not compared. Occlusion is read per instance before grouping: a nearer
+  object whose BoundingBox width covers the ego's line of sight to a farther one (for
+  a moving target, any part of its sweep toward the ego's path); props occluding props
+  are not recorded.
+- **Speed.** An actor's speed is the highest absolute SpeedAction target, since
+  initialization often sets 0 and the story accelerates. A story transition (not a
+  step) to standstill is a stop; two distinct non-zero targets are a speed change; a
+  relative target speed means moving at no stated speed. Event order is not used.
+- **Commands.** `EnableXXX` names the tested function and, like `SysEngReq`, puts the
+  ego under system control; lane-offset, lane-change-request and ALCA-mode commands
+  are lane changes; `EnableAPA` / `ParkingOut` are parking in or out; door commands
+  and the driver's closing brake (`BrakePosition`) are recorded facts.
+- **Driver input.** Active `OverrideControllerValueAction` channels make a
+  driver-intervention test; an active reverse gear is reversing.
+- **Simulation control.** `TurnOff` and `just_for_test` events are dropped.
+- **Environment.** Every declared environment is read; story changes to rain, snow
+  or fog make the scenario that weather, conflicting readings stay unknown. Missing
+  values come from the case's environment preset, where rain and snow amounts
+  outrank the preset category and the preset fog level (a rendering setting) is not
+  read.
+- **Requirements.** Occlusion relations, a driver-intervention test intent and a
+  parking operation are now compared instead of left unverified.
 
 ## BGE-M3 runtime
 

@@ -9,6 +9,10 @@ class EntityIR:
     name: str
     kind: str
     category: str | None = None
+    # 3D model of the object (its `name` attribute or `model` property) and its
+    # BoundingBox width in metres, when declared.
+    model: str | None = None
+    width: float | None = None
 
 
 @dataclass(slots=True)
@@ -20,6 +24,15 @@ class ActionIR:
     phase: str = "story"
     source_path: str = ""
     event_path: str = ""
+    # Innermost action element (e.g. CustomCommandAction, LongitudinalDistanceAction).
+    element: str = ""
+    event_name: str = ""
+    # SpeedAction dynamicsShape (step, linear, ...).
+    shape: str | None = None
+    # CustomCommandAction text.
+    command: str | None = None
+    # Active OverrideControllerValueAction channels and their values (Brake, Gear, ...).
+    overrides: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

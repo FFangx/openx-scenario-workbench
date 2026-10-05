@@ -79,11 +79,12 @@ def classify_asset(store, version, *, client=None, use_model=False):
 
 
 def _target_labels(asset):
-    from .reuse_facts import bundle_participant_signatures
+    from .reuse_facts import bundle_participant_signatures, bundle_scenery_signatures
     labels = {"pedestrian": "行人", "cyclist": "骑行者", "motorcycle": "两轮车",
               "vehicle": "乘用车", "truck": "商用车", "bus": "商用车", "van": "商用车",
               "trailer": "商用车", "obstacle": "障碍物"}
-    return sorted({labels[item.kind] for item in bundle_participant_signatures(asset.bundle) if item.kind in labels})
+    return sorted({labels[item.kind] for item in (*bundle_participant_signatures(asset.bundle), *bundle_scenery_signatures(asset.bundle))
+                   if item.kind in labels})
 
 
 def read_classification(store, version):
