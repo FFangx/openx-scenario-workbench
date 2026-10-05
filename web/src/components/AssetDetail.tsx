@@ -3,7 +3,7 @@ import { Alert, App, Button, Collapse, Descriptions, Form, Input, Popconfirm, Se
 import { CloseOutlined, CodeOutlined, DeleteOutlined, DownloadOutlined, ExportOutlined, RobotOutlined, TagsOutlined } from "@ant-design/icons";
 import { api, urls, type AssetDetail as Detail, type ClassificationLabels, type StandardExportResult, type VersionRef } from "../api";
 import { dateTime, useT } from "../i18n";
-import { PREVIEW_FAILED, valueLabel } from "../vocab";
+import { PREVIEW_FAILED, roadFeatureLabel, valueLabel } from "../vocab";
 import { SourceFilesDialog, StandardChecks } from "./AssessmentDialogs";
 import { PreviewPlayer } from "./PreviewPlayer";
 
@@ -81,12 +81,16 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
               <div className="settings-form">
                 {detail.summary && (
                   <p className="muted">
-                    {t(`${detail.summary.entities} 个参与者 · 道路总长 ${detail.summary.road_length_m.toFixed(0)} m · ${detail.summary.lane_count} 个车道记录 · ${detail.summary.junction_count} 个交叉口`,
+                    {detail.summary.road_file_missing ? (() => {
+                      const road = detail.summary.inferred_road_features.map((f) => roadFeatureLabel(f, lang)).join(", ") || t("未知", "unknown");
+                      return t(`${detail.summary.entities} 个参与者 · 道路文件缺失（地图「${detail.summary.road_name ?? ""}」，按地图名推断为${road}）`,
+                        `${detail.summary.entities} entities · road file missing (map "${detail.summary.road_name ?? ""}", inferred from its name as ${road})`);
+                    })() : t(`${detail.summary.entities} 个参与者 · 道路总长 ${detail.summary.road_length_m.toFixed(0)} m · ${detail.summary.lane_count} 个车道记录 · ${detail.summary.junction_count} 个交叉口`,
                       `${detail.summary.entities} entities · ${detail.summary.road_length_m.toFixed(0)} m road · ${detail.summary.lane_count} lane entries · ${detail.summary.junction_count} junctions`)}
                     {detail.summary.description && <><br />{detail.summary.description}</>}
                   </p>
                 )}
-                <div className="asset-player"><PreviewPlayer cand={{ ...version, has_frame: detail.has_frame }} esmini={esmini} onSettings={onSettings} /></div>
+                <div className="asset-player"><PreviewPlayer cand={{ ...version, compatibility: v.compatibility, has_frame: detail.has_frame }} esmini={esmini} onSettings={onSettings} /></div>
                 {v.compatibility_detail && <pre className="json-view">{v.compatibility_detail}</pre>}
                 <Collapse size="small" items={[{ key: "checks", label: t("文件标准检查", "File standard checks"), children: <StandardChecks checks={detail.validation ?? {}} /> }]} />
               </div>

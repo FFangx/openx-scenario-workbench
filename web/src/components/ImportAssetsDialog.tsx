@@ -15,6 +15,7 @@ export function ImportReports({ job }: { job: Job }) {
   const cases = reports.reduce((n, r) => n + r.case_count, 0);
   const skipped = Math.max(0, cases - reports.reduce((n, r) => n + r.imported_count, 0));
   const missing = reports.flatMap((r) => r.missing_road_references);
+  const roadMissing = reports.reduce((n, r) => n + (r.road_missing_count ?? 0), 0);
   return (
     <>
       <div className="muted job-note">
@@ -27,10 +28,13 @@ export function ImportReports({ job }: { job: Job }) {
           {t(`${r.source_name}：${r.imported_count}/${r.case_count} 个场景可配对`, `${r.source_name}: ${r.imported_count}/${r.case_count} pairable cases`)}
         </div>
       ))}
-      {(skipped > 0 || missing.length > 0) && (
-        <Alert type="warning" showIcon title={t(`部分场景未入库：跳过 ${skipped} 个场景，${missing.length} 条道路引用缺失。补充以下 XODR 文件后重新导入。`,
-          `Partial import: ${skipped} cases skipped; ${missing.length} missing road references. Add these XODR files and reimport.`)}
-          description={missing.length ? <pre className="json-view">{missing.join("\n")}</pre> : undefined} />
+      {skipped > 0 && (
+        <Alert type="warning" showIcon title={t(`部分场景未入库：跳过 ${skipped} 个场景。`, `Partial import: ${skipped} cases skipped.`)} />
+      )}
+      {missing.length > 0 && (
+        <Alert type="info" showIcon title={t(`${roadMissing} 个场景引用了包内没有的道路（仿真软件内置道路）：已入库并可参与匹配，道路类型由地图名推断，但无法预览。补充以下 XODR 文件后重新导入即可预览。`,
+          `${roadMissing} cases reference roads not in the package (simulator built-in roads): imported and matchable, with the road type inferred from the map name, but not previewable. Add these XODR files and reimport to preview them.`)}
+          description={<pre className="json-view">{missing.join("\n")}</pre>} />
       )}
     </>
   );

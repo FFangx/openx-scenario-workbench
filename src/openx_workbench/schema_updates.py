@@ -306,7 +306,7 @@ def preview(store, job, revision: str, root: Path | None = None) -> dict:
     for index, version in enumerate(versions):
         job.check()
         job.note(version.title or version.source_name)
-        for role in ("scenario", "road"):
+        for role in ("scenario",) if version.road_missing else ("scenario", "road"):
             data = store.file_bytes(version, role)
             before, after = validate_xml(data, root=root), validate_xml(data, root=staging)
             if before["status"] != after["status"] or len(before["issues"]) != len(after["issues"]):

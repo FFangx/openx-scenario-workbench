@@ -175,6 +175,8 @@ def asset_file(asset_id: str, version_id: str, role: str) -> Response:
     if role not in {"scenario", "road"}:
         raise HTTPException(404, "Unknown file role.")
     version = _version(asset_id, version_id)
+    if role == "road" and version.road_missing:
+        raise HTTPException(404, "Road file missing.")
     name = (version.xosc_name if role == "scenario" else version.xodr_name).rsplit("/", 1)[-1]
     return Response(_store().file_bytes(version, role), media_type="application/xml",
                     headers={"Content-Disposition": f'inline; filename="{name}"'})
@@ -268,7 +270,7 @@ def overview() -> dict[str, Any]:
     recent = sorted(versions, key=lambda item: item.created_at, reverse=True)[:8]
     return {"assets": len(latest), "versions": len(versions),
             "playable": sum(item.compatibility == "playable" for item in latest),
-            "unavailable": sum(item.compatibility in {"unsupported", "failed", "timeout"} for item in latest),
+            "unavailable": sum(item.compatibility in {"unsupported", "failed", "timeout", "road_missing"} for item in latest),
             "untested": sum(item.compatibility == "not_tested" for item in latest),
             "recent": [{key: getattr(item, key) for key in ("asset_id", "version_id", "title", "source_name",
                                                              "version_number", "compatibility", "created_at")}

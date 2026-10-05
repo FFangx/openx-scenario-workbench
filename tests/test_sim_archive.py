@@ -3,14 +3,22 @@ import json
 import zipfile
 from xml.etree import ElementTree as ET
 
+import pytest
+
 from openx_workbench.catalog import AssetFile, build_catalog
+from openx_workbench.parser import map_road_features
 from openx_workbench.sim_archive import expand_sim_archives, _osc_json_to_xml
 
+RAIN_PRESET = {"id": "rainy02", "category": "rainy", "time": "20:00:00", "rain": 3, "snow": 0, "fog": 3}
 
-def _sim_bytes(road_name: str = "demo.xodr", include_road: bool = True) -> bytes:
+
+def _sim_bytes(road_name: str = "demo.xodr", include_road: bool = True,
+               map_id: str = "demo", map_name: str = "three-lane junction") -> bytes:
     payload = {
-        "caseDef": {"id": "case-001", "name": "Adjacent cut-in"},
+        "caseDef": {"id": "case-001", "name": "Adjacent cut-in", "mapId": map_id, "mapName": map_name},
         "caseData": {
+            "environments": {"byId": {"rainy02": RAIN_PRESET}, "allIds": ["rainy02"]},
+            "currEnvId": "rainy02",
             "openSCENARIO": {
                 "FileHeader": {"revMajor": "1", "revMinor": "1", "description": "Cut-in", "author": "demo"},
                 "RoadNetwork": {"LogicFile": {"filepath": road_name}},
@@ -77,19 +85,63 @@ def test_sim_root_order_does_not_depend_on_json_parameter_edit_order():
     assert next(iter(data)) == "Storyboard"  # Input remains untouched.
 
 
-def test_sim_archive_reports_missing_road_and_accepts_supplement() -> None:
-    sim = AssetFile("demo.sim", _sim_bytes("external.xodr", include_road=False))
+def test_sim_case_keeps_map_and_environment_presets() -> None:
+    files, _ = expand_sim_archives([AssetFile("demo.sim", _sim_bytes())])
+    sidecar = next(item for item in files if item.name == "demo/case-001.case.json")
+    case = json.loads(sidecar.data)
+    assert (case["map_id"], case["map_name"]) == ("demo", "three-lane junction")
+    assert case["environments"] == [RAIN_PRESET]
+    assert case["current_environment_id"] == "rainy02"
+    assert case["road_missing"] is False
+    asset = build_catalog(files)[0]
+    assert asset.bundle.source_case["map_name"] == "three-lane junction"
+    assert not asset.bundle.road.file_missing
+
+
+def test_sim_case_with_missing_built_in_road_is_matchable_not_previewable() -> None:
+    sim = AssetFile("demo.sim", _sim_bytes("Junction3.xodr", include_road=False, map_id="Junction3"))
     files, reports = expand_sim_archives([sim])
-    assert not any(item.name.endswith(".xosc") for item in files)
-    assert reports[0].missing_road_references == ("external.xodr",)
+    assert reports[0].missing_road_references == ("Junction3.xodr",)
+    assert (reports[0].imported_count, reports[0].road_missing_count) == (1, 1)
+
+    asset = build_catalog(files)[0]
+    assert asset.xodr_name == ""
+    assert asset.bundle.road.file_missing
+    assert asset.bundle.road.name == "three-lane junction"
+    assert asset.bundle.road.inferred_features == ["junction"]
+    assert asset.bundle.validation["road"]["status"] == "missing"
+    assert "road_file_missing" in asset.bundle.warnings
+    assert [entity.name for entity in asset.bundle.scenario.entities] == ["Ego", "Target"]
 
     road = AssetFile(
-        "external.xodr",
+        "Junction3.xodr",
         b'<OpenDRIVE><header/><road id="1" length="1"><planView/></road></OpenDRIVE>',
     )
     files, reports = expand_sim_archives([sim, road])
-    assert len(build_catalog(files)) == 1
-    assert reports[0].imported_count == 1
+    asset = build_catalog(files)[0]
+    assert asset.xodr_name == "Junction3.xodr" and not asset.bundle.road.file_missing
+    assert (reports[0].imported_count, reports[0].road_missing_count) == (1, 0)
+
+
+def test_standalone_scenario_still_requires_its_road() -> None:
+    files, _ = expand_sim_archives([AssetFile("demo.sim", _sim_bytes("external.xodr", include_road=False))])
+    with pytest.raises(ValueError, match="external.xodr"):
+        build_catalog([item for item in files if not item.name.endswith(".case.json")])
+
+
+@pytest.mark.parametrize(("names", "features"), [
+    (("Junction3", "three-lane junction"), ["junction"]),
+    (("FourLanesIntersection",), ["junction"]),
+    (("two-lane roundabout junction",), ["roundabout"]),
+    (("park_ground", "ground parking lot"), ["parking"]),
+    (("TwoLanesSameDirection_walkCross",), ["straight"]),
+    (("ThreeLanes",), ["straight"]),
+    (("SeniorScene_CityHighWay",), ["motorway"]),
+    (("straight_and_r=500",), ["curve"]),
+    (("Town07",), []),
+])
+def test_map_name_road_type(names, features) -> None:
+    assert map_road_features(*names) == features
 
 
 def test_sim_archive_resolves_scenariomanager_map_id_reference() -> None:

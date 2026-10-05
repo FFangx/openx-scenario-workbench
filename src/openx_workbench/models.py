@@ -75,6 +75,11 @@ class RoadIR:
     junction_count: int = 0
     signal_count: int = 0
     object_count: int = 0
+    # The referenced OpenDRIVE file is not available (e.g. a simulator's
+    # built-in map). Only the map name is known; `inferred_features` are
+    # road types read from that name, never from geometry.
+    file_missing: bool = False
+    inferred_features: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -84,6 +89,9 @@ class ParseBundle:
     warnings: list[str] = field(default_factory=list)
     road_geometry: dict[str, Any] = field(default_factory=dict, repr=False)
     validation: dict[str, Any] = field(default_factory=dict)
+    # Authoring-tool metadata outside the OpenSCENARIO file, such as a
+    # ScenarioManager case's map and environment presets.
+    source_case: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -292,6 +292,8 @@ class CandidateRoad(Shape):
     junction_count: int
     road_count: int
     revision: str | None
+    file_missing: bool
+    inferred_features: list[str]
 
 
 class Candidate(Shape):
@@ -559,6 +561,9 @@ class AssetSummary(Shape):
     lane_count: int
     junction_count: int
     description: str
+    road_file_missing: bool
+    road_name: str | None
+    inferred_road_features: list[str]
 
 
 class AssetDetail(Shape):
@@ -606,6 +611,7 @@ class ImportReport(Open):
     case_count: int
     imported_count: int
     missing_road_references: list[str]
+    road_missing_count: int = 0
 
 
 class JobResult(Open):

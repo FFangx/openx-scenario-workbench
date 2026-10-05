@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from xml.etree import ElementTree as ET
 
-from .catalog import AssetFile
+from .catalog import AssetFile, case_metadata_name
 
 SCENARIO_ROOT_ORDER = ("FileHeader", "ParameterDeclarations", "VariableDeclarations",
                        "CatalogLocations", "RoadNetwork", "Entities", "Storyboard")
@@ -20,13 +20,17 @@ class SimImportReport:
     imported_count: int
     contained_road_count: int
     missing_road_references: tuple[str, ...]
+    # Imported cases whose road is still missing: matchable, not previewable.
+    road_missing_count: int = 0
 
 
 def expand_sim_archives(files: list[AssetFile]) -> tuple[list[AssetFile], list[SimImportReport]]:
     """Expand `.sim` ZIP containers into pairable XOSC/XODR asset files.
 
     Standalone XODR uploads supplement roads omitted from a SIM archive. Cases whose
-    referenced road is still unavailable are reported and excluded from the catalog.
+    referenced road is still unavailable (a simulator built-in map) are reported but
+    still imported: each case's map name and environment presets travel in a
+    `.case.json` sidecar, and the catalog marks the road file as missing.
     """
 
     regular = [item for item in files if not item.name.casefold().endswith(".sim")]
@@ -68,29 +72,31 @@ def _expand_sim(
         ]
         assets: list[AssetFile] = list(contained_road_files)
         missing: set[str] = set()
-        imported = 0
+        imported = road_missing = 0
         sim_stem = PurePosixPath(sim_file.name.replace("\\", "/")).stem
 
         for index, case_name in enumerate(case_names, start=1):
             payload = json.loads(archive.read(case_name).decode("utf-8"))
             case_def = payload.get("caseDef") or {}
-            open_scenario = (payload.get("caseData") or {}).get("openSCENARIO") or {}
+            case_data = payload.get("caseData") or {}
+            open_scenario = case_data.get("openSCENARIO") or {}
             road_ref = (
                 (open_scenario.get("RoadNetwork") or {})
                 .get("LogicFile", {})
                 .get("filepath", "")
             )
             road_key = PurePosixPath(str(road_ref).replace("\\", "/")).name.casefold()
-            if not road_key or road_key not in roads:
+            has_road = bool(road_key) and road_key in roads
+            if not has_road:
                 missing.add(str(road_ref) or "<unspecified>")
-                continue
+                road_missing += 1
 
             case_id = str(case_def.get("id") or f"case-{index:04d}")
             case_title = str(case_def.get("name") or case_id)
-            assets.append(AssetFile(
-                f"{sim_stem}/{case_id}.xosc",
-                _osc_json_to_xml(open_scenario, case_title),
-            ))
+            xosc_name = f"{sim_stem}/{case_id}.xosc"
+            assets.append(AssetFile(xosc_name, _osc_json_to_xml(open_scenario, case_title)))
+            assets.append(AssetFile(case_metadata_name(xosc_name), _case_metadata(
+                case_id, case_def, case_data, str(road_ref), road_missing=not has_road)))
             imported += 1
 
     return assets, SimImportReport(
@@ -99,7 +105,30 @@ def _expand_sim(
         imported_count=imported,
         contained_road_count=len(contained_road_files),
         missing_road_references=tuple(sorted(missing, key=str.casefold)),
+        road_missing_count=road_missing,
     )
+
+
+def _case_metadata(case_id: str, case_def: dict, case_data: dict, road_reference: str,
+                   *, road_missing: bool) -> bytes:
+    """Case facts the OpenSCENARIO JSON leaves out: the map and the environment presets.
+
+    ScenarioManager keeps weather and time of day as presets in
+    `caseData.environments` unless the story sets them with an EnvironmentAction.
+    """
+    environments = case_data.get("environments") or {}
+    by_id = environments.get("byId") or {}
+    metadata = {
+        "case_id": case_id,
+        "map_id": str(case_def.get("mapId") or ""),
+        "map_name": str(case_def.get("mapName") or ""),
+        "road_reference": road_reference,
+        "road_missing": road_missing,
+        "environments": [by_id[key] for key in environments.get("allIds") or []
+                         if isinstance(by_id.get(key), dict)],
+        "current_environment_id": case_data.get("currEnvId"),
+    }
+    return json.dumps(metadata, ensure_ascii=False, sort_keys=True).encode("utf-8")
 
 
 def _logical_road_name(path: PurePosixPath) -> str:

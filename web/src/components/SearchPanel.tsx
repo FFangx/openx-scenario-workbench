@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Alert, Button, Empty, Form, Input, Select, Table, Tabs, Tag, Tooltip, type TableColumnsType } from "antd";
 import { CheckCircleFilled, CloseCircleFilled, CloseOutlined, FileOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
 import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Lang, type Library, type Scene, type SearchResponse } from "../api";
-import { valueLabel } from "../vocab";
+import { roadFeatureLabel, valueLabel } from "../vocab";
 import { dateTime, useT } from "../i18n";
 import { ArrowUpRight } from "./ArrowUpRight";
 import { PreviewPlayer } from "./PreviewPlayer";
@@ -62,10 +62,17 @@ export function SearchPanel(p: Props) {
             <FileOutlined />
             <span className="fn">{basename(c.xosc)}</span>
           </a>
-          <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr} onClick={(e) => e.stopPropagation()}>
-            <FileTextOutlined />
-            <span className="fn">+ {basename(c.xodr)}</span>
-          </a>
+          {c.road.file_missing ? (
+            <span className="muted" title={t("道路文件缺失", "Road file missing")}>
+              <FileTextOutlined />
+              <span className="fn">+ {t("道路缺失", "No road")}</span>
+            </span>
+          ) : (
+            <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr} onClick={(e) => e.stopPropagation()}>
+              <FileTextOutlined />
+              <span className="fn">+ {basename(c.xodr)}</span>
+            </a>
+          )}
         </div>
       ),
     },
@@ -289,7 +296,8 @@ export function SearchPanel(p: Props) {
               <div className="pv-link">
                 <a href={urls.file(c, "scenario")} target="_blank" rel="noreferrer" title={c.xosc}>{basename(c.xosc)}</a>
                 <span className="plus">+</span>
-                <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{basename(c.xodr)}</a>
+                {c.road.file_missing ? <span className="muted">{t("道路文件缺失", "Road file missing")}</span>
+                  : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{basename(c.xodr)}</a>}
               </div>
               <Tabs
                 size="small"
@@ -298,7 +306,13 @@ export function SearchPanel(p: Props) {
                   {
                     key: "xodr",
                     label: t("道路（XODR）", "Road (XODR)"),
-                    children: (
+                    children: c.road.file_missing ? (
+                      <div className="kv">
+                        <span>{t("文件", "File")}</span><span>{t("缺失（仿真软件内置道路）", "Missing (simulator built-in road)")}</span>
+                        <span>{t("道路类型", "Road type")}</span>
+                        <span>{c.road.inferred_features.map((f) => roadFeatureLabel(f, lang)).join(", ") || t("未知", "Unknown")}{t("（由地图名推断）", " (from the map name)")}</span>
+                      </div>
+                    ) : (
                       <div className="kv">
                         <span>{t("文件", "File")}</span><span title={c.xodr}>{basename(c.xodr)}</span>
                         <span>{t("长度", "Length")}</span><span>{metres(c.road.total_length_m)}</span>
@@ -315,7 +329,7 @@ export function SearchPanel(p: Props) {
                     children: (
                       <div className="kv">
                         <span>{t("画面", "Frame")}</span><span>{c.has_frame ? t("已缓存的 esmini 画面", "Cached esmini frame") : t("尚未生成", "Not generated yet")}</span>
-                        <span>{t("播放", "Playback")}</span><span>{c.compatibility === "playable" ? t("可播放", "Playable") : c.compatibility === "failed" ? t("播放失败", "Failed") : t("未检测", "Not tested")}</span>
+                        <span>{t("播放", "Playback")}</span><span>{c.compatibility === "playable" ? t("可播放", "Playable") : c.compatibility === "failed" ? t("播放失败", "Failed") : c.compatibility === "road_missing" ? t("道路文件缺失", "Road file missing") : t("未检测", "Not tested")}</span>
                         <span>{t("触发器", "Triggers")}</span><span>{c.scenario.trigger_count}</span>
                       </div>
                     ),
@@ -328,7 +342,8 @@ export function SearchPanel(p: Props) {
             </div>
             <div className="pv-road">
               <div className="hd">
-                {t("关联道路：", "Associated road: ")}<a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{basename(c.xodr)}</a>
+                {t("关联道路：", "Associated road: ")}{c.road.file_missing ? t("缺失", "missing")
+                  : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{basename(c.xodr)}</a>}
               </div>
               <div className="img-empty road">
                 <b>{metres(c.road.total_length_m)}</b>

@@ -321,8 +321,14 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
           <span className="ell" title={cand.xosc}>{basename(cand.xosc)}</span>
           <span><a href={urls.file(cand, "scenario")} target="_blank" rel="noreferrer">{t("打开", "Open")} <ArrowUpRight /></a></span>
           <span>{t("道路", "Road")}</span>
-          <span className="ell" title={cand.xodr}>{basename(cand.xodr)}</span>
-          <span><a href={urls.file(cand, "road")} target="_blank" rel="noreferrer">{t("打开", "Open")} <ArrowUpRight /></a></span>
+          {cand.road.file_missing ? (
+            <><span className="ell muted">{t("道路文件缺失", "Road file missing")}</span><span /></>
+          ) : (
+            <>
+              <span className="ell" title={cand.xodr}>{basename(cand.xodr)}</span>
+              <span><a href={urls.file(cand, "road")} target="_blank" rel="noreferrer">{t("打开", "Open")} <ArrowUpRight /></a></span>
+            </>
+          )}
         </div>
       </div>
 

@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from .atomic_write import write_bytes, write_json
-from .catalog import AssetFile, OpenXAsset, build_catalog
+from .catalog import AssetFile, OpenXAsset, build_catalog, case_metadata_name
 from .dependency_package import package_files
 from .sim_archive import expand_sim_archives
 from .store_lock import serialized
@@ -45,6 +45,11 @@ class AssetVersion:
     files: tuple[dict[str, str], ...]
     compatibility: str = "not_tested"
     compatibility_detail: str = ""
+
+    @property
+    def road_missing(self) -> bool:
+        """The scenario's road is a simulator built-in map that was not imported: no preview or export."""
+        return not any(record["role"] == "road" for record in self.files)
 
 
 class AssetStore:
@@ -111,20 +116,21 @@ class AssetStore:
     def _save(self, asset: OpenXAsset, expanded: list[AssetFile], source: AssetFile,
               existing: list[AssetVersion]) -> AssetVersion:
         scenario = next(item for item in expanded if item.name == asset.xosc_name)
-        road = next(item for item in reversed(expanded) if item.name == asset.xodr_name)
+        road = next((item for item in reversed(expanded) if item.name == asset.xodr_name), None) if asset.xodr_name else None
+        case = next((item for item in expanded if item.name == case_metadata_name(asset.xosc_name)), None)
         logical = f"{source.name.casefold()}\0{asset.xosc_name.casefold()}".encode("utf-8")
         asset_id = _digest(logical)[:20]
-        content_hash = _digest(source.data + b"\0" + scenario.data + b"\0" + road.data)
+        content_hash = _digest(source.data + b"\0" + scenario.data + b"\0" + (road.data if road else b""))
         version_id = content_hash[:20]
         old = next((v for v in existing if v.asset_id == asset_id and v.version_id == version_id), None)
         if old:
-            return old
+            return self._backfill_case(old, case, existing)
         number = 1 + max((v.version_number for v in existing if v.asset_id == asset_id), default=0)
         folder = self._manifest_path(asset_id, version_id).parent
         folder.mkdir(parents=True, exist_ok=True)
-        payloads = (("source", source), ("scenario", scenario), ("road", road))
+        payloads = (("source", source), ("scenario", scenario), ("road", road), ("case", case))
         records = []
-        for role, item in payloads:
+        for role, item in ((role, item) for role, item in payloads if item is not None):
             suffix = PurePosixPath(item.name.replace("\\", "/")).suffix.lower()
             filename = f"{role}{suffix}"
             checksum = _digest(item.data)
@@ -141,17 +147,37 @@ class AssetStore:
                                 "stored_name": filename, "sha256": checksum})
         if source.name.casefold().endswith(".zip"):
             for item in expanded:
-                if item.name in {scenario.name, road.name}:
+                if item.name in {scenario.name, road.name if road else None}:
                     continue
                 records.append({"role": "dependency", "original_name": item.name,
                                 "archive_member": item.name, "sha256": _digest(item.data)})
         version = AssetVersion(asset_id, version_id, number, asset.title, source.name,
                                asset.xosc_name, asset.xodr_name,
                                datetime.now(timezone.utc).isoformat(), content_hash,
-                               _digest(source.data), tuple(records))
+                               _digest(source.data), tuple(records),
+                               compatibility="road_missing" if road is None else "not_tested")
         self._write_manifest(version)
         existing.append(version)
         return version
+
+    def _backfill_case(self, version: AssetVersion, case: AssetFile | None,
+                       existing: list[AssetVersion]) -> AssetVersion:
+        """Add SIM case metadata to a version imported before it was kept.
+
+        The metadata is derived from the version's own source archive, so the
+        version's content identity is unchanged.
+        """
+        if case is None or any(record["role"] == "case" for record in version.files):
+            return version
+        from dataclasses import replace
+        folder = self._manifest_path(version.asset_id, version.version_id).parent
+        write_bytes(folder / "case.json", case.data, prefix="case-", suffix=".tmp")
+        record = {"role": "case", "original_name": case.name, "stored_name": "case.json",
+                  "sha256": _digest(case.data)}
+        updated = replace(version, files=(*version.files, record))
+        self._write_manifest(updated)
+        existing[existing.index(version)] = updated
+        return updated
 
     def _write_manifest(self, version: AssetVersion) -> None:
         from dataclasses import asdict
@@ -160,9 +186,14 @@ class AssetStore:
 
     def file_bytes(self, version: AssetVersion, role: str,
                    original_name: str | None = None) -> bytes:
-        record = next(record for record in version.files
-                      if record["role"] == role and
-                      (original_name is None or record["original_name"] == original_name))
+        record = next((record for record in version.files
+                       if record["role"] == role and
+                       (original_name is None or record["original_name"] == original_name)), None)
+        if record is None:
+            if role == "road":
+                raise FileNotFoundError("道路文件缺失：该场景引用的仿真软件内置道路未导入 / "
+                                        "Road file missing: the simulator's built-in road was not imported.")
+            raise KeyError(f"No {role} file in this version.")
         if "archive_member" in record:
             with zipfile.ZipFile(io.BytesIO(self.file_bytes(version, "source"))) as archive:
                 data = archive.read(record["archive_member"])
@@ -186,9 +217,12 @@ class AssetStore:
         return assets, mapping
 
     def load_asset(self, version: AssetVersion) -> OpenXAsset:
-        pair = [AssetFile(version.xosc_name, self.file_bytes(version, "scenario")),
-                AssetFile(version.xodr_name, self.file_bytes(version, "road"))]
-        asset = build_catalog(pair)[0]
+        files = [AssetFile(version.xosc_name, self.file_bytes(version, "scenario"))]
+        if not version.road_missing:
+            files.append(AssetFile(version.xodr_name, self.file_bytes(version, "road")))
+        if any(record["role"] == "case" for record in version.files):
+            files.append(AssetFile(case_metadata_name(version.xosc_name), self.file_bytes(version, "case")))
+        asset = build_catalog(files)[0]
         asset.asset_id = f"{version.asset_id}:{version.version_id}"
         from .classification import read_classification
         record = read_classification(self, version)
@@ -199,7 +233,7 @@ class AssetStore:
         return asset
 
     def set_compatibility(self, version: AssetVersion, status: str, detail: str = "") -> None:
-        if status not in {"not_tested", "playable", "warning", "unsupported", "failed", "timeout"}:
+        if status not in {"not_tested", "playable", "warning", "unsupported", "failed", "timeout", "road_missing"}:
             raise ValueError("Unknown compatibility status")
         from dataclasses import replace
         self._write_manifest(replace(version, compatibility=status, compatibility_detail=detail))

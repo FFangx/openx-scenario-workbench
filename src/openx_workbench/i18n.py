@@ -105,6 +105,7 @@ TEXT = {
         "road_file_mismatch": "场景引用的道路文件名与上传文件不一致。",
         "no_scenario_entities": "场景中没有发现参与者。",
         "no_roads": "道路文件中没有发现 road 元素。",
+        "road_file_missing": "道路文件缺失：道路类型只由地图名推断，无法预览。",
     },
     "en": {
         "title": "OpenX Scenario Workbench",
@@ -212,6 +213,7 @@ TEXT = {
         "road_file_mismatch": "The referenced road filename does not match the uploaded file.",
         "no_scenario_entities": "No scenario entities were found.",
         "no_roads": "No road elements were found in the road file.",
+        "road_file_missing": "Road file missing: the road type is inferred from the map name only; preview is unavailable.",
     },
 }
 

@@ -8,7 +8,7 @@ import { ArrowUpRight } from "./ArrowUpRight";
 const ACTIVE = new Set(["starting", "running"]);
 
 /** Real esmini frames only: a live MJPEG stream while playing, otherwise the saved still frame of this exact version. */
-export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Pick<Candidate, "asset_id" | "version_id" | "has_frame">; esmini: boolean; onSettings: () => void }) {
+export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Pick<Candidate, "asset_id" | "version_id" | "has_frame"> & { compatibility?: string }; esmini: boolean; onSettings: () => void }) {
   const { t } = useT();
   const [status, setStatus] = useState<PreviewStatus>({ state: "idle" });
   const [busy, setBusy] = useState(false);
@@ -54,7 +54,9 @@ export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Pick<Candida
   };
   const stop = () => api.previewStop().then(setStatus).catch(() => undefined);
 
-  const disabledReason = !esmini ? t("尚未找到 esmini，可在设置 → 本机服务中选择安装位置。", "esmini was not found; choose it under Settings → Local service.")
+  const disabledReason = cand.compatibility === "road_missing"
+    ? t("道路文件缺失：该场景引用的仿真软件内置道路未导入，补充 XODR 后重新导入即可预览。", "Road file missing: the simulator's built-in road was not imported; add its XODR and reimport to preview.")
+    : !esmini ? t("尚未找到 esmini，可在设置 → 本机服务中选择安装位置。", "esmini was not found; choose it under Settings → Local service.")
     : !cand.version_id ? t("此资产没有已保存的版本。", "This asset has no stored version.") : null;
 
   return (

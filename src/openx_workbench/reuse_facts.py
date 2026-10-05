@@ -270,6 +270,9 @@ def bundle_features(
         ]
     )
     entities, actions, triggers, _ = canonical_features(candidate_text)
+    if road.file_missing:
+        # No geometry to read: the map name is the only road evidence.
+        return entities, actions, triggers, set(road.inferred_features)
     road_features: set[str] = set()
     if "line" in road.geometry_types:
         road_features.add("straight")

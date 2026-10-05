@@ -86,6 +86,11 @@ def asset_text(asset: OpenXAsset) -> str:
         " ".join(filter(None, (entity.category for entity in scenario.entities))),
         " ".join(action.kind for action in scenario.actions),
         " ".join(trigger.kind for trigger in scenario.triggers),
+    ]
+    if road.file_missing:
+        parts += ["road file missing", " ".join(road.inferred_features)]
+        return " ".join(parts)
+    parts += [
         f"roads {len(road.road_ids)} length {road.total_length} lanes {road.lane_count}",
         " ".join(f"lane_{name} {count}" for name, count in road.lane_types.items()),
         " ".join(

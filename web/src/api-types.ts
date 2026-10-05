@@ -1225,12 +1225,18 @@ export interface components {
             description: string;
             /** Entities */
             entities: number;
+            /** Inferred Road Features */
+            inferred_road_features: string[];
             /** Junction Count */
             junction_count: number;
             /** Lane Count */
             lane_count: number;
+            /** Road File Missing */
+            road_file_missing: boolean;
             /** Road Length M */
             road_length_m: number;
+            /** Road Name */
+            road_name: string | null;
             /** Title */
             title: string;
         };
@@ -1363,10 +1369,14 @@ export interface components {
         };
         /** CandidateRoad */
         CandidateRoad: {
+            /** File Missing */
+            file_missing: boolean;
             /** Geometry Types */
             geometry_types: {
                 [key: string]: number;
             };
+            /** Inferred Features */
+            inferred_features: string[];
             /** Junction Count */
             junction_count: number;
             /** Lane Count */
@@ -1705,6 +1715,11 @@ export interface components {
             imported_count: number;
             /** Missing Road References */
             missing_road_references: string[];
+            /**
+             * Road Missing Count
+             * @default 0
+             */
+            road_missing_count?: number;
             /** Source Name */
             source_name: string;
         } & {

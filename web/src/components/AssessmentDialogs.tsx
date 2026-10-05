@@ -51,6 +51,7 @@ export function StandardChecksDialog({ cand, open, onClose }: { cand: Candidate;
 export const CHECK_LABELS: Record<string, [string, string, string]> = {
   valid: ["通过", "Passed", "direct"], invalid: ["未通过", "Failed", "not"],
   unsupported: ["此版本未支持", "Version unsupported", "review"], unavailable: ["未完成检查", "Check unavailable", "review"],
+  missing: ["道路文件缺失", "Road file missing", "review"],
 };
 
 export function StandardChecks({ checks }: { checks: Record<string, StandardCheck> }) {

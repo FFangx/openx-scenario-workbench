@@ -64,14 +64,16 @@ def asset_detail(asset_id: str, version_id: str) -> dict[str, Any]:
                      "compatibility": item.compatibility, "source_name": item.source_name}
                     for item in sorted((v for v in store.versions() if v.asset_id == asset_id),
                                        key=lambda v: v.version_number, reverse=True)],
-        "standard_export": version.source_name.casefold().endswith(".sim"),
+        "standard_export": version.source_name.casefold().endswith(".sim") and not version.road_missing,
     }
     try:
         asset = store.load_asset(version)
         road = asset.bundle.road
         detail["summary"] = {"title": asset.title, "entities": len(asset.bundle.scenario.entities),
                              "road_length_m": road.total_length, "lane_count": road.lane_count,
-                             "junction_count": road.junction_count, "description": asset.bundle.scenario.description or ""}
+                             "junction_count": road.junction_count, "description": asset.bundle.scenario.description or "",
+                             "road_file_missing": road.file_missing, "road_name": road.name,
+                             "inferred_road_features": road.inferred_features}
         detail["validation"] = asset.bundle.validation
     except Exception as error:  # noqa: BLE001 - an unreadable version is shown, not hidden
         detail["error"] = str(error)

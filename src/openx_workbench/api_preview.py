@@ -64,6 +64,8 @@ def _status(preview: PreviewProcess | None) -> dict[str, Any]:
 @router.post("/assets/{asset_id}/versions/{version_id}/preview", **documented(PreviewStatus))
 def preview_start(asset_id: str, version_id: str, request: PreviewRequest) -> dict[str, Any]:
     version = _version(asset_id, version_id)
+    if version.road_missing:
+        raise ValueError("道路文件缺失，无法预览 / The road file is missing; this version cannot be previewed.")
     executable = find_esmini(str(read_preferences().get("esmini_path", "")))
     if executable is None:
         raise ValueError("尚未找到 esmini，请在设置 → 本机服务中选择安装位置 / esmini was not found; choose it under Settings → Local service.")

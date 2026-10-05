@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 import math
 from pathlib import PurePosixPath
+from typing import Any
 from xml.etree import ElementTree as ET
 
 from .models import ActionIR, EntityIR, ParseBundle, PositionIR, RoadIR, ScenarioIR, TriggerIR
@@ -247,7 +248,51 @@ def parse_xodr(data: bytes | str) -> RoadIR:
     )
 
 
-def parse_bundle(xosc_data: bytes | str, xodr_data: bytes | str, xodr_filename: str | None = None) -> ParseBundle:
+# Map-name keywords of simulator built-in roads, checked in order: a "two-lane
+# roundabout junction" is a roundabout, a "three-lane junction" a junction.
+# Names that only count lanes ("ThreeLanes", "单向双车道") are the built-in
+# straight multi-lane roads. "cross" is left out: "walkCross" is a crosswalk.
+_MAP_ROAD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("parking", ("park", "停车", "泊车", "库位")),
+    ("roundabout", ("roundabout", "环岛", "环形")),
+    ("junction", ("junction", "intersection", "路口")),
+    ("curve", ("curve", "bend", "turn", "r=", "弯")),
+    ("motorway", ("motorway", "highway", "高速")),
+    ("straight", ("straight", "striaght", "直道", "直线", "lane", "车道")),
+)
+
+
+def map_road_features(*names: str | None) -> list[str]:
+    """Road type named by a map whose OpenDRIVE file is unavailable; empty when the name says nothing."""
+    text = " ".join(name for name in names if name).casefold()
+    return next(([feature] for feature, keywords in _MAP_ROAD_RULES
+                 if any(keyword in text for keyword in keywords)), [])
+
+
+def parse_bundle_without_road(xosc_data: bytes | str, map_names: tuple[str, ...] = (),
+                              source_case: dict[str, Any] | None = None) -> ParseBundle:
+    """Parse a scenario whose road file is missing: matchable on its scenario, not previewable."""
+    from .schema_validation import validate_xml
+    scenario = parse_xosc(xosc_data)
+    road = RoadIR(name=next((name for name in reversed(map_names) if name), None), file_missing=True,
+                  inferred_features=map_road_features(*map_names))
+    warnings = ["road_file_missing"]
+    if scenario.parameter_issues:
+        warnings.append("unresolved_scenario_parameters")
+    if not scenario.entities:
+        warnings.append("no_scenario_entities")
+    return ParseBundle(
+        scenario=scenario,
+        road=road,
+        warnings=warnings,
+        validation={"scenario": validate_xml(xosc_data),
+                    "road": {"status": "missing", "standard": "OpenDRIVE", "version": None, "issues": []}},
+        source_case=dict(source_case or {}),
+    )
+
+
+def parse_bundle(xosc_data: bytes | str, xodr_data: bytes | str, xodr_filename: str | None = None,
+                 source_case: dict[str, Any] | None = None) -> ParseBundle:
     from .schema_validation import validate_xml
     scenario = parse_xosc(xosc_data)
     road = parse_xodr(xodr_data)
@@ -269,4 +314,5 @@ def parse_bundle(xosc_data: bytes | str, xodr_data: bytes | str, xodr_filename: 
         warnings=warnings,
         road_geometry=parse_road_geometry(xodr_data),
         validation={"scenario": validate_xml(xosc_data), "road": validate_xml(xodr_data)},
+        source_case=dict(source_case or {}),
     )
