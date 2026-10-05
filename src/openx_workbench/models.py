@@ -88,6 +88,10 @@ class RoadIR:
     junction_count: int = 0
     signal_count: int = 0
     object_count: int = 0
+    # Driving lanes only (see parser._lane_profile); 0 when none were read.
+    lanes_same_direction: int = 0  # most driving lanes one direction offers on one cross-section
+    lanes_total: int = 0  # most driving lanes of both directions on one cross-section
+    lane_markings: list[str] = field(default_factory=list)  # "solid"/"broken" drawn on driving lanes
     # The referenced OpenDRIVE file is not available (e.g. a simulator's
     # built-in map). Only the map name is known; `inferred_features` are
     # road types read from that name, never from geometry.

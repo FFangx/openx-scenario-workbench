@@ -32,6 +32,18 @@ def compare_structure(
         if query.participant_signatures
         else []
     )
+    if not (query.participant_signatures or query.occlusions):
+        # Information gate: with no participant or interaction stated, two near-empty stories
+        # always "match", which proves nothing. Without a tested function either, it is a review;
+        # with one, a single-vehicle test of that function is reused only after its procedure
+        # (speeds, path) is confirmed, never as is.
+        differences.append(
+            ReuseDifference("procedure", f"single-vehicle {query.tested_function} test",
+                            "procedure not compared", "confirm the test procedure", cost=0, verified=False)
+            if query.tested_function else
+            ReuseDifference("story", "participants or tested function", "not stated in the requirement",
+                            "decide by hand whether this is the same test", verified=False)
+        )
     differences.extend(_occlusion_differences(query, candidate))
     differences.extend(_intent_differences(query, candidate))
     for value in candidate.unverified:
@@ -91,6 +103,7 @@ def compare_structure(
             cost=policy.COST_ROAD,
         )
     )
+    differences.extend(_lane_differences(query, asset.bundle.road))
     differences.extend(
         missing(
             "trigger",
@@ -132,6 +145,39 @@ def compare_structure(
         )
     differences.extend(environment_differences(query.environment, candidate.environment))
     return tuple(differences)
+
+
+LANE_SCOPES = {"same_direction": "lanes in one direction", "total": "lanes in total"}
+
+
+def _lane_differences(query: RetrievalQuery, road) -> list[ReuseDifference]:
+    """The road's driving lanes and lane lines against the requirement, in three states.
+
+    Enough lanes or the requested line present: no difference. Too few lanes or no such line on
+    the map: a road change. Not readable (road file missing, no driving lanes, no lane lines):
+    unverified, never a guess.
+    """
+    differences = []
+    if query.lane_count is not None:
+        requested = f"at least {query.lane_count} {LANE_SCOPES[query.lane_count_scope]}"
+        actual = road.lanes_same_direction if query.lane_count_scope == "same_direction" else road.lanes_total
+        if road.file_missing or not actual:
+            differences.append(ReuseDifference("road", requested, "road file missing" if road.file_missing
+                                               else "no driving lanes read", "verify lane count",
+                                               cost=policy.COST_ROAD, verified=False))
+        elif actual < query.lane_count:
+            differences.append(ReuseDifference("road", requested, f"{actual} {LANE_SCOPES[query.lane_count_scope]}",
+                                               "select a road with more lanes", cost=policy.COST_ROAD))
+    if query.lane_marking:
+        requested = f"{query.lane_marking} lane line"
+        if road.file_missing or not road.lane_markings:
+            differences.append(ReuseDifference("road", requested, "road file missing" if road.file_missing
+                                               else "no lane lines read", "verify lane lines",
+                                               cost=policy.COST_ROAD, verified=False))
+        elif query.lane_marking not in road.lane_markings:
+            differences.append(ReuseDifference("road", requested, "lines: " + ", ".join(road.lane_markings),
+                                               "select or modify OpenDRIVE lane lines", cost=policy.COST_ROAD))
+    return differences
 
 
 def _occlusion_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:

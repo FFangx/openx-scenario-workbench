@@ -83,15 +83,20 @@ def test_typed_structure_edit_changes_the_live_assessment_and_the_saved_snapshot
     revised = client.post(scene_url + "/revisions", json={"edits": {"structure": {"road_class": "直道"}}}).json()
     request = {"project_id": project_id, "document_id": record.document_id, "scene_id": "scene-0001", "encoder": "hashing"}
     first = client.post("/api/search", json=request).json()["results"][0]
-    assert (first["structural_level"], first["level"], first["review_kind"]) == ("direct", "review", "standards")
+    # A road alone states no participant or tested function: never a reuse, whatever matches.
+    assert (first["structural_level"], first["level"]) == ("review", "review")
+    assert not any(item["category"] == "road" for item in first["differences"])
     refused = client.post("/api/decisions", json={**request, "asset_id": first["asset_id"], "version_id": first["version_id"]})
     assert refused.status_code == 400
 
     structure = {**revised["structure"], "road_class": "交叉口"}
     assert client.post(scene_url + "/revisions", json={"edits": {"structure": structure}}).json()["revision"] == revised["revision"] + 1
     changed = client.post("/api/search", json=request).json()["results"][0]
-    assert changed["structural_level"] == "modify"
-    assert client.post("/api/decisions", json={**request, "asset_id": changed["asset_id"], "version_id": changed["version_id"]}).status_code == 200
+    assert changed["structural_level"] == "review"
+    assert any(item["category"] == "road" and item["verified"] for item in changed["differences"])
+    confirmations = [{"item": item["id"], "reason": "Same test, checked by hand"} for item in changed["review_items"]]
+    assert client.post("/api/decisions", json={**request, "asset_id": changed["asset_id"], "version_id": changed["version_id"],
+                                               "confirmations": confirmations}).status_code == 200
     trace = ProjectStore(assets).reports(project_id)[0]["trace"]
     assert trace["source"]["structure"]["road_class"] == "交叉口"
     assert trace["source"]["revision"] == revised["revision"] + 1

@@ -1385,10 +1385,16 @@ export interface components {
             junction_count: number;
             /** Lane Count */
             lane_count: number;
+            /** Lane Markings */
+            lane_markings: string[];
             /** Lane Types */
             lane_types: {
                 [key: string]: number;
             };
+            /** Lanes Same Direction */
+            lanes_same_direction: number;
+            /** Lanes Total */
+            lanes_total: number;
             /** Revision */
             revision: string | null;
             /** Road Count */
@@ -1557,6 +1563,11 @@ export interface components {
             requested_label: string;
             /** Text */
             text: string;
+            /**
+             * Tier
+             * @default core
+             */
+            tier?: string;
             /** Verified */
             verified: boolean;
         };
@@ -1574,6 +1585,11 @@ export interface components {
             cost: number;
             /** Requested */
             requested: string;
+            /**
+             * Tier
+             * @default core
+             */
+            tier?: string;
             /** Verified */
             verified: boolean;
         };

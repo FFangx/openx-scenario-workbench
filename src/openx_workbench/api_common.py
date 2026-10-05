@@ -177,7 +177,9 @@ def _candidate_json(result: RetrievalResult, version: AssetVersion | None, lang:
                  "lane_types": road.lane_types, "geometry_types": road.geometry_types,
                  "junction_count": road.junction_count, "road_count": len(road.road_ids),
                  "revision": road.revision, "file_missing": road.file_missing,
-                 "inferred_features": road.inferred_features},
+                 "inferred_features": road.inferred_features,
+                 "lanes_same_direction": road.lanes_same_direction, "lanes_total": road.lanes_total,
+                 "lane_markings": road.lane_markings},
         "has_frame": bool(version and read_frame(_store(), version)),
     }
 

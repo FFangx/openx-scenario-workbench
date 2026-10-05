@@ -24,7 +24,7 @@ import { ExplanationDialog, ReviewSignoffDialog, SourceFilesDialog, StandardChec
 
 const SUB: Record<string, [string, string]> = {
   direct: ["候选场景无需修改即可复用。", "The candidate scenario can be reused without modification."],
-  modify: ["按下方列出的修改后即可复用。", "The candidate can be reused after the changes listed below."],
+  modify: ["按下方列出的修改后即可复用；标为“改时确认”的项在修改时核对。", "The candidate can be reused after the changes listed below; check the items marked to confirm while making them."],
   major_modify: ["可以复用，但修改量接近新建：多个参与者或行为需要调整。", "Reusable, but the changes come close to a new build: several participants or behaviors change."],
   new_build: ["存在阻断差异，无法复用，需要新建场景。", "Blocking differences prevent reuse. Build a new scenario."],
   standards: ["结构相似，但场景或道路的标准检查未通过或未完成。", "Structure matches, but the scenario or road standard checks have not passed yet."],
@@ -33,8 +33,14 @@ const SUB: Record<string, [string, string]> = {
   recall: ["这是文本检索结果。选择 PDF 场景后才能按结构评估复用。", "Text-only match. Select a PDF scene to assess reuse structurally."],
 };
 
+// Only an unverified core fact needs review; an adjustable one is confirmed while making the change,
+// and a note (test intent, end condition) is never compared.
 const STATUS = (d: Difference, lang: Lang) =>
-  !d.verified
+  d.tier === "note"
+    ? { label: lang === "zh" ? "提示" : "Note", cls: "", icon: <QuestionCircleFilled /> }
+    : !d.verified && d.tier === "adjustable"
+    ? { label: lang === "zh" ? "改时确认" : "Confirm when changing", cls: "warn", icon: <QuestionCircleFilled /> }
+    : !d.verified
     ? { label: lang === "zh" ? "未验证" : "Unverified", cls: "warn", icon: <QuestionCircleFilled /> }
     : d.blocking
       ? { label: lang === "zh" ? "阻断" : "Blocking", cls: "bad", icon: <CloseCircleFilled /> }

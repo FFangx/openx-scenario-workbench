@@ -90,6 +90,11 @@ class RetrievalQuery:
     # A driver-intervention test (driver inputs override the system); None: not stated.
     driver_intervention: bool | None = None
     parking_operation: str = ""  # park_in / park_out
+    # Lanes the road must offer at least: "same_direction" (单向 N) or "total" (双向 N, or
+    # a count whose direction is not stated). A lower bound: one more lane never hurts a test.
+    lane_count: int | None = None
+    lane_count_scope: str = ""
+    lane_marking: str = ""  # "solid" / "broken": the road must have such a line
 
 
 STRUCTURE_KINDS = {
@@ -156,6 +161,7 @@ STRUCTURE_ROADS = {
     "交叉口": "junction",
     "高速路": "motorway",
 }
+STRUCTURE_LANE_MARKINGS = {"实线": "solid", "虚线": "broken"}
 STRUCTURE_PARKING = {"泊入": "park_in", "泊出": "park_out"}
 STRUCTURE_TRIGGERS = {
     "TTC": "ttc",
@@ -253,16 +259,30 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     intervention = structure["test_intent"] == "驾驶员干预试验"
     # Keep unsupported declared requirements visible in the verdict. They must
     # never disappear just because the XML reader does not yet understand them.
-    for key in ("venue_features", "lane_marking"):
-        if structure[key] and structure[key] != "未知":
-            unverified.append(f"{key}={structure[key]}")
+    if structure["venue_features"] and structure["venue_features"] != "未知":
+        unverified.append(f"venue_features={structure['venue_features']}")
+    lane_marking = STRUCTURE_LANE_MARKINGS.get(structure["lane_marking"] or "", "")
+    if structure["lane_marking"] and structure["lane_marking"] != "未知" and not lane_marking:
+        unverified.append(f"lane_marking={structure['lane_marking']}")
+    lane_count = params["lane_count"]
+    # 单向 N counts one direction; 双向 N both (SM's reading: an odd 双向 N, as in 双向单车道,
+    # means N each way). The lane direction alone is no requirement: it only scopes the count.
+    lane_scope = ""
+    if isinstance(lane_count, (int, float)) and lane_count >= 1:
+        lane_count = int(lane_count)
+        if params["lane_direction"] == "单向":
+            lane_scope = "same_direction"
+        elif params["lane_direction"] == "双向" and lane_count % 2:
+            lane_scope = "same_direction"
+        else:
+            lane_scope = "total"
+    else:
+        lane_count = None
     if structure["test_intent"] not in {"未知", "驾驶员干预试验"}:
         unverified.append(f"test_intent={structure['test_intent']}")
     for key in (
         "lateral_direction",
         "curve_radius_m",
-        "lane_count",
-        "lane_direction",
         "end_condition",
     ):
         if params[key] is not None and params[key] != "未知":
@@ -304,6 +324,9 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         occlusions=occlusions,
         driver_intervention=True if intervention else (False if structure["test_intent"] != "未知" else None),
         parking_operation=STRUCTURE_PARKING.get(structure["parking_operation"], ""),
+        lane_count=lane_count,
+        lane_count_scope=lane_scope,
+        lane_marking=lane_marking,
     )
     if not any(
         (
@@ -319,6 +342,8 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             query.occlusions,
             query.driver_intervention,
             query.parking_operation,
+            query.lane_count,
+            query.lane_marking,
         )
     ):
         query = replace(query, unverified=("no extracted structural requirements",))

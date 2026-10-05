@@ -225,6 +225,7 @@ class Difference(Shape):
     blocking: bool
     cost: float
     verified: bool
+    tier: str = "core"  # core, adjustable or note (reuse_policy.difference_tier)
     category_label: str
     requested_label: str
     candidate_label: str
@@ -296,6 +297,9 @@ class CandidateRoad(Shape):
     revision: str | None
     file_missing: bool
     inferred_features: list[str]
+    lanes_same_direction: int
+    lanes_total: int
+    lane_markings: list[str]
 
 
 class Candidate(Shape):
@@ -367,6 +371,7 @@ class DifferenceRecord(Shape):
     blocking: bool
     cost: float
     verified: bool
+    tier: str = "core"  # absent in reports saved before tiers: read conservatively as core
 
 
 class SignedItem(Shape):

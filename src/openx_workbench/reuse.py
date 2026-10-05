@@ -34,16 +34,21 @@ LEVELS = ("direct", "modify", "major_modify", "review", "new_build")
 
 
 def classify_reuse_level(differences: tuple[ReuseDifference, ...]) -> str:
-    """One of LEVELS: blocking differences make a new build, unverified ones a review,
-    and verified changes a modification, a major one from MAJOR_MODIFY_COST."""
-    if not differences:
-        return "direct"
+    """One of LEVELS: blocking differences make a new build, an unverified core fact a
+    review, and changes a modification, a major one from MAJOR_MODIFY_COST.
+
+    Unverified adjustable facts (a speed, the weather) are confirmed while making the
+    changes, so they make a modification rather than a review. Notes never count.
+    """
     if any(item.blocking for item in differences):
         return "new_build"
-    if any(not item.verified for item in differences):
+    if any(not item.verified and item.tier == policy.TIER_CORE for item in differences):
         return "review"
+    if not any(item.tier != policy.TIER_NOTE for item in differences):
+        return "direct"
     return "major_modify" if change_cost(differences) >= policy.MAJOR_MODIFY_COST else "modify"
 
 
 def change_cost(differences: tuple[ReuseDifference, ...]) -> float:
-    return round(sum(item.cost for item in differences), 3)
+    """The summed cost of everything to change or confirm; notes cost nothing."""
+    return round(sum(item.cost for item in differences if item.tier != policy.TIER_NOTE), 3)

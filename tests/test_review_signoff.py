@@ -15,7 +15,18 @@ def test_costly_verified_changes_are_a_major_modification():
     below = reuse_policy.MAJOR_MODIFY_COST - 0.5
     assert classify_reuse_level((_change(below),)) == "modify"
     assert classify_reuse_level((_change(below), _change(0.5))) == "major_modify"
-    assert classify_reuse_level((_change(reuse_policy.MAJOR_MODIFY_COST), _change(0.5, verified=False))) == "review"
+    # An unverified adjustable fact is confirmed while making the change; an unverified core fact needs review.
+    assert classify_reuse_level((_change(below), _change(0.5, verified=False))) == "major_modify"
+    unknown_participant = ReuseDifference("participant_topology", "vehicle@front", "vehicle@unknown",
+                                          "verify participant facts", cost=2, verified=False)
+    assert classify_reuse_level((_change(below), unknown_participant)) == "review"
+
+
+def test_notes_neither_cost_nor_block_direct_reuse():
+    note = ReuseDifference("unverified", "end_condition=collision", "not extracted", "verify", verified=False)
+    assert note.tier == reuse_policy.TIER_NOTE
+    assert classify_reuse_level((note,)) == "direct"
+    assert classify_reuse_level((note, _change(0.5))) == "modify"
 
 
 def _trace(level, structural, differences):
@@ -31,6 +42,10 @@ def test_review_items_are_the_unverified_differences_or_the_standards_gate():
         {"id": "difference:unverified:lane_marking=实线:not extracted", "kind": "difference", "difference": 1}]
     assert review_items(_trace("review", "direct", [])["reuse"]) == [
         {"id": "standards", "kind": "standards", "difference": None}]
+    adjustable = {"category": "environment", "requested": "weather=rain", "candidate": "unknown",
+                  "verified": False, "tier": "adjustable"}
+    assert review_items(_trace("review", "review", [adjustable, open_item])["reuse"]) == [
+        {"id": "difference:unverified:lane_marking=实线:not extracted", "kind": "difference", "difference": 1}]
 
 
 def test_sign_off_needs_a_reason_for_every_item_and_nothing_else():

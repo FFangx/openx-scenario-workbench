@@ -221,13 +221,18 @@ def test_action_ownership_and_initial_speed_are_not_inferred():
     asset.bundle.scenario.actions = [
         item for item in asset.bundle.scenario.actions if item.kind != "SpeedAction"
     ]
-    assert search(requirement(), asset)[0].reuse_level == "review"
+    result = search(requirement(), asset)[0]
+    # No speed is read, so none is invented: it stays an open item to confirm, never a match.
+    assert result.reuse_level in {"modify", "major_modify"}
+    assert any(item.category == "parameter" and not item.verified for item in result.differences)
 
 
-def test_missing_environment_and_unsupported_constraints_request_review():
+def test_missing_environment_is_confirmed_while_unsupported_road_constraints_request_review():
     asset = authored_asset()
     asset.bundle.scenario.environment = {}
-    assert search(requirement(), asset)[0].reuse_level == "review"
+    result = search(requirement(), asset)[0]
+    assert result.reuse_level == "modify"
+    assert [item.tier for item in result.differences if not item.verified] == ["adjustable"] * 2
     assert (
         search(requirement(lane_marking="实线"), authored_asset())[0].reuse_level
         == "review"
@@ -388,3 +393,59 @@ def test_participant_speed_is_optional_in_the_stored_structure():
         {"kind": "行人", "speed_kph": -3}]}, dropped)
     assert [item.speed_kph for item in parsed.participants] == [20.0, None, None]
     assert dropped == {"participant_speed='fast'", "participant_speed=-3"}
+
+
+def _lanes(asset, same, total, markings):
+    asset.bundle.road.lanes_same_direction, asset.bundle.road.lanes_total = same, total
+    asset.bundle.road.lane_markings = markings
+    return asset
+
+
+def _road_differences(package, asset):
+    return [(item.requested, item.verified) for item in search(package, asset)[0].differences if item.category == "road"]
+
+
+def test_lane_count_is_a_lower_bound_read_in_the_stated_direction():
+    def lanes(count, direction):
+        return requirement(params={**requirement().structure["params"], "lane_count": count, "lane_direction": direction})
+
+    asset = _lanes(authored_asset(), 2, 4, ["broken", "solid"])
+    assert _road_differences(lanes(2, "单向"), asset) == []
+    assert _road_differences(lanes(4, "双向"), asset) == []
+    assert _road_differences(lanes(1, "双向"), asset) == []  # 双向单车道: one lane each way
+    assert _road_differences(lanes(3, "单向"), asset) == [("at least 3 lanes in one direction", True)]
+    assert search(lanes(3, "单向"), asset)[0].reuse_level == "modify"
+    # The count of an unstated direction is checked against both directions together.
+    assert _road_differences(lanes(4, "未知"), asset) == []
+
+
+def test_lane_lines_are_matched_by_presence_and_unknown_when_unread():
+    asset = _lanes(authored_asset(), 2, 4, ["broken"])
+    assert _road_differences(requirement(lane_marking="虚线"), asset) == []
+    assert _road_differences(requirement(lane_marking="实线"), asset) == [("solid lane line", True)]
+    unread = _lanes(authored_asset(), 2, 4, [])
+    assert _road_differences(requirement(lane_marking="实线"), unread) == [("solid lane line", False)]
+    assert search(requirement(lane_marking="实线"), unread)[0].reuse_level == "review"
+
+
+def test_driving_lanes_and_lines_are_read_from_opendrive():
+    from openx_workbench.parser import parse_xodr
+
+    road = parse_xodr("""<OpenDRIVE><header/><road id="1" length="100"><lanes><laneSection s="0">
+      <left><lane id="2" type="sidewalk"/><lane id="1" type="driving"><roadMark type="broken"/></lane></left>
+      <center><lane id="0" type="none"><roadMark type="solid solid"/></lane></center>
+      <right><lane id="-1" type="driving"><roadMark type="broken"/></lane>
+        <lane id="-2" type="driving"><roadMark type="solid"/></lane><lane id="-3" type="shoulder"/></right>
+      </laneSection></lanes></road></OpenDRIVE>""")
+    assert (road.lanes_same_direction, road.lanes_total, road.lane_markings) == (2, 3, ["broken", "solid"])
+
+
+def test_a_requirement_without_participants_is_never_reused_as_is():
+    asset = authored_asset()
+    misuse = requirement(participants=[], tested_function="未知", test_intent="误作用试验")
+    result = search(misuse, asset)[0]
+    assert result.reuse_level == "review"
+    assert {item.category for item in result.differences if not item.verified and item.tier == "core"} >= {"story"}
+    single = search(requirement(participants=[]), asset)[0]  # an AEB test with no participant stated
+    assert single.reuse_level in {"modify", "major_modify"}
+    assert any(item.category == "procedure" and item.tier == "adjustable" for item in single.differences)

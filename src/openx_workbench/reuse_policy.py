@@ -26,6 +26,41 @@ COST_TRIGGER = 1.5  # change a start trigger
 COST_ROAD = 1.0  # select or modify the OpenDRIVE road
 COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
 
+# ---------- difference tiers ----------
+# Which differences decide reuse. Core facts make up the scenario's story and its road
+# (who is there, what they do, what is tested, which road); an unverified core fact keeps a
+# candidate in review. Adjustable facts (speeds, TTC, triggers, environment) are edited while
+# reusing; an unverified one is listed to confirm during the change, not a reason for review.
+# Notes (test intent, end condition) describe the evaluation, not the scenario: listed, never
+# compared. Mirrors the ScenarioManager layering of 2026-07-27 (story > map > parameters).
+
+TIER_CORE, TIER_ADJUSTABLE, TIER_NOTE = "core", "adjustable", "note"
+# An unresolved parameter reference in the asset ("parameter_resolution") stays core: what the
+# file does at all is unclear until it is resolved.
+TIER_BY_CATEGORY = {
+    "parameter": TIER_ADJUSTABLE,
+    "trigger": TIER_ADJUSTABLE,
+    "environment": TIER_ADJUSTABLE,
+    "procedure": TIER_ADJUSTABLE,  # a single-vehicle test: its procedure is confirmed while reusing
+}
+# Requirement items the comparison cannot check yet ("unverified"), by "key=value", then by key.
+# Only a functional test intent is a note: a misuse or activation-boundary test is another kind
+# of test, which an asset does not show, so it stays core.
+TIER_BY_REQUIREMENT = {
+    "lateral_direction": TIER_ADJUSTABLE,
+    "trigger": TIER_ADJUSTABLE,
+    "test_intent=功能试验": TIER_NOTE,
+    "end_condition": TIER_NOTE,
+}
+
+
+def difference_tier(category: str, requested: str) -> str:
+    """The tier of a difference; anything not listed is core, the safe default."""
+    if category == "unverified":
+        return TIER_BY_REQUIREMENT.get(requested, TIER_BY_REQUIREMENT.get(requested.split("=", 1)[0], TIER_CORE))
+    return TIER_BY_CATEGORY.get(category, TIER_CORE)
+
+
 # Verified, non-blocking changes costing at least this much are a "major modification": the
 # candidate is still reusable, but close to a new build. A behavior change plus removing an extra
 # participant (2 + 3) reaches it; on the benchmark every labelled "modify" stays below 4.

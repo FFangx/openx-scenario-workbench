@@ -314,7 +314,36 @@ def parse_xodr(data: bytes | str) -> RoadIR:
         junction_count=sum(1 for _ in _all(root, "junction")),
         signal_count=sum(1 for _ in _all(root, "signal")),
         object_count=sum(1 for _ in _all(root, "object")),
+        **_lane_profile(roads),
     )
+
+
+def _lane_profile(roads: list[ET.Element]) -> dict:
+    """Driving-lane counts and the line types drawn on driving lanes.
+
+    Only type="driving" lanes count: shoulders, sidewalks and borders would turn a two-lane
+    road into five. One physical road is often split into several OpenDRIVE roads, so the
+    counts are the largest cross-section, not a sum. Markings are the roadMark types on the
+    borders of driving lanes and on a center line between them; a "solid broken" line is both.
+    """
+    same = total = 0
+    markings: set[str] = set()
+    for road in roads:
+        for section in (item for item in road.iter() if _local(item) == "laneSection"):
+            sides = {}
+            for side in ("left", "center", "right"):
+                element = next((item for item in section if _local(item) == side), None)
+                sides[side] = [lane for lane in (element if element is not None else []) if _local(lane) == "lane"]
+            driving = {side: [lane for lane in sides[side] if (lane.get("type") or "").casefold() == "driving"]
+                       for side in ("left", "right")}
+            same = max(same, *(len(lanes) for lanes in driving.values()))
+            total = max(total, sum(len(lanes) for lanes in driving.values()))
+            marked = [*driving["left"], *driving["right"], *(sides["center"] if any(driving.values()) else [])]
+            for lane in marked:
+                for mark in (item for item in lane if _local(item) == "roadMark"):
+                    kind = (mark.get("type") or "").casefold()
+                    markings.update(word for word in ("solid", "broken") if word in kind)
+    return {"lanes_same_direction": same, "lanes_total": total, "lane_markings": sorted(markings)}
 
 
 # Map-name keywords of simulator built-in roads, checked in order: a "two-lane

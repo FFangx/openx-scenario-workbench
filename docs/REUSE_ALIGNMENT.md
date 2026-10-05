@@ -11,19 +11,41 @@ It does not introduce a second ingestion, model or indexing stack.
   structural source; the store rejects independent flat-field edits for typed scenes.
 - Matching compares participant count/type, relative bearing/facing and actor-owned
   behavior, tested function, road, triggers, initial speeds and environment.
-  Additional participants/actions prevent direct reuse. Missing facts and declared
-  unsupported constraints produce `review`, rather than silently disappearing.
+  Additional participants/actions prevent direct reuse. Missing core facts and declared
+  unsupported core constraints produce `review`, rather than silently disappearing.
 - Participants are paired one-to-one for the fewest blocking differences, then the
   lowest change cost, over all pairings. A participant's own initial speed, when the
   requirement states it, is compared after pairing; otherwise the requirement's speed
   list is compared with duplicates when it has one speed per participant.
-- Verdicts (2026-10-04): `direct`; `modify` for verified changes only; `major_modify`
-  when those changes cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus an
-  extra participant removed); `review` for any unverified fact; `new_build` for any
-  blocking difference. All numbers live in `reuse_policy.py`.
-- A `review` assessment is saved only when the reviewer confirms each open item with a
-  reason. The verdict stays `review`; the reasons are kept in the trace
-  (`reuse.review_signoff`) and shown as "confirmed after review".
+- Verdicts (2026-10-04, tiers 2026-10-05): `direct`; `modify` for changes to make;
+  `major_modify` when they cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus
+  an extra participant removed); `review` for an unverified core fact; `new_build` for
+  any blocking difference. All numbers and tiers live in `reuse_policy.py`.
+- Every difference has a tier, after the ScenarioManager layering (story > map >
+  parameters, 2026-07-27). **Core**: tested function, participants, behaviors,
+  occlusion, road type, lane count and lane lines, venue, a misuse or activation-boundary
+  test intent, unresolved asset parameters. **Adjustable**: speeds, TTC, distances,
+  triggers, environment, lateral direction. **Note**: a functional test intent and the
+  end condition, which describe the evaluation and are listed but never compared or
+  costed. An unverified core fact makes a review; an unverified adjustable fact is
+  listed as "confirm when changing" and makes a modification. Unknown categories are
+  core.
+- Information gate: a requirement with no participant or occlusion is never reused as
+  is. Without a tested function it is a review (two near-empty stories always match);
+  with one, a single-vehicle test of that function is at best a modification whose
+  procedure is confirmed. Before the gate, misuse tests with no participant were matched
+  `direct` to any asset testing the same function.
+- Lanes (2026-10-05): the parser reads the most driving lanes one direction and both
+  directions offer on one cross-section, and the line types drawn on driving lanes
+  (`solid`, `broken`). A requirement's lane count is a lower bound: 单向 N counts one
+  direction, 双向 N both (an odd 双向 N, as in 双向单车道, N each way), a count without
+  direction both. A requested line type matches when the road has it anywhere: the
+  requirement does not say which line it means. Unread lanes or lines, or a missing road
+  file, are unverified, never a guess. Same rules as ScenarioManager `lane_requirement`.
+- A `review` assessment is saved only when the reviewer confirms each open core item
+  with a reason. The verdict stays `review`; the reasons are kept in the trace
+  (`reuse.review_signoff`) and shown as "confirmed after review". Differences saved
+  before tiers existed count as core.
 - Speeds and environments are read as described in "SIM structure facts" below
   (2026-10-05). Function labels describe an accepted classification or a simulator
   command that switches the function on, not ASAM certification.

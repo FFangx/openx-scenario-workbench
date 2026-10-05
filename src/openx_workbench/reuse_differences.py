@@ -16,6 +16,11 @@ class ReuseDifference:
     blocking: bool = False
     cost: float = 1.0
     verified: bool = True
+    tier: str = ""  # reuse_policy.difference_tier, derived when left empty
+
+    def __post_init__(self) -> None:
+        if not self.tier:
+            object.__setattr__(self, "tier", policy.difference_tier(self.category, self.requested))
 
 
 def missing(

@@ -32,8 +32,10 @@ def checked_trace(trace):
 def review_items(reuse: dict) -> list[dict]:
     """What a reviewer must confirm before a "review" assessment can be saved.
 
-    Each unverified difference, or the file standard checks when they alone keep a structural
-    direct match from being confirmed. `reuse` is a trace's "reuse" section.
+    Each unverified core difference (the ones that make it a review; adjustable ones are
+    confirmed while making the change), or the file standard checks when they alone keep a
+    structural direct match from being confirmed. `reuse` is a trace's "reuse" section.
+    Differences saved before tiers existed have no tier and count as core.
     """
     if reuse.get("level") != "review":
         return []
@@ -41,7 +43,8 @@ def review_items(reuse: dict) -> list[dict]:
         return [{"id": "standards", "kind": "standards", "difference": None}]
     return [{"id": f"difference:{item['category']}:{item['requested']}:{item['candidate']}", "kind": "difference",
              "difference": index}
-            for index, item in enumerate(reuse.get("differences", [])) if not item.get("verified", True)]
+            for index, item in enumerate(reuse.get("differences", []))
+            if not item.get("verified", True) and item.get("tier", "core") == "core"]
 
 
 def sign_off(trace: dict, confirmations: dict[str, str]) -> dict:
