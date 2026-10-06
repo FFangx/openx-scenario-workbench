@@ -284,6 +284,7 @@ class CandidateEntity(Shape):
     category: str | None
     model: str | None
     width: float | None
+    height: float | None
 
 
 class CandidateScenario(Shape):

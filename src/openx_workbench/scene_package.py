@@ -52,6 +52,9 @@ class ParticipantSignature:
     # Takes no part in the test (scene_facts.background_participants): an asset's parked cars or
     # bystanders. Left over, it costs little; it can still stand for a requested participant.
     background: bool = field(default=False, compare=False)
+    # What an asset's 3D model shows beyond its category (scene_facts.model_traits): a child, a
+    # tricycle authored as a car. Evidence that confirms a requirement, never a conflict.
+    traits: tuple[str, ...] = field(default=(), compare=False)
 
     def __post_init__(self) -> None:
         if not self.actions:
@@ -98,6 +101,11 @@ class RetrievalQuery:
     lane_count: int | None = None
     lane_count_scope: str = ""
     lane_marking: str = ""  # "solid" / "broken": the road must have such a line
+    # The kind of test an asset's named checks show (an accelerator, see scene_facts.condition_facts);
+    # a requirement keeps its declared intent among `unverified` until an asset confirms it.
+    test_intent: str = ""
+    # Which way an asset's ego moves sideways (scene_facts.lateral_direction), likewise confirming.
+    lateral_direction: str = ""
 
 
 STRUCTURE_KINDS = {
@@ -166,6 +174,9 @@ STRUCTURE_ROADS = {
 }
 STRUCTURE_LANE_MARKINGS = {"实线": "solid", "虚线": "broken"}
 STRUCTURE_PARKING = {"泊入": "park_in", "泊出": "park_out"}
+STRUCTURE_INTENTS = {"激活边界试验": "activation_boundary"}
+STRUCTURE_AGES = {"儿童": "child"}
+STRUCTURE_LATERAL = {"左": "left", "右": "right"}
 STRUCTURE_TRIGGERS = {
     "TTC": "ttc",
     "相对距离": "distance",

@@ -11,8 +11,11 @@ from .scene_facts import (
     asset_environment,
     background_participants,
     command_facts,
+    condition_facts,
     driver_overrides,
     is_scenery,
+    lateral_direction,
+    model_traits,
     occlusions,
     scene_speed_mps,
 )
@@ -59,6 +62,7 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
     )
     participants = bundle_participant_signatures(bundle, semantic=True)
     ego = command_facts(bundle)
+    checks = condition_facts(bundle)
     return RetrievalQuery(
         text="",
         structured=True,
@@ -86,6 +90,8 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
             f"{item['path']} @{item['attribute']}: {item['detail']}"
             for item in bundle.scenario.parameter_issues
         ),
+        test_intent="activation_boundary" if checks["activation_boundary"] else "",
+        lateral_direction=lateral_direction(bundle),
     )
 
 
@@ -160,6 +166,7 @@ def bundle_participant_signatures(
                 ),
                 speed_kph=actor_speed_kph(bundle, actor),
                 background=actor in background,
+                traits=model_traits(entity),
             )
         )
     return tuple(sorted(signatures, key=ParticipantSignature.key))

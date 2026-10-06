@@ -16,6 +16,9 @@ from openx_workbench.scene_facts import (
     asset_environment,
     background_participants,
     command_facts,
+    lateral_direction,
+    named_conditions,
+    route_turn,
     scenery_summary,
     scoring_criteria,
 )
@@ -271,3 +274,115 @@ def test_left_over_background_costs_little_and_is_grouped():
     assert [(difference.category, difference.candidate) for difference in differences] == [
         ("background_participant", "6 × vehicle@front_left:same:static")]
     assert classify_reuse_level(tuple(differences)) == "modify"
+
+
+def checks(xosc, *names):
+    """The scenario stops on the library's named checks (UserDefinedValueCondition)."""
+    conditions = "".join(
+        f'<Condition name="{name}" delay="0" conditionEdge="rising"><ByValueCondition>'
+        f'<UserDefinedValueCondition name="{name}" value="1" rule="equalTo"/></ByValueCondition></Condition>'
+        for name in ("EndTheCase", *names))
+    return xosc.replace("<StopTrigger/></Storyboard>",
+                        f"<StopTrigger><ConditionGroup>{conditions}</ConditionGroup></StopTrigger></Storyboard>")
+
+
+def test_named_lane_change_checks_make_the_ego_change_lanes():
+    plain = scenario("", place("Ego", 0, 0, 10), group("Ego", ("on", command("SysEngReq"))))
+    checked = asset(checks(plain, "Check_LaneChangeCompleted", "Check_LaneChangeCancelled"))
+    assert named_conditions(checked.bundle) == ("Check_LaneChangeCompleted", "Check_LaneChangeCancelled")
+    assert "lane_change" in actor_actions(checked.bundle, "Ego")
+    assert "lane_change" not in actor_actions(asset(plain).bundle, "Ego")
+    assert named_conditions(asset(checks(plain)).bundle) == ()  # teardown alone says nothing
+
+
+def test_activation_checks_confirm_an_activation_boundary_test():
+    package = ScenePackage("REQ", "Activation at Vsmax", "", structure={
+        "test_intent": "激活边界试验", "ego_actions": ["匀速行驶"],
+        "participants": [{"kind": "乘用车", "bearing": "正前方", "facing": "同向", "actions": ["匀速行驶"]}]})
+    query = scene_package_to_query(package)
+    xosc = scenario(vehicle("Lead"), place("Ego", 0, 0, 10) + place("Lead", 30, 0, 10))
+
+    def intent(item):
+        return [difference.tier for difference in compare_structure(query, item)
+                if difference.requested.startswith("test_intent")]
+
+    assert intent(asset(xosc)) == ["core"]
+    assert intent(asset(checks(xosc, "Check_LaneChangeCompleted"))) == ["core"]
+    confirmed = asset(checks(xosc, "Check_SysEngReq_Accepted", "Check_SysEngReq_Rejected"))
+    assert asset_structure_query(confirmed).test_intent == "activation_boundary"
+    assert intent(confirmed) == []
+
+
+def child(name):
+    return pedestrian(name).replace('name="adult"', 'name="Child01"')
+
+
+def test_a_child_model_confirms_a_requested_child():
+    package = ScenePackage("REQ", "Child crossing", "", structure={"participants": [
+        {"kind": "行人", "bearing": "正前方", "facing": "横向", "actions": ["匀速行驶"], "age": "儿童"}]})
+    query = scene_package_to_query(package)
+    init = place("Ego", 0, 0, 10) + place("Kid", 30, 0, 1)
+
+    def ages(entities):
+        item = asset(scenario(entities, init, group("Kid", ("walk", speed(1.4)))))
+        return [difference.tier for difference in compare_structure(query, item)
+                if difference.requested.startswith("participant age")]
+
+    assert ages(pedestrian("Kid")) == ["core"]
+    assert ages(child("Kid")) == []
+
+
+def test_a_tricycle_model_authored_as_a_car_stands_for_either():
+    tricycle = vehicle("Trike").replace('name="car"', 'name="058-Tricycle01"')
+    item = asset(scenario(tricycle, place("Ego", 0, 0, 10) + place("Trike", 30, 0, 0)))
+    for kind in ("三轮车", "乘用车"):
+        package = ScenePackage("REQ", "Standing target", "", structure={"participants": [
+            {"kind": kind, "bearing": "正前方", "facing": "同向", "actions": ["静止"]}]})
+        differences = compare_structure(scene_package_to_query(package), item)
+        assert not [difference for difference in differences if difference.blocking], kind
+
+
+def lane_change(value, kind="RelativeTargetLane", ref="Ego"):
+    target = (f'<RelativeTargetLane entityRef="{ref}" value="{value}"/>' if kind == "RelativeTargetLane"
+              else f'<AbsoluteTargetLane value="{value}"/>')
+    return ('<PrivateAction><LateralAction><LaneChangeAction><LaneChangeActionDynamics dynamicsShape="sinusoidal" '
+            f'value="3" dynamicsDimension="time"/><LaneChangeTarget>{target}</LaneChangeTarget></LaneChangeAction>'
+            '</LateralAction></PrivateAction>')
+
+
+def route(*headings):
+    points = "".join(f'<Waypoint routeStrategy="shortest"><Position><WorldPosition x="{index * 50}" y="0" h="{heading}"/>'
+                     '</Position></Waypoint>' for index, heading in enumerate(headings))
+    return (f'<PrivateAction><RoutingAction><AssignRouteAction><Route name="r" closed="false">{points}</Route>'
+            '</AssignRouteAction></RoutingAction></PrivateAction>')
+
+
+def test_lateral_direction_and_route_turn_of_the_ego():
+    lane_start = ('<Private entityRef="Ego"><PrivateAction><TeleportAction><Position><LanePosition roadId="1" '
+                  'laneId="-2" s="10" offset="0"/></Position></TeleportAction></PrivateAction></Private>')
+
+    def read(init, *events):
+        return asset(scenario("", init, group("Ego", *events))).bundle
+
+    assert lateral_direction(read(place("Ego", 0, 0, 10), ("lc", lane_change(1)))) == "left"
+    assert lateral_direction(read(place("Ego", 0, 0, 10), ("lc", command("ALCAMode=right")))) == "right"
+    assert lateral_direction(read(lane_start, ("lc", lane_change(-1, "AbsoluteTargetLane")))) == "left"
+    assert lateral_direction(read(lane_start, ("lc", lane_change(-3, "AbsoluteTargetLane")))) == "right"
+    assert lateral_direction(read(place("Ego", 0, 0, 10), ("lc", command("LaneChangeReq")))) == ""
+    assert route_turn(read(place("Ego", 0, 0, 10), ("go", route(0, 0, -1.57)))) == "right"
+    assert route_turn(read(place("Ego", 0, 0, 10), ("go", route(3.14, 2.62, 1.57)))) == "right"
+    assert route_turn(read(place("Ego", 0, 0, 10), ("go", route(0.0, 0.01)))) == "straight"
+
+    package = ScenePackage("REQ", "Lane change to the left", "", structure={
+        "ego_actions": ["变道"], "params": {"lateral_direction": "左"},
+        "participants": [{"kind": "乘用车", "bearing": "左后方", "facing": "同向", "actions": ["匀速行驶"]}]})
+    query = scene_package_to_query(package)
+
+    def side(item):
+        return [difference.requested for difference in compare_structure(query, item)
+                if difference.requested.startswith("lateral_direction")]
+
+    entities, init = vehicle("Rear"), place("Ego", 0, 0, 10) + place("Rear", -20, 3.5, 10)
+    assert side(asset(scenario(entities, init, group("Ego", ("lc", command("ALCAMode=left")))))) == []
+    assert side(asset(scenario(entities, init, group("Ego", ("lc", command("ALCAMode=right")))))) == [
+        "lateral_direction=左"]

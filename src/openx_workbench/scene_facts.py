@@ -63,6 +63,18 @@ def is_scenery(entity: EntityIR) -> bool:
     return entity.kind == "miscobject"
 
 
+# 3D model names are the authoring tool's convention (Child01, ACEA_Child01, Tricycle01 authored
+# as a car), not OpenSCENARIO: an accelerator like EnableXXX. Present, strong evidence; absent or
+# unfamiliar, nothing.
+_MODEL_TRAITS = (("child", "child"), ("tricycle", "tricycle"))
+
+
+def model_traits(entity: EntityIR) -> tuple[str, ...]:
+    """What the entity's 3D model shows beyond its category: a child, a tricycle."""
+    model = (entity.model or "").casefold()
+    return tuple(trait for marker, trait in _MODEL_TRAITS if marker in model)
+
+
 # ---------- speed ----------
 
 def _speed_actions(bundle: ParseBundle, actor: str) -> list[ActionIR]:
@@ -169,12 +181,17 @@ def _reverse_gear(bundle: ParseBundle, actor: str) -> bool:
 
 
 def actor_behaviors(bundle: ParseBundle, actor: str) -> set[str]:
-    """The actor's behaviors in the typed requirement vocabulary."""
+    """The actor's behaviors in the typed requirement vocabulary.
+
+    The ego also changes lanes when the scenario waits on a named lane-change check (see
+    condition_facts): a lane change the system under test makes leaves no action in the file.
+    """
     actions = actions_of(bundle, actor)
     story = [action for action in actions if action.phase == "story"]
     facts = command_facts(bundle, actor)
     result: set[str] = set()
-    if facts["lane_change"] or any(_element(action) == "LaneChangeAction" for action in story):
+    checked = actor.casefold() == "ego" and condition_facts(bundle)["lane_change"]
+    if facts["lane_change"] or checked or any(_element(action) == "LaneChangeAction" for action in story):
         result.add("lane_change")
     if facts["system_control"]:
         result.add("system_control")
@@ -188,6 +205,86 @@ def actor_behaviors(bundle: ParseBundle, actor: str) -> set[str]:
     if behaviour != "static" or not result:
         result.add(behaviour)
     return result
+
+
+# ---------- lateral movement and route ----------
+
+# Commands naming the side the system under test moves to (ALCAMode=left, LaneOffset=right):
+# the library's convention, an accelerator.
+_SIDE_COMMANDS = ("alcamode=", "laneoffset=")
+
+
+def _start_lane(bundle: ParseBundle, actor: str) -> float | None:
+    name = actor.casefold()
+    return next((_number(position.attributes.get("laneId")) for position in bundle.scenario.positions
+                 if (position.actor or "").casefold() == name and position.kind == "LanePosition"), None)
+
+
+def lateral_direction(bundle: ParseBundle, actor: str = "ego") -> str:
+    """Which way the actor moves sideways: "left", "right", or "" when not read or both ways.
+
+    A relative target lane counts to the left of the actor's own driving direction when
+    positive (OpenSCENARIO); an absolute one is read against the lane the actor starts in:
+    lane IDs grow away from the reference line on both sides, so in right-hand traffic a
+    lane nearer to it is to the left. A command naming the side counts too.
+    """
+    directions: set[str] = set()
+    start = _start_lane(bundle, actor)
+    for action in actions_of(bundle, actor):
+        target, value = action.lane_target, _number(action.lane_target.get("value"))
+        if target.get("kind") == "RelativeTargetLane" and target.get("entityRef", "").casefold() == actor.casefold():
+            if value:
+                directions.add("left" if value > 0 else "right")
+        elif target.get("kind") == "AbsoluteTargetLane" and start and value and value * start > 0 and value != start:
+            directions.add("left" if abs(value) < abs(start) else "right")
+        text = (action.command or "").casefold().replace(" ", "")
+        for marker in _SIDE_COMMANDS:
+            side = text.split(marker, 1)[1] if marker in text else ""
+            directions.update(item for item in ("left", "right") if side.startswith(item))
+    return directions.pop() if len(directions) == 1 else ""
+
+
+def route_turn(bundle: ParseBundle, actor: str = "ego") -> str:
+    """Which way the actor's assigned route turns, from its waypoints' headings: "left", "right",
+    "straight", or "" without a route whose waypoints state headings."""
+    for action in actions_of(bundle, actor):
+        headings = [heading for waypoint in action.waypoints if (heading := _number(waypoint.get("h"))) is not None]
+        if len(headings) >= 2:
+            turn = sum(math.remainder(after - before, math.tau) for before, after in zip(headings, headings[1:]))
+            return "left" if turn >= math.pi / 4 else "right" if turn <= -math.pi / 4 else "straight"
+    return ""
+
+
+# ---------- named conditions ----------
+
+# A library's own named checks (UserDefinedValueCondition: Check_LaneChangeCompleted,
+# Check_SysEngReq_Rejected, Trigger_HandsOff) are the authoring tool's convention, not
+# OpenSCENARIO semantics, like EnableXXX: present, strong evidence; absent or unknown, nothing.
+# Set-up and teardown every case of the tool waits on tell nothing.
+_SIMULATION_CONDITIONS = frozenset({"egopreparecompleted", "endthecase"})
+_LANE_CHANGE_CONDITIONS = ("lanechange",)
+# Whether the system activates (at Vsmax, on request) or asks the driver to take over before
+# rain or fog: the checks of an activation-boundary test.
+_ACTIVATION_CONDITIONS = ("activated", "sysengreq_accepted", "sysengreq_rejected", "dca_before")
+
+
+def named_conditions(bundle: ParseBundle) -> tuple[str, ...]:
+    """Names of the user-defined conditions the scenario starts or stops on, in file order."""
+    result: list[str] = []
+    for trigger in bundle.scenario.triggers:
+        name = trigger.attributes.get("name", "") if trigger.kind == "UserDefinedValueCondition" else ""
+        if name and name.casefold() not in _SIMULATION_CONDITIONS and name not in result:
+            result.append(name)
+    return tuple(result)
+
+
+def condition_facts(bundle: ParseBundle) -> dict[str, bool]:
+    """What the named checks show about the test (the system under test is the ego)."""
+    names = [name.casefold() for name in named_conditions(bundle)]
+    return {
+        "lane_change": any(marker in name for name in names for marker in _LANE_CHANGE_CONDITIONS),
+        "activation_boundary": any(marker in name for name in names for marker in _ACTIVATION_CONDITIONS),
+    }
 
 
 # ---------- environment ----------

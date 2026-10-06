@@ -10,9 +10,11 @@ class EntityIR:
     kind: str
     category: str | None = None
     # 3D model of the object (its `name` attribute or `model` property) and its
-    # BoundingBox width in metres, when declared.
+    # BoundingBox width and height in metres, when declared. Authoring tools often keep
+    # default boxes (a child model as tall as an adult), so height describes, never decides.
     model: str | None = None
     width: float | None = None
+    height: float | None = None
 
 
 @dataclass(slots=True)
@@ -33,6 +35,10 @@ class ActionIR:
     command: str | None = None
     # Active OverrideControllerValueAction channels and their values (Brake, Gear, ...).
     overrides: dict[str, str] = field(default_factory=dict)
+    # LaneChangeAction target: {"kind": "RelativeTargetLane", "value": "1", "entityRef": ...}.
+    lane_target: dict[str, str] = field(default_factory=dict)
+    # AssignRouteAction waypoints in order: {"kind": "WorldPosition", "x": ..., "h": ...}.
+    waypoints: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -92,6 +98,9 @@ class RoadIR:
     lanes_same_direction: int = 0  # most driving lanes one direction offers on one cross-section
     lanes_total: int = 0  # most driving lanes of both directions on one cross-section
     lane_markings: list[str] = field(default_factory=list)  # "solid"/"broken" drawn on driving lanes
+    speed_limits_kph: list[float] = field(default_factory=list)  # signed limits along the road
+    # Counted traffic_light / crosswalk / stop_line / parking_space (parser._road_furniture).
+    furniture: dict[str, int] = field(default_factory=dict)
     # The referenced OpenDRIVE file is not available (e.g. a simulator's
     # built-in map). Only the map name is known; `inferred_features` are
     # road types read from that name, never from geometry.

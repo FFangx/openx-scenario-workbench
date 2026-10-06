@@ -136,6 +136,32 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   measures when present and mean nothing when absent. A requirement states no scoring,
   so they enter no comparison; they describe the asset to a reviewer. Re-importing a
   SIM archive refreshes the sidecar of versions imported before it was read.
+- **Named checks** (2026-10-06). A library's `UserDefinedValueCondition` names
+  (`Check_LaneChangeCompleted`, `Check_SysEngReq_Rejected`, `Trigger_HandsOff`) are
+  its own convention, treated like `EnableXXX` as an accelerator: present, strong
+  evidence; absent, nothing; never a reason for a new build. The set-up and teardown
+  checks every case waits on (`EgoPrepareCompleted`, `EndTheCase`) are ignored. A
+  lane-change check makes the ego change lanes (the system's lane change leaves no
+  action in the file). Activation checks (`*_Activated`, `SysEngReq_Accepted` /
+  `Rejected`, a takeover request before a rain or fog area) confirm a requirement's
+  activation-boundary test intent, which otherwise stays unverified.
+- **3D models** (2026-10-06). Model names are the library's convention too, read the
+  same way. A child model (`Child01`, `ACEA_Child01`) confirms a requested child, once
+  per child shown; a tricycle model authored as a car (`Tricycle01`,
+  `vehicleCategory="car"`) stands for a requested tricycle and still for a car. Other
+  models (rollover vehicle, umbrella, debris, warning triangle, construction signs)
+  have no requirement field to confirm and describe the asset only. BoundingBox
+  heights are read but decide nothing: libraries keep default boxes (a child model as
+  tall as an adult one, sedans at 1.65–1.9 m).
+- **Lateral direction and route** (2026-10-06). The ego's sideways direction is read
+  from its `LaneChangeAction` target (a relative lane counts positive to the left; an
+  absolute one against the lane it starts in, for right-hand traffic) or from a
+  command naming the side (`ALCAMode=left`, `LaneOffset=right`, the library's
+  convention). It confirms a requirement's `lateral_direction`; a different side
+  leaves it unverified, since a requirement may mean another participant's side (a
+  cut-in "from the left"). An `AssignRouteAction` route turns left or right when its
+  waypoint headings change by 45° or more; no requirement field states a turn yet, so
+  it describes the asset only.
 - **Environment.** Every declared environment is read; story changes to rain, snow
   or fog make the scenario that weather, conflicting readings stay unknown. Missing
   values come from the case's environment preset, where rain and snow amounts

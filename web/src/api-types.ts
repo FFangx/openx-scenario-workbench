@@ -1362,6 +1362,8 @@ export interface components {
         CandidateEntity: {
             /** Category */
             category: string | null;
+            /** Height */
+            height: number | null;
             /** Kind */
             kind: string;
             /** Model */

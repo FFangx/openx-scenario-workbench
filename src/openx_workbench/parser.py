@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 import math
+import re
 from pathlib import PurePosixPath
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -56,6 +57,8 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
     speed = _first(node, "AbsoluteTargetSpeed")
     dynamics = _first(node, "SpeedActionDynamics")
     command = _first(node, "CustomCommandAction")
+    lane = next((child for child in node.iter()
+                 if _local(child) in {"RelativeTargetLane", "AbsoluteTargetLane"}), None)
     return ActionIR(
         name,
         _local(kind_node) if kind_node is not None else "Action",
@@ -66,6 +69,10 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
         shape=dynamics.get("dynamicsShape") if dynamics is not None else None,
         command=((command.text or command.get("content") or "").strip() or None) if command is not None else None,
         overrides=_overrides(node),
+        lane_target={"kind": _local(lane), **lane.attrib} if lane is not None else {},
+        waypoints=[{"kind": _local(position[0]), **position[0].attrib}
+                   for waypoint in _all(node, "Waypoint")
+                   if (position := _first(waypoint, "Position")) is not None and len(position)],
     )
 
 
@@ -183,7 +190,7 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
     )
 
     for obj in _all(root, "ScenarioObject"):
-        kind, category, model, width = "reference", None, None, None
+        kind, category, model, width, height = "reference", None, None, None, None
         for child in list(obj):
             child_name = _local(child)
             if child_name in {"Vehicle", "Pedestrian", "MiscObject"}:
@@ -194,12 +201,13 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
                 model = model if model and model != "default" else None
                 dimensions = _first(child, "Dimensions")
                 width = _float(dimensions.get("width")) if dimensions is not None else None
+                height = _float(dimensions.get("height")) if dimensions is not None else None
                 break
             if child_name == "CatalogReference":
                 kind = "catalog_reference"
                 category = child.get("catalogName")
                 break
-        scenario.entities.append(EntityIR(obj.get("name", "unnamed"), kind, category, model, width))
+        scenario.entities.append(EntityIR(obj.get("name", "unnamed"), kind, category, model, width, height))
 
     # Initialization actions are grouped under Private by entity.
     for private in _all(root, "Private"):
@@ -315,7 +323,34 @@ def parse_xodr(data: bytes | str) -> RoadIR:
         signal_count=sum(1 for _ in _all(root, "signal")),
         object_count=sum(1 for _ in _all(root, "object")),
         **_lane_profile(roads),
+        **_road_furniture(root),
     )
+
+
+# Object types (OpenDRIVE e_objectType, case and separators aside) a scenario's story can rely on.
+_FURNITURE_OBJECTS = {"crosswalk": "crosswalk", "stopline": "stop_line", "parkingspace": "parking_space"}
+_SPEED_UNITS = {"km/h": 1.0, "mph": 1.609344}
+
+
+def _road_furniture(root: ET.Element) -> dict:
+    """Speed limits, traffic lights and marked areas along the road.
+
+    A signal whose value carries a speed unit is a speed limit; a dynamic signal is a traffic
+    light. Both are OpenDRIVE semantics, so country-specific sign codes are not needed.
+    """
+    limits: set[float] = set()
+    elements: Counter[str] = Counter()
+    for signal in _all(root, "signal"):
+        scale, value = _SPEED_UNITS.get((signal.get("unit") or "").casefold()), _float(signal.get("value"))
+        if scale and value and value > 0:
+            limits.add(round(value * scale, 1))
+        if (signal.get("dynamic") or "").casefold() == "yes":
+            elements["traffic_light"] += 1
+    for item in _all(root, "object"):
+        kind = _FURNITURE_OBJECTS.get(re.sub(r"[^a-z]", "", (item.get("type") or "").casefold()))
+        if kind:
+            elements[kind] += 1
+    return {"speed_limits_kph": sorted(limits), "furniture": dict(sorted(elements.items()))}
 
 
 def _lane_profile(roads: list[ET.Element]) -> dict:

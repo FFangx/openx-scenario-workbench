@@ -17,7 +17,7 @@ from .reuse_differences import (
 )
 from .reuse_facts import asset_structure_query, bundle_parameters
 from .scene_facts import asset_environment
-from .scene_package import ParticipantSignature, RetrievalQuery
+from .scene_package import STRUCTURE_AGES, STRUCTURE_INTENTS, STRUCTURE_LATERAL, ParticipantSignature, RetrievalQuery
 
 ENUMERATION_LIMIT = 6  # up to 6! = 720 participant pairings are enumerated; beyond, solve the assignment problem
 
@@ -48,7 +48,19 @@ def compare_structure(
             "parameter_resolution", "resolved scenario parameters", value,
             "resolve parameter before confirming reuse", verified=False,
         ))
+    # The asset's named checks show the declared kind of test (an activation-boundary test), its ego
+    # moves to the declared side, its 3D models show a declared child (once per participant shown):
+    # confirmed. Anything else stays unverified; the requirement may mean another participant's side.
+    confirmed = Counter({f"test_intent={label}": 1 for label, intent in STRUCTURE_INTENTS.items()
+                         if intent == candidate.test_intent})
+    confirmed.update(f"lateral_direction={label}" for label, side in STRUCTURE_LATERAL.items()
+                     if side == candidate.lateral_direction)
+    for label, trait in STRUCTURE_AGES.items():
+        confirmed[f"participant age={label}"] = sum(trait in item.traits for item in candidate.participant_signatures)
     for value in query.unverified:
+        if confirmed[value] > 0:
+            confirmed[value] -= 1
+            continue
         differences.append(
             ReuseDifference(
                 "unverified",
@@ -224,6 +236,11 @@ def _facing(signature: ParticipantSignature, other: ParticipantSignature) -> str
     return "any" if _static_obstacles(signature, other) else signature.facing
 
 
+def _kind(signature: ParticipantSignature, other: ParticipantSignature) -> str:
+    """The kind, or the other's kind when this one's 3D model shows it (a tricycle authored as a car)."""
+    return other.kind if other.kind in signature.traits else signature.kind
+
+
 def _conflicts(expected: ParticipantSignature, actual: ParticipantSignature) -> tuple[int, bool, int]:
     """(known identity conflicts, known behavior conflict, unknown components of `actual`).
 
@@ -231,7 +248,7 @@ def _conflicts(expected: ParticipantSignature, actual: ParticipantSignature) -> 
     """
     identity = zip(
         (expected.kind, expected.bearing, _facing(expected, actual)),
-        (actual.kind, actual.bearing, _facing(actual, expected)),
+        (_kind(actual, expected), actual.bearing, _facing(actual, expected)),
     )
     mismatches = sum(left != right and "unknown" not in {left, right} for left, right in identity)
     known_actions = set(expected.actions) - {"unknown"}
