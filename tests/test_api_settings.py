@@ -6,7 +6,7 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from openx_workbench import api, api_settings
-from openx_workbench.llm_service import ModelError, load_config
+from openx_workbench.llm_service import ModelError, ModelInfo, load_config
 
 SECRET = "authored-test-key"
 
@@ -57,8 +57,8 @@ def test_model_list_and_probe_use_the_draft_with_the_saved_key(client, monkeypat
         def __init__(self, config):
             seen.append(config)
 
-        def models(self):
-            return ["a", "b"]
+        def catalog(self):
+            return [ModelInfo("a", ("low", "high"), "high", 4096), ModelInfo("b")]
 
         def probe(self):
             if seen[-1].model == "broken":
@@ -67,7 +67,10 @@ def test_model_list_and_probe_use_the_draft_with_the_saved_key(client, monkeypat
 
     monkeypatch.setattr(api_settings, "ModelClient", Client)
     client.put("/api/settings/model", json=model(api_key=SECRET))
-    assert client.post("/api/settings/model/models", json=model()).json() == {"models": ["a", "b"]}
+    assert client.post("/api/settings/model/models", json=model()).json() == {
+        "models": ["a", "b"],
+        "details": [{"id": "a", "effort_levels": ["low", "high"], "default_effort": "high", "max_output_tokens": 4096},
+                    {"id": "b", "effort_levels": [], "default_effort": "", "max_output_tokens": None}]}
     assert seen[-1].api_key == SECRET
     assert client.post("/api/settings/model/test", json=model(model="draft-model")).json() == {"model": "draft-model"}
     failed = client.post("/api/settings/model/test", json=model(model="broken"))

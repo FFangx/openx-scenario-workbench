@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, App, AutoComplete, Button, Collapse, Form, Input, InputNumber, Modal, Popconfirm, Radio, Space, Switch, Tabs } from "antd";
+import { Alert, App, AutoComplete, Button, Collapse, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Space, Switch, Tabs } from "antd";
 import { ApiOutlined, FolderOpenOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from "@ant-design/icons";
-import { api, type Appearance, type Encoder, type Lang, type ModelDraft, type Preferences, type Settings } from "../api";
+import { api, type Appearance, type Encoder, type Lang, type ModelDraft, type ModelInfo, type Preferences, type Settings } from "../api";
 import { useT } from "../i18n";
 import { SchemaTab } from "./SchemaUpdates";
 
@@ -54,7 +54,13 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
   const { message } = App.useApp();
   const saved = settings.model;
   const [form] = Form.useForm<ModelDraft>();
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const modelId = (Form.useWatch("model", form) ?? "").trim();
+  const chosen = models.find((m) => m.id === modelId);
+  const thinking = Form.useWatch("thinking", form);
+  const effort = Form.useWatch("reasoning_effort", form) ?? "";
+  // Levels the service declares for the chosen model; a saved level stays selectable.
+  const levels = [...new Set([...(chosen?.effort_levels ?? []), ...(effort ? [effort] : [])])];
   const [busy, setBusy] = useState<"list" | "test" | "save" | "key" | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -77,7 +83,7 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
 
   const fetchModels = () =>
     run("list", api.modelList, (r) => {
-      setModels(r.models);
+      setModels(r.details);
       return t(`获取到 ${r.models.length} 个模型，可在“模型名”中选择。`, `${r.models.length} models found. Choose one under Model ID.`);
     });
   const test = () => run("test", api.modelTest, (r) => t(`模型可用：${r.model}`, `Model available: ${r.model}`));
@@ -114,7 +120,7 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
       <Form.Item label={t("模型名（可手动输入）", "Model ID (editable)")} required>
         <Space.Compact block>
           <Form.Item name="model" noStyle rules={[{ required: true, whitespace: true }]}>
-            <AutoComplete options={models.map((m) => ({ value: m }))} filterOption={(input, o) => !!o?.value.toLowerCase().includes(input.toLowerCase())}
+            <AutoComplete options={models.map((m) => ({ value: m.id }))} filterOption={(input, o) => !!o?.value.toLowerCase().includes(input.toLowerCase())}
               placeholder={t("选择模型或手动输入", "Select or enter a model ID")} />
           </Form.Item>
           <Button icon={<ReloadOutlined />} loading={busy === "list"} onClick={fetchModels}>{t("获取模型清单", "Fetch model list")}</Button>
@@ -128,7 +134,15 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
           label: t("高级参数", "Advanced options"),
           children: (
             <div className="settings-grid">
-              <Form.Item name="thinking" label={t("DeepSeek 思考模式", "DeepSeek thinking mode")} valuePropName="checked"><Switch /></Form.Item>
+              <Form.Item name="thinking" label={t("思考模式", "Thinking mode")} valuePropName="checked"><Switch /></Form.Item>
+              <Form.Item name="reasoning_effort" label={t("思考等级", "Thinking effort")}
+                extra={!thinking ? t("思考模式关闭时不生效。", "Applies only with thinking on.")
+                  : !chosen ? t("先获取模型清单，才能看到该模型支持的等级。", "Fetch the model list to see this model's levels.")
+                  : !chosen.effort_levels.length ? t("该服务没有声明思考等级，使用服务默认。", "The service declares no levels; its default applies.") : undefined}>
+                <Select disabled={!thinking || !levels.length}
+                  options={[{ value: "", label: chosen?.default_effort ? t(`服务默认（${chosen.default_effort}）`, `Service default (${chosen.default_effort})`) : t("服务默认", "Service default") },
+                    ...levels.map((level) => ({ value: level, label: level }))]} />
+              </Form.Item>
               <Form.Item name="max_tokens" label={t("最大输出 tokens", "Maximum output tokens")}><InputNumber min={256} max={131072} step={256} /></Form.Item>
               <Form.Item name="timeout" label={t("超时（秒）", "Timeout (seconds)")}><InputNumber min={10} max={1800} step={10} /></Form.Item>
             </div>

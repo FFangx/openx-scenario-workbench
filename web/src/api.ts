@@ -34,6 +34,7 @@ export type DecisionReq = Schemas["DecisionRequest"];
 export type ModelSettings = Schemas["ModelSettings"];
 /** A blank api_key keeps the saved key, but only while the endpoint is unchanged. */
 export type ModelDraft = Schemas["ModelDraft"];
+export type ModelInfo = Schemas["ModelInfo"];
 export type PreviewSettings = Schemas["PreviewSettings"];
 export type Preferences = Schemas["Preferences"];
 export type Lang = Preferences["language"];
@@ -124,7 +125,7 @@ export const api = {
 
   settings: () => call<Settings>("/api/settings"),
   savePreferences: (p: Partial<Preferences>) => send<Preferences>("PUT", "/api/settings/preferences", p),
-  modelList: (d: ModelDraft) => post<{ models: string[] }>("/api/settings/model/models", d),
+  modelList: (d: ModelDraft) => post<Schemas["ModelList"]>("/api/settings/model/models", d),
   modelTest: (d: ModelDraft) => post<{ model: string }>("/api/settings/model/test", d),
   modelSave: (d: ModelDraft) => send<ModelSettings>("PUT", "/api/settings/model", d),
   modelRemoveKey: () => send<ModelSettings>("DELETE", "/api/settings/model/key"),

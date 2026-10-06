@@ -80,7 +80,9 @@ class PdfStore:
             client = client or ModelClient()
             identity = json.dumps([ENGINE_VERSION, PROMPT_VERSION, base_url(client.config.base_url),
                                    client.config.model, client.config.thinking, client.config.max_tokens,
-                                   ocr_identity(self.assets.root), layout_identity(self.assets.root)])
+                                   ocr_identity(self.assets.root), layout_identity(self.assets.root)]
+                                  # Appended only when set, so documents extracted before keep their ids.
+                                  + ([client.config.reasoning_effort] if client.config.reasoning_effort else []))
         document_id = hashlib.sha256((digest + "\0" + source_standard + ("\0" + identity if identity else "")).encode()).hexdigest()[:20]
         manifest = root / document_id / "document.json"
         if manifest.is_file():

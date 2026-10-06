@@ -5,7 +5,7 @@ The saved API key never leaves this process; responses only say whether one exis
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any, Literal
@@ -35,6 +35,7 @@ class ModelDraft(BaseModel):
     model: str = ""
     api_key: str = Field("", description="Blank keeps the saved key when the endpoint is unchanged.")
     thinking: bool = True
+    reasoning_effort: str = Field("", max_length=20, description="Blank keeps the service default.")
     max_tokens: int = Field(64000, ge=256, le=131072)
     timeout: int = Field(900, ge=10, le=1800)
 
@@ -62,14 +63,15 @@ def _saved_model() -> tuple[ModelConfig, bool]:
 
 def _model_json(config: ModelConfig, readable: bool = True) -> dict[str, Any]:
     return {"base_url": config.base_url, "model": config.model, "thinking": config.thinking,
-            "max_tokens": config.max_tokens, "timeout": config.timeout,
+            "reasoning_effort": config.reasoning_effort, "max_tokens": config.max_tokens, "timeout": config.timeout,
             "has_key": bool(config.api_key), "readable": readable}
 
 
 def _draft(request: ModelDraft) -> ModelConfig:
     saved, _ = _saved_model()
     return draft_config(saved, request.base_url, request.api_key, model=request.model.strip(),
-                        thinking=request.thinking, max_tokens=request.max_tokens, timeout=request.timeout)
+                        thinking=request.thinking, reasoning_effort=request.reasoning_effort.strip(),
+                        max_tokens=request.max_tokens, timeout=request.timeout)
 
 
 def _preview_json() -> dict[str, Any]:
@@ -110,8 +112,9 @@ def update_preferences(request: PreferencesUpdate) -> dict[str, Any]:
 
 
 @router.post("/model/models", **documented(ModelList))
-def model_list(request: ModelDraft) -> dict[str, list[str]]:
-    return {"models": ModelClient(_draft(request)).models()}
+def model_list(request: ModelDraft) -> dict[str, Any]:
+    catalog = ModelClient(_draft(request)).catalog()
+    return {"models": [item.id for item in catalog], "details": [asdict(item) for item in catalog]}
 
 
 @router.post("/model/test", **documented(ModelProbe))

@@ -6,7 +6,11 @@
    URL and API key. Fetch the model list, choose an ID or type one manually, test
    the selected model, then save. Listing models and completing a JSON request
    are separate checks. Some services do not implement `/models`; manual IDs
-   remain supported.
+   remain supported. Under advanced options, thinking can be switched off and
+   its effort chosen from the levels the service lists for the model (DeepSeek's
+   `/models` reports `effort.supported_levels`, e.g. low/high/max); it is sent as
+   `reasoning_effort` while thinking is on. Services that list no levels keep
+   their default.
 2. Create/select a project and import PDFs from the PDF card's **⋯ → Import PDFs** in the workbench; extraction runs as a background job with live progress. Scanned pages require the optional local OCR runtime described below.
    Import sends document text to the configured model. It parses blocks and the
    chapter tree first, then performs scene-first extraction and classification.

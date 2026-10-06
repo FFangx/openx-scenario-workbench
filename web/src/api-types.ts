@@ -1866,6 +1866,12 @@ export interface components {
              */
             model?: string;
             /**
+             * Reasoning Effort
+             * @description Blank keeps the service default.
+             * @default
+             */
+            reasoning_effort?: string;
+            /**
              * Thinking
              * @default true
              */
@@ -1875,6 +1881,17 @@ export interface components {
              * @default 900
              */
             timeout?: number;
+        };
+        /** ModelInfo */
+        ModelInfo: {
+            /** Default Effort */
+            default_effort: string;
+            /** Effort Levels */
+            effort_levels: string[];
+            /** Id */
+            id: string;
+            /** Max Output Tokens */
+            max_output_tokens: number | null;
         };
         /** ModelLabels */
         ModelLabels: {
@@ -1895,6 +1912,8 @@ export interface components {
         };
         /** ModelList */
         ModelList: {
+            /** Details */
+            details: components["schemas"]["ModelInfo"][];
             /** Models */
             models: string[];
         };
@@ -1915,6 +1934,8 @@ export interface components {
             model: string;
             /** Readable */
             readable: boolean;
+            /** Reasoning Effort */
+            reasoning_effort: string;
             /** Thinking */
             thinking: boolean;
             /** Timeout */

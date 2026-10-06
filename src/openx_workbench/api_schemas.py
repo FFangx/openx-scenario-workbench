@@ -63,8 +63,16 @@ class OpenedFolder(Shape):
     opened: str
 
 
+class ModelInfo(Shape):
+    id: str
+    effort_levels: list[str]
+    default_effort: str
+    max_output_tokens: int | None
+
+
 class ModelList(Shape):
     models: list[str]
+    details: list[ModelInfo]
 
 
 class ModelProbe(Shape):
@@ -663,6 +671,7 @@ class ModelSettings(Shape):
     base_url: str
     model: str
     thinking: bool
+    reasoning_effort: str
     max_tokens: int
     timeout: int
     has_key: bool

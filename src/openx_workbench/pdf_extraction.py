@@ -78,6 +78,8 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
         actual = {**body, "model": client.config.model, "max_tokens": min(body.get("max_tokens", 64000), client.config.max_tokens)}
         identity = {"engine": ENGINE_VERSION, "endpoint": base_url(client.config.base_url),
                     "thinking": client.config.thinking, "request": actual}
+        if client.config.thinking and client.config.reasoning_effort:
+            identity["reasoning_effort"] = client.config.reasoning_effort
         checksum = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         cached = cache_root / (checksum + ".json")
         if cached.exists():

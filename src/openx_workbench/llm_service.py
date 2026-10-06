@@ -5,6 +5,7 @@ import base64
 import ctypes
 import json
 import os
+import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -21,8 +22,23 @@ class ModelConfig:
     model: str = "deepseek-v4-flash"
     api_key: str = field(default="", repr=False)
     thinking: bool = True
+    # Thinking effort sent as `reasoning_effort` while thinking is on; empty keeps the service
+    # default. Levels come from the service's model list (DeepSeek: effort.supported_levels).
+    reasoning_effort: str = ""
     max_tokens: int = 64000
     timeout: int = 900
+
+
+@dataclass(frozen=True)
+class ModelInfo:
+    """One entry of the service's model list, with what it declares about thinking effort."""
+    id: str
+    effort_levels: tuple[str, ...] = ()
+    default_effort: str = ""
+    max_output_tokens: int | None = None
+
+
+EFFORT = re.compile(r"^[a-z][a-z0-9_-]{0,19}$")
 
 
 class ModelError(ValueError):
@@ -87,6 +103,8 @@ def save_config(config: ModelConfig, root: Path | None = None) -> None:
     normalized = base_url(config.base_url)
     if not config.model.strip() or not 256 <= config.max_tokens <= 131072 or not 10 <= config.timeout <= 1800:
         raise ModelError("请检查模型名、输出上限和超时 / Check model, output limit and timeout.")
+    if config.reasoning_effort and not EFFORT.match(config.reasoning_effort):
+        raise ModelError("思考等级无效 / Invalid thinking effort.")
     target = (root or default_store_root()) / "model_settings.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     value = asdict(config)
@@ -132,11 +150,25 @@ class ModelClient:
             raise ModelError("模型服务未返回有效 JSON / Invalid JSON response from model service.") from None
 
     def models(self) -> list[str]:
+        return [item.id for item in self.catalog()]
+
+    def catalog(self) -> list[ModelInfo]:
+        """The service's models in id order; effort levels only where the service declares them."""
         result = self.request("/models", timeout=30)
-        models = sorted({item["id"] for item in result.get("data", []) if isinstance(item, dict) and isinstance(item.get("id"), str)})
-        if not models:
+        found: dict[str, ModelInfo] = {}
+        for item in result.get("data", []):
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                continue
+            effort = item.get("effort") if isinstance(item.get("effort"), dict) else {}
+            levels = tuple(level for level in effort.get("supported_levels") or ()
+                           if isinstance(level, str) and EFFORT.match(level))
+            default = effort.get("default_level") if effort.get("default_level") in levels else ""
+            limit = item.get("max_output_tokens")
+            found.setdefault(item["id"], ModelInfo(item["id"], levels, default,
+                                                   limit if isinstance(limit, int) and limit > 0 else None))
+        if not found:
             raise ModelError("服务未提供模型清单，可手动输入模型名 / No model list; enter a model ID manually.")
-        return models
+        return [found[key] for key in sorted(found)]
 
     def complete(self, body):
         request = {**body, "model": self.config.model}
@@ -145,6 +177,8 @@ class ModelClient:
             request["thinking"] = {"type": "enabled" if self.config.thinking else "disabled"}
         else:
             request.pop("thinking", None)
+        if self.config.thinking and self.config.reasoning_effort:
+            request["reasoning_effort"] = self.config.reasoning_effort
         response = self.request("/chat/completions", request)
         choices = response.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
