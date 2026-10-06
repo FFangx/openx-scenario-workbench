@@ -16,6 +16,7 @@ from .preferences import read_preferences
 from .retrieval import OpenXIndex, RetrievalResult, build_encoder, catalog_fingerprint
 from .reuse_trace import build_trace
 from .scene_package import RetrievalQuery, ScenePackage, scene_package_to_query
+from .synonyms import expand_query
 
 ENCODERS = {"bge", "hashing"}
 
@@ -65,7 +66,8 @@ def scene_query(package: ScenePackage | None, text: str, *, skip_contained: bool
 
 
 def search(index: OpenXIndex, query: RetrievalQuery | None, text: str, top_k: int) -> list[RetrievalResult]:
-    return index.search(query.text if query else text.strip(), query=query, top_k=top_k)
+    """A scene's typed query, or free text with the library terms its everyday words refer to."""
+    return index.search(query.text if query else expand_query(text.strip()), query=query, top_k=top_k)
 
 
 def source_identity(stored: StoredScene) -> dict[str, Any]:
