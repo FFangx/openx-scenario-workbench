@@ -18,6 +18,7 @@ from openx_workbench.scene_facts import (
     background_participants,
     command_facts,
     ego_curve_radius,
+    ego_turn,
     environment_events,
     in_tunnel,
     lateral_direction,
@@ -537,3 +538,33 @@ def test_asset_story_retells_the_scenario_without_its_name():
     assert "model Child01, child" in story and "props: TrafficCone x1" in story
     assert "named checks: Check_Stopped" in story and "scored by: lonacc<-5" in story
     assert story.splitlines()[0].startswith("road: file missing")
+
+
+def on_map(xosc, map_name):
+    case = {"case_id": "c", "map_id": map_name, "map_name": map_name, "road_reference": "ThreeLanes.xodr",
+            "road_missing": True, "environments": [], "current_environment_id": None, "judgements": []}
+    return build_catalog([AssetFile("lib/c.xosc", xosc.encode()), AssetFile("lib/c.case.json", json.dumps(case).encode())])[0]
+
+
+def test_the_way_the_ego_leaves_a_junction_is_compared():
+    turning = asset(scenario("", place("Ego", 0, 0, 10) + acquire(-1.57)))
+    assert ego_turn(turning.bundle) == "right"  # a routing outweighs the map name
+    assert ego_turn(asset(scenario("", place("Ego", 0, 0, 10))).bundle) == "straight"  # a straight map: nowhere to turn
+    junction = on_map(scenario("", place("Ego", 0, 0, 10)), "Junction3")
+    assert ego_turn(junction.bundle) == ""
+    assert route_turn(asset(scenario("", place("Ego", 0, 0, 10), group("Ego", ("go", route(0, 3.14))))).bundle) == "u_turn"
+    # A road file without a junction leaves nowhere to turn: the bend of a curve is no turn.
+    curved = build_catalog([AssetFile("lib/c.xosc", scenario("", place("Ego", 10, -1.75, 10) + acquire(1.57)).encode()),
+                            AssetFile("ThreeLanes.xodr", CURVED_ROAD.encode())])[0]
+    assert (route_turn(curved.bundle), ego_turn(curved.bundle)) == ("left", "straight")
+
+    def routes(turn, item):
+        package = ScenePackage("REQ", "Junction", "", structure={"road_class": "交叉口", "ego_turn": turn})
+        return [(difference.requested, difference.candidate, difference.cost, difference.verified, difference.tier)
+                for difference in compare_structure(scene_package_to_query(package), item)
+                if difference.category == "ego_route"]
+
+    assert routes("右转", turning) == []
+    assert routes("左转", turning) == [("ego_turn=left", "ego_turn=right", 2, True, "core")]
+    assert routes("直行", junction) == [("ego_turn=straight", "not read", 0.5, False, "core")]
+    assert routes("未知", junction) == []

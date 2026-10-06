@@ -1,6 +1,6 @@
 """Translate controlled business vocabulary, preserving source identifiers."""
 import re
-from .scene_package import STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS
+from .scene_package import STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS, STRUCTURE_TURNS
 
 LABELS = {
     "direct": "可直接复用", "modify": "修改后复用", "major_modify": "大幅修改后复用", "rebuild": "需要重建",
@@ -51,7 +51,16 @@ LABELS = {
     "placement": "摆位", "move start position or retime trigger": "调整起点或触发时机",
     "turn standing participant": "调整静止参与者朝向",
     "not scripted": "文件未写", "confirm the system changes lanes": "核对被测系统自行换道",
+    "ego_route": "主车路线", "not read": "未读出", "verify the ego's route": "核对主车路线",
+    "change the ego's route": "修改主车路线",
+    "traffic_light": "交通信号灯", "speed_limit": "限速标志", "no traffic_light": "无交通信号灯",
+    "no speed_limit": "无限速标志", "no speed limit sign": "无限速标志", "road file missing": "道路文件缺失",
+    "verify traffic control": "核对交通控制设施", "add traffic control to OpenDRIVE": "在道路文件中添加交通控制设施",
+    "verify speed limit signs": "核对限速标志", "add a speed limit sign to OpenDRIVE": "在道路文件中添加限速标志",
+    "set the speed limit sign value": "调整限速标志数值",
+    "variant": "任选其一", "select or build the other alternatives": "其余任选项另选或另建素材",
 }
+LABELS.update({f"ego_turn={value}": "主车" + label for label, value in STRUCTURE_TURNS.items()})
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):
     LABELS.update({value: key for key, value in vocabulary.items()})
 

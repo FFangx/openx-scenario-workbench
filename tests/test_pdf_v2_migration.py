@@ -168,7 +168,12 @@ def test_prompts_are_frozen_and_chain_parser_is_selected():
     from openx_workbench.pdf_v2.parser import _resolve_heading_decoder
     assert "tested_function" in resolve_scene_prompt("scene-first-prompt-v6")
     assert "\"speed_kph\"" not in resolve_scene_prompt("scene-first-prompt-v6")
-    assert PROMPT_VERSION == "scene-first-prompt-v7" and '"speed_kph": null' in resolve_scene_prompt(PROMPT_VERSION)
+    assert '"speed_kph": null' in resolve_scene_prompt("scene-first-prompt-v7")
+    assert "alternative_group" not in resolve_scene_prompt("scene-first-prompt-v7")
+    current = resolve_scene_prompt(PROMPT_VERSION)
+    assert PROMPT_VERSION == "scene-first-prompt-v8"
+    assert all(field in current for field in ('"alternative_group": null', '"ego_turn"', '"traffic_controls"',
+                                              '"speed_limits_kph"'))
     assert _resolve_heading_decoder(None) == "chain"
 
 

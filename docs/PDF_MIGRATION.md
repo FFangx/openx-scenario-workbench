@@ -43,9 +43,14 @@ details were removed; no private corpus, configuration, model responses or
 evaluation data was copied. No ScenarioManager installation is needed at runtime.
 
 OpenX owns orchestration, HTTP transport, persistence and UI. It uses the same
-default `chain` heading decoder and, since 2026-10-04, `scene-first-prompt-v7`
-(v6 plus an optional per-participant `speed_kph`; v6 stays frozen), preserves typed scene
-structures, subtree expansion, shared clauses, source anchors and review issues.
+default `chain` heading decoder and, since 2026-10-06, `scene-first-prompt-v8`
+(v7 plus either-or participants `alternative_group`, the ego's way through a junction
+`ego_turn`, the traffic control a test relies on `traffic_controls`, speed-limit sign
+values `speed_limits_kph`, and a bearing defined by the lane a participant is in when the
+test starts; v7 added a per-participant `speed_kph`; earlier prompts stay frozen). The new
+fields are left out of a stored structure at their defaults, so earlier revisions read
+back unchanged. It preserves typed scene structures, subtree expansion, shared clauses,
+source anchors and review issues.
 Additional checks reject incomplete finishes and malformed response collections
 instead of treating them as successful empty extractions. Invalid references are
 reported; a response whose scenes all have invalid anchors fails explicitly.

@@ -17,7 +17,7 @@ from .pdf_v2.scene_first import run_scene_first_extraction
 from .scene_package import EvidenceRef, ScenePackage, canonical_features, synchronize_structure
 
 ENGINE_VERSION = "openx-v2-scene-first-4"
-PROMPT_VERSION = "scene-first-prompt-v7"
+PROMPT_VERSION = "scene-first-prompt-v8"
 
 
 @dataclass

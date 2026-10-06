@@ -71,6 +71,12 @@ LateralDirection = Literal["左", "右", "未知"]
 
 LaneDirection = Literal["单向", "双向", "未知"]
 
+# Which way the ego leaves a junction or roundabout.
+EgoTurn = Literal["直行", "左转", "右转", "掉头", "未知"]
+
+# Traffic control whose presence the test relies on (a traffic-light test, a speed-limit test).
+TrafficControl = Literal["交通信号灯", "限速标志"]
+
 TestedFunction = Literal[
 
     "NOA", "AEB", "ACC", "LSS", "APA", "FCW",
@@ -95,6 +101,10 @@ class SceneParticipant(BaseModel):
     # This participant's own initial speed. Optional, and left out of the stored structure when
     # unset, so revisions saved before it existed read back unchanged.
     speed_kph: float | None = Field(default=None, ge=0, allow_inf_nan=False, exclude_if=lambda value: value is None)
+    # Participants sharing a label are alternatives, one of which takes part in a run ("a car, a
+    # tricycle or a pedestrian stands ahead"). Optional and left out when unset, like the speed.
+    alternative_group: str | None = Field(default=None, min_length=1, max_length=16,
+                                          exclude_if=lambda value: value is None)
 
     def signature_actions(self) -> tuple[str, ...]:
 
@@ -128,6 +138,9 @@ class SceneParams(BaseModel):
     lane_direction: LaneDirection = "未知"
 
     fog_visibility_m: float | None = None
+    # Speed-limit sign values the test sets up; several are alternatives (chosen by the set speed).
+    # Left out of the stored structure when empty, so earlier revisions read back unchanged.
+    speed_limits_kph: tuple[float, ...] = Field(default=(), exclude_if=lambda value: not value)
 
     end_condition: str | None = None
 
@@ -149,6 +162,9 @@ class SceneStructure(BaseModel):
     lane_marking: LaneMarking = "未知"
     parking_operation: ParkingOperation = "未知"
     test_intent: TestIntent = "未知"
+    # Left out of the stored structure at their defaults, so earlier revisions read back unchanged.
+    ego_turn: EgoTurn = Field(default="未知", exclude_if=lambda value: value == "未知")
+    traffic_controls: tuple[TrafficControl, ...] = Field(default=(), exclude_if=lambda value: not value)
     params: SceneParams = SceneParams()
 
 class ProposedScene(BaseModel):
@@ -295,6 +311,8 @@ _PARKING_OP_VALUES = _literal_values(ParkingOperation)
 _TEST_INTENT_VALUES = _literal_values(TestIntent)
 _LATERAL_DIR_VALUES = _literal_values(LateralDirection)
 _LANE_DIR_VALUES = _literal_values(LaneDirection)
+_EGO_TURN_VALUES = _literal_values(EgoTurn)
+_TRAFFIC_CONTROL_VALUES = _literal_values(TrafficControl)
 
 def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | None:
 
@@ -332,12 +350,19 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
             dropped.add(f"{field}={value!r}")
             return None
 
-    def _speed(value: object) -> float | None:
-        speed = _number(value, "participant_speed")
+    def _speed(value: object, field: str = "participant_speed") -> float | None:
+        speed = _number(value, field)
         if speed is not None and not (math.isfinite(speed) and speed >= 0):
-            dropped.add(f"participant_speed={value!r}")
+            dropped.add(f"{field}={value!r}")
             return None
         return speed
+
+    def _group(value: object) -> str | None:
+        text = str(value or "").strip()
+        if len(text) > 16:
+            dropped.add(f"alternative_group={text}")
+            return None
+        return text or None
 
     participants: list[SceneParticipant] = []
     for item in raw.get("participants") or ():
@@ -352,6 +377,7 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
                 actions=_pick_many(item.get("actions"), _PARTICIPANT_ACTION_VALUES, "action"),
                 age=_pick(item.get("age"), _AGE_VALUES, "age", "未知"),
                 speed_kph=_speed(item.get("speed_kph")),
+                alternative_group=_group(item.get("alternative_group")),
             )
         )
 
@@ -391,6 +417,10 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
         lane_count=_number(params_raw.get("lane_count"), "lane_count"),
         lane_direction=_pick(params_raw.get("lane_direction"), _LANE_DIR_VALUES, "lane_direction", "未知"),
         fog_visibility_m=_number(params_raw.get("fog_visibility_m"), "fog_visibility"),
+        speed_limits_kph=tuple(sorted({
+            limit for limit in (_speed(item, "speed_limit") for item in (params_raw.get("speed_limits_kph") or ()))
+            if limit
+        })),
 
         end_condition=end_condition_raw[:120] or None,
     )
@@ -410,6 +440,8 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
         lane_marking=_pick(raw.get("lane_marking"), _LANE_MARKING_VALUES, "lane_marking", "未知"),
         parking_operation=_pick(raw.get("parking_operation"), _PARKING_OP_VALUES, "parking_operation", "未知"),
         test_intent=_pick(raw.get("test_intent"), _TEST_INTENT_VALUES, "test_intent", "未知"),
+        ego_turn=_pick(raw.get("ego_turn"), _EGO_TURN_VALUES, "ego_turn", "未知"),
+        traffic_controls=_pick_many(raw.get("traffic_controls"), _TRAFFIC_CONTROL_VALUES, "traffic_control"),
         params=params,
     )
 

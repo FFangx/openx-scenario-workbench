@@ -180,7 +180,7 @@ def _ego(bundle: ParseBundle) -> list[str]:
         moves.append(f"moves {side}")
     turn = route_turn(bundle)
     if turn:
-        moves.append(f"route {turn}" if turn == "straight" else f"route turns {turn}")
+        moves.append({"straight": "route straight", "u_turn": "route turns around"}.get(turn, f"route turns {turn}"))
     if facts["parking"]:
         moves.append(facts["parking"].replace("_", " "))
     if moves:

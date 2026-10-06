@@ -15,6 +15,7 @@ from .scene_facts import (
     condition_facts,
     driver_overrides,
     ego_curve_radius,
+    ego_turn,
     in_tunnel,
     is_scenery,
     lateral_direction,
@@ -98,6 +99,7 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
         lateral_direction=lateral_direction(bundle),
         curve_radius_m=ego_curve_radius(bundle),
         venue_features=frozenset({"tunnel"}) if in_tunnel(bundle) else frozenset(),
+        ego_turn=ego_turn(bundle),
     )
 
 

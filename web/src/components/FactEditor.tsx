@@ -91,6 +91,7 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
     { key: "actions", title: t("动作", "Actions"), render: (_: unknown, a: Participant, i: number) => <Select size="small" mode="multiple" value={a.actions} options={options("participant_actions")} onChange={(v) => setActor(i, { actions: v })} style={{ width: "100%" }} /> },
     { key: "speed", title: t("速度 km/h", "Speed km/h"), width: 76, render: (_: unknown, a: Participant, i: number) => <InputNumber size="small" min={0} value={a.speed_kph ?? null} onChange={(v) => setActor(i, { speed_kph: v ?? null })} aria-label={t("参与者速度（km/h）", "Participant speed (km/h)")} style={{ width: "100%" }} /> },
     { key: "age", title: t("年龄", "Age"), width: 80, render: (_: unknown, a: Participant, i: number) => <Select size="small" value={a.age ?? "未知"} options={options("age")} onChange={(v) => setActor(i, { age: v })} style={{ width: "100%" }} /> },
+    { key: "group", title: t("任选组", "Either-or"), width: 64, render: (_: unknown, a: Participant, i: number) => <Input size="small" maxLength={16} value={a.alternative_group ?? ""} onChange={(e) => setActor(i, { alternative_group: e.target.value.trim() || null })} aria-label={t("任选组（同组参与者每次只出现一个）", "Either-or group (one participant of a group per run)")} /> },
     { key: "x", width: 36, render: (_: unknown, __: Participant, i: number) => <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t("删除参与者", "Remove participant")} onClick={() => set({ participants: actors.filter((_, j) => j !== i) })} /> },
   ];
 
@@ -125,6 +126,8 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
                   <Form.Item label={t("天气", "Weather")}><Select value={(draft.params.weather as string) ?? "未知"} options={options("weather")} onChange={(v) => setParam("weather", v)} disabled={useJson} /></Form.Item>
                   <Form.Item label={t("主车动作", "Ego actions")}><Select mode="multiple" value={draft.ego_actions} options={options("ego_actions")} onChange={(v) => set({ ego_actions: v })} disabled={useJson} /></Form.Item>
                   <Form.Item label={t("时段", "Time of day")}><Select value={(draft.params.time_of_day as string) ?? "未知"} options={options("time_of_day")} onChange={(v) => setParam("time_of_day", v)} disabled={useJson} /></Form.Item>
+                  <Form.Item label={t("主车路口走向", "Ego at the junction")}><Select value={draft.ego_turn ?? "未知"} options={options("ego_turn")} onChange={(v) => set({ ego_turn: v })} disabled={useJson} /></Form.Item>
+                  <Form.Item label={t("交通控制设施", "Traffic control")}><Select mode="multiple" value={draft.traffic_controls ?? []} options={options("traffic_controls")} onChange={(v) => set({ traffic_controls: v })} disabled={useJson} /></Form.Item>
                 </div>
                 <p className="muted">{t("空白表示原文未明确；只有下面的数值字段参与匹配。文字说明不会自动转换为参数。", "Blank means unspecified. Matching uses these numeric fields; narrative does not update them.")}</p>
                 <div className="editor-grid">
@@ -133,6 +136,10 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
                       <InputNumber min={0} style={{ width: "100%" }} value={(draft.params[key] as number | null) ?? null} onChange={(v) => setParam(key, v ?? null)} disabled={useJson} />
                     </Form.Item>
                   ))}
+                  <Form.Item label={t("限速标志（km/h）", "Speed limit signs (km/h)")} extra={t("多个数值表示任选其一", "Several values are alternatives")}>
+                    <Select mode="tags" open={false} tokenSeparators={[",", "，", " "]} value={(draft.params.speed_limits_kph ?? []).map(String)}
+                      onChange={(v: string[]) => setParam("speed_limits_kph", [...new Set(v.map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort((a, b) => a - b))} disabled={useJson} />
+                  </Form.Item>
                   <Form.Item label={t("结束条件", "End condition")}>
                     <Input value={(draft.params.end_condition as string) ?? ""} onChange={(e) => setParam("end_condition", e.target.value || null)} disabled={useJson} />
                   </Form.Item>
@@ -144,7 +151,7 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
                   <span className="sec-title">{t("其他参与者", "Other participants")}</span>
                   <Button size="small" icon={<PlusOutlined />} onClick={() => set({ participants: [...actors, { ...EMPTY_ACTOR }] })} disabled={useJson}>{t("添加参与者", "Add participant")}</Button>
                 </div>
-                <p className="muted">{t("原文未说明的字段请保留未知。填写了参与者速度时，按参与者逐个比较速度。", "Keep facts the source does not state as unknown. Once a participant has a speed, speeds are compared per participant.")}</p>
+                <p className="muted">{t("原文未说明的字段请保留未知。填写了参与者速度时，按参与者逐个比较速度。任选其一的参与者填同一个任选组，匹配时素材有其中一个即可。", "Keep facts the source does not state as unknown. Once a participant has a speed, speeds are compared per participant. Give either-or participants the same group: an asset needs one of them.")}</p>
                 <Table<Participant> size="small" pagination={false} rowKey={(_, i) => String(i)} dataSource={actors} columns={actorColumns} className="actor-editor"
                   locale={{ emptyText: t("没有其他参与者", "No other participants") }} />
               </fieldset>

@@ -53,7 +53,7 @@ Similarity over the structural facts finds most right assets, but cannot say whe
 ## What it does
 
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
-- Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first path (prompt v7), preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
+- Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first path (prompt v8), preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
 - Publishes confirmed PDF scene revisions into a shared requirement library; simulation assets have optional model classification with rule/model/final audit history.
 - Provides model URL/key settings, model discovery, manual model IDs and a selected-model JSON test.
 - Converts each PDF scene package into explicit scenario-family, participant, relative-position, action, trigger, road, and parameter constraints.

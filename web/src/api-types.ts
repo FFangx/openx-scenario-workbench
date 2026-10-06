@@ -2432,6 +2432,11 @@ export interface components {
              */
             lateral_direction: "左" | "右" | "未知";
             /**
+             * Speed Limits Kph
+             * @default []
+             */
+            speed_limits_kph?: number[];
+            /**
              * Target Speeds Kph
              * @default []
              */
@@ -2464,6 +2469,8 @@ export interface components {
              * @enum {string}
              */
             age: "儿童" | "成人" | "未知";
+            /** Alternative Group */
+            alternative_group?: string | null;
             /**
              * Bearing
              * @default 未知方位
@@ -2513,6 +2520,8 @@ export interface components {
             bearing: string[];
             /** Ego Actions */
             ego_actions: string[];
+            /** Ego Turn */
+            ego_turn: string[];
             /** Facing */
             facing: string[];
             /** Participant Actions */
@@ -2529,6 +2538,8 @@ export interface components {
             tested_function: string[];
             /** Time Of Day */
             time_of_day: string[];
+            /** Traffic Controls */
+            traffic_controls: string[];
             /** Weather */
             weather: string[];
         };
@@ -2539,6 +2550,12 @@ export interface components {
              * @default []
              */
             ego_actions: ("匀速行驶" | "变速" | "刹停" | "变道" | "定距跟车" | "倒车" | "被测系统控制" | "未知")[];
+            /**
+             * Ego Turn
+             * @default 未知
+             * @enum {string}
+             */
+            ego_turn?: "直行" | "左转" | "右转" | "掉头" | "未知";
             /**
              * Lane Marking
              * @default 未知
@@ -2596,6 +2613,11 @@ export interface components {
             tested_function: "NOA" | "AEB" | "ACC" | "LSS" | "APA" | "FCW" | "BSM" | "ALCA" | "RCTA" | "LDW" | "LDP" | "TSA" | "LKA" | "ELK" | "AVP" | "ISL" | "DFM" | "DAM" | "DOW" | "未知";
             /** Tested Function Raw */
             tested_function_raw: string | null;
+            /**
+             * Traffic Controls
+             * @default []
+             */
+            traffic_controls?: ("交通信号灯" | "限速标志")[];
             /**
              * Venue Features
              * @default []

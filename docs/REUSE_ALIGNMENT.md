@@ -57,6 +57,24 @@ It does not introduce a second ingestion, model or indexing stack.
   write. So a different function is a change (`COST_FUNCTION`) and an unknown one is
   confirmed while reusing; neither blocks. A parking requirement against a driving
   asset stays blocking through the parking operation.
+- Either-or participants (2026-10-06, prompt v8). A requirement may offer alternatives
+  of which one takes part in a run ("a car, a tricycle or a pedestrian stands ahead"):
+  they share an `alternative_group`. An asset builds one of them, so every combination
+  of one participant per group is compared (`VARIANT_LIMIT`) and the best kept; the
+  others are neither missing nor the asset's concern, and their ages leave the
+  requirement with them. A `variant` note names the choice and costs nothing.
+- The way the ego leaves a junction (`ego_turn`: straight, left, right, U-turn) is read
+  from the ego's routing (`scene_facts.ego_turn`). A road file without a junction leaves
+  nowhere to turn, so its ego goes straight whatever the routing says (the bend of a
+  curve is no turn); without a road file a routing outweighs the map name, which only
+  says "straight" for a road with nowhere to turn. Another turn is a route to change in
+  the same junction (`COST_BEHAVIOR`, core); an unread one is verified
+  (`COST_PARAMETER`, core, so a review).
+- Traffic control the test relies on (`traffic_controls`: traffic lights, speed-limit
+  signs) and the signed speed-limit values come from the road file: present, nothing;
+  absent from a readable road, a road change (`COST_ROAD`), or a sign value to set
+  (`COST_PARAMETER`) when other limits are signed; road file missing, unverified. Of
+  several requested values (chosen by the set speed) any one will do.
 - Information gate: a requirement with no participant or occlusion is a review, even
   when both sides test the same function. Two near-empty stories always match: before
   the gate, misuse tests were matched `direct` to any asset testing the same function and
@@ -188,8 +206,8 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   headings from where it starts through its `AssignRouteAction` waypoints,
   `FollowTrajectoryAction` vertices or `AcquirePositionAction` target change by 45°
   or more (each step's change summed, so one vertex heading stated wrong inside a curve
-  cancels out). No requirement field states a turn yet, so the turn itself is not
-  compared. It changes how participants face: after a turn, people crossing the road
+  cancels out), and turns around from 135°. A requirement's `ego_turn` compares it (see
+  above). It also changes how participants face: after a turn, people crossing the road
   the ego enters walk its starting way, so each participant also carries its facing
   relative to the turned ego, and either reading matches the requested one (a
   requirement may describe the start or the interaction).

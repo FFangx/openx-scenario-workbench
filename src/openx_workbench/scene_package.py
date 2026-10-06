@@ -59,6 +59,12 @@ class ParticipantSignature:
     # ego turns at a junction; empty otherwise). A requirement may describe either moment: people
     # crossing the road the ego turns into walk the ego's starting way.
     turned_facing: str = field(default="", compare=False)
+    # A requirement's alternatives share a label: one of them takes part in a run (a car, a tricycle
+    # or a pedestrian stands ahead). Empty: always there. Only a requirement has it.
+    alternative: str = field(default="", compare=False)
+    # A requirement's stated pedestrian age (儿童 / 成人), kept among `unverified` until an asset
+    # shows it; carried here so an alternative left out takes its age along.
+    age: str = field(default="", compare=False)
 
     def __post_init__(self) -> None:
         if not self.actions:
@@ -115,6 +121,13 @@ class RetrievalQuery:
     curve_radius_m: float | None = None
     # Where an asset's ego drives beyond the road shape (scene_facts.in_tunnel), likewise confirming.
     venue_features: frozenset[str] = frozenset()
+    # Which way the ego leaves the junction or roundabout: "straight" / "left" / "right" / "u_turn";
+    # empty when not stated (requirement) or not readable (asset, scene_facts.ego_turn).
+    ego_turn: str = ""
+    # Traffic control a requirement's test relies on ("traffic_light" / "speed_limit") and the
+    # speed-limit values it sets up (several: alternatives). The asset side is its road file.
+    traffic_controls: frozenset[str] = frozenset()
+    speed_limits_kph: tuple[float, ...] = ()
 
 
 STRUCTURE_KINDS = {
@@ -187,6 +200,8 @@ STRUCTURE_INTENTS = {"激活边界试验": "activation_boundary"}
 STRUCTURE_AGES = {"儿童": "child"}
 STRUCTURE_LATERAL = {"左": "left", "右": "right"}
 STRUCTURE_VENUES = {"隧道": "tunnel"}
+STRUCTURE_TURNS = {"直行": "straight", "左转": "left", "右转": "right", "掉头": "u_turn"}
+STRUCTURE_TRAFFIC_CONTROLS = {"交通信号灯": "traffic_light", "限速标志": "speed_limit"}
 STRUCTURE_TRIGGERS = {
     "TTC": "ttc",
     "相对距离": "distance",
@@ -244,6 +259,8 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
                 actions=tuple(sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"]))
                 or ("unknown",),
                 speed_kph=float(speed) if speed is not None else None,
+                alternative=participant.get("alternative_group") or "",
+                age=participant["age"] if participant["age"] != "未知" else "",
             )
         )
         if participant["age"] != "未知":
@@ -354,6 +371,9 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         lane_count_scope=lane_scope,
         lane_marking=lane_marking,
         curve_radius_m=params["curve_radius_m"],
+        ego_turn=STRUCTURE_TURNS.get(structure.get("ego_turn", ""), ""),
+        traffic_controls=frozenset(STRUCTURE_TRAFFIC_CONTROLS[item] for item in structure.get("traffic_controls", ())),
+        speed_limits_kph=tuple(params.get("speed_limits_kph", ())),
     )
     if not any(
         (
@@ -371,6 +391,9 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             query.parking_operation,
             query.lane_count,
             query.lane_marking,
+            query.ego_turn,
+            query.traffic_controls,
+            query.speed_limits_kph,
         )
     ):
         query = replace(query, unverified=("no extracted structural requirements",))

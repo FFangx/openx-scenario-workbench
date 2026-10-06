@@ -440,6 +440,77 @@ _PROMPT_SCENE_FIRST_V7 = (
     .replace(_V5_EXAMPLE_PARTICIPANT, _V7_EXAMPLE_PARTICIPANT)
 )
 
+_V7_BEARING_LINES = """  bearing（相对主车的方位，单选）：
+    正前方 / 正后方 / 并排同车道 / 左前方 / 左后方 / 左并排 / 右前方 / 右后方 / 右并排 / 未知方位
+"""
+
+_V8_BEARING_LINES = """  bearing（相对主车的方位，单选）：
+    正前方 / 正后方 / 并排同车道 / 左前方 / 左后方 / 左并排 / 右前方 / 右后方 / 右并排 / 未知方位
+    - 指**试验开始时**（主车驶近之前）目标所在的位置，不是相遇、碰撞那一刻的位置
+    - 前后看纵向位置，左右看**所在车道**：在主车本车道 = 正前方 / 正后方；
+      在左侧车道（含对向车道）= 左前方 / 左后方 / 左并排；右侧同理
+    - 主车将要驶过的静止目标都在前方：路两侧停放的车 = 左前方 / 右前方，不是并排
+    - 对向车道驶来的车（靠右行驶）= 左前方 + facing「对向」
+"""
+
+_V7_SPEED_TAIL = """      分不清哪个速度属于哪个参与者就留 null，只写进 params.target_speeds_kph
+"""
+
+_V8_SPEED_TAIL_AND_GROUP = """      分不清哪个速度属于哪个参与者就留 null，只写进 params.target_speeds_kph
+  alternative_group（任选组，字符串，可为 null）
+    - 文档写明几种目标**任选其一**、每次试验只出现其中一种时（「乘用车/快递三轮车/行人
+      任选其一」「乘用车（或快递三轮车）」「成人或儿童行人」），每种各列一个参与者，
+      并给它们填**同一个**组名（如 "A"；另有一组任选就写 "B"）
+    - 同时出现的参与者（行人群里的每个人、两侧停放的每辆车）一律填 null
+"""
+
+_V8_TURN_AND_CONTROLS = """ego_turn（主车在路口 / 环岛的走向，单选）：直行 / 左转 / 右转 / 掉头 / 未知
+  - 只在文档写明时填：「主车左转通过路口」→ 左转；「确保车辆在交叉口直行」→ 直行
+  - 不经过路口、环岛的场景，或文档没说主车怎么走，填「未知」
+
+traffic_controls（试验要用到的交通控制设施，可多选，可为空）：交通信号灯 / 限速标志
+  - 只填试验靠它进行的：信号灯识别与响应、限速标志识别这类试验
+  - 只作位置参照提到的（「距停止线 21m 处」），或写明「无信号灯 / 信号灯熄灭」的，不要填
+
+test_intent（这个试验考核什么，单选）：
+"""
+
+_V8_SPEED_LIMIT_LINES = """  fog_visibility_m：雾天能见度（数字，米）——「能见度不大于 200m」→ 200；
+    文档只说「雾天」没给数值就留 null
+  speed_limits_kph：限速标志的数值（数字数组，km/h）——「设置限速 60 km/h 标志」→ [60]；
+    按条件任选其一的几个值都列上（「按设定车速选取 100/80/60/40 km/h 标志」→ [100, 80, 60, 40]）；
+    试验没有限速标志就留空数组
+"""
+
+_V7_EXAMPLE_INTENT = """        "test_intent": "功能试验",
+"""
+
+_V8_EXAMPLE_INTENT = """        "test_intent": "功能试验",
+        "ego_turn": "未知",
+        "traffic_controls": [],
+"""
+
+_V8_EXAMPLE_PARTICIPANT = (
+    '          {"kind": "乘用车", "bearing": "正前方", "facing": "同向",'
+    ' "actions": ["静止"], "age": "未知", "speed_kph": null, "alternative_group": null}\n'
+)
+
+_V8_EXAMPLE_PARAMS_TAIL = """          "fog_visibility_m": null,
+          "speed_limits_kph": [],
+          "end_condition": null
+"""
+
+_PROMPT_SCENE_FIRST_V8 = (
+    _PROMPT_SCENE_FIRST_V7
+    .replace(_V7_BEARING_LINES, _V8_BEARING_LINES)
+    .replace(_V7_SPEED_TAIL, _V8_SPEED_TAIL_AND_GROUP)
+    .replace("test_intent（这个试验考核什么，单选）：\n", _V8_TURN_AND_CONTROLS)
+    .replace(_V6_END_CONDITION_LINES.split("  end_condition")[0], _V8_SPEED_LIMIT_LINES)
+    .replace(_V7_EXAMPLE_INTENT, _V8_EXAMPLE_INTENT)
+    .replace(_V7_EXAMPLE_PARTICIPANT, _V8_EXAMPLE_PARTICIPANT)
+    .replace('          "fog_visibility_m": null,\n          "end_condition": null\n', _V8_EXAMPLE_PARAMS_TAIL)
+)
+
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
     "scene-first-prompt-v2": _PROMPT_SCENE_FIRST_V2,
@@ -448,6 +519,7 @@ _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v5": _PROMPT_SCENE_FIRST_V5,
     "scene-first-prompt-v6": _PROMPT_SCENE_FIRST_V6,
     "scene-first-prompt-v7": _PROMPT_SCENE_FIRST_V7,
+    "scene-first-prompt-v8": _PROMPT_SCENE_FIRST_V8,
 }
 
 _FROZEN_PROMPT_SHA256: dict[str, str] = {
@@ -477,6 +549,10 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
 
     "scene-first-prompt-v7": (
         "dc279fa0d19751439643ec4a670918a4aadecfb2430fe97765494825baa5fcac"
+    ),
+
+    "scene-first-prompt-v8": (
+        "de57b2c17c038fe88f3fd0a924797d9521acbd042e54907c709010f56bcc208a"
     ),
 }
 

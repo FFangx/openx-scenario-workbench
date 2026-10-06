@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import replace
-from itertools import permutations
+from itertools import islice, permutations, product
 
 from . import reuse_policy as policy
 from .catalog import OpenXAsset
@@ -27,12 +27,51 @@ from .scene_package import (
 )
 
 ENUMERATION_LIMIT = 6  # up to 6! = 720 participant pairings are enumerated; beyond, solve the assignment problem
+VARIANT_LIMIT = 64  # combinations of alternatives compared per asset; beyond, the first ones in key order
 
 
 def compare_structure(
     query: RetrievalQuery, asset: OpenXAsset, candidate: RetrievalQuery | None = None
 ) -> tuple[ReuseDifference, ...]:
+    """Every difference to close; with alternatives, for the one the asset serves best.
+
+    A requirement may offer alternatives of which one takes part in a run ("a car, a tricycle or a
+    pedestrian stands ahead"). An asset builds one of them: the others are neither missing nor its
+    concern. Each combination is compared, the one ranking best kept, and a note names the choice.
+    """
     candidate = candidate or asset_structure_query(asset)
+    signatures = query.participant_signatures
+    groups: dict[str, list[int]] = {}
+    for index, item in enumerate(signatures):
+        if item.alternative:
+            groups.setdefault(item.alternative, []).append(index)
+    groups = {label: members for label, members in groups.items() if len(members) > 1}
+    if not groups:
+        return _compare_structure(query, asset, candidate)
+    compared = []
+    for picks in islice(product(*groups.values()), VARIANT_LIMIT):
+        left_out = {index for members in groups.values() for index in members} - set(picks)
+        # The age of an alternative left out is no longer a requirement.
+        ages = Counter(f"participant age={signatures[index].age}" for index in left_out if signatures[index].age)
+        unverified = []
+        for value in query.unverified:
+            if ages[value] > 0:
+                ages[value] -= 1
+            else:
+                unverified.append(value)
+        variant = replace(query, participant_signatures=tuple(item for index, item in enumerate(signatures)
+                                                              if index not in left_out), unverified=tuple(unverified))
+        compared.append((_compare_structure(variant, asset, candidate), picks))
+    differences, picks = min(compared, key=lambda item: _score(list(item[0])))
+    notes = tuple(
+        ReuseDifference("variant", " / ".join(signatures[index].key() for index in members),
+                        signatures[pick].key(), "select or build the other alternatives", cost=0)
+        for members, pick in zip(groups.values(), picks)
+    )
+    return differences + notes
+
+
+def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: RetrievalQuery) -> tuple[ReuseDifference, ...]:
     differences = (
         participant_differences(
             query.participant_signatures, candidate.participant_signatures, candidate.scenery_signatures
@@ -133,6 +172,7 @@ def compare_structure(
         )
     )
     differences.extend(_lane_differences(query, asset.bundle.road))
+    differences.extend(_traffic_control_differences(query, asset.bundle.road))
     differences.extend(
         missing(
             "trigger",
@@ -173,6 +213,7 @@ def compare_structure(
                     verified="unknown" not in candidate.ego_actions,
                 )
             )
+    differences.extend(_route_differences(query, candidate))
     values = bundle_parameters(asset.bundle)
     visibility = asset_environment(asset.bundle).get("fog_visibility_m")
     if isinstance(visibility, (float, int)):
@@ -223,6 +264,54 @@ def _lane_differences(query: RetrievalQuery, road) -> list[ReuseDifference]:
             differences.append(ReuseDifference("road", requested, "lines: " + ", ".join(road.lane_markings),
                                                "select or modify OpenDRIVE lane lines", cost=policy.COST_ROAD))
     return differences
+
+
+def _traffic_control_differences(query: RetrievalQuery, road) -> list[ReuseDifference]:
+    """Traffic lights and speed-limit signs the test relies on, from the road file, in three states.
+
+    Present (a requested speed limit among the signed ones; of several requested, any one): no
+    difference. Absent from a readable road: a road change, or a sign value to set. Road file missing:
+    unverified, never a guess.
+    """
+    differences = []
+    wanted = set(query.traffic_controls)
+    if query.speed_limits_kph:
+        wanted.discard("speed_limit")  # the values say it
+        requested = "speed_limit=" + "/".join(f"{value:g}" for value in query.speed_limits_kph) + " km/h"
+        tolerance = policy.PARAMETER_TOLERANCE["speed_limit_kph"]
+        if road.file_missing:
+            differences.append(ReuseDifference("road", requested, "road file missing", "verify speed limit signs",
+                                               cost=policy.COST_ROAD, verified=False))
+        elif not road.speed_limits_kph:
+            differences.append(ReuseDifference("road", requested, "no speed limit sign",
+                                               "add a speed limit sign to OpenDRIVE", cost=policy.COST_ROAD))
+        elif not any(abs(asked - signed) <= tolerance
+                     for asked in query.speed_limits_kph for signed in road.speed_limits_kph):
+            differences.append(ReuseDifference(
+                "road", requested, "speed_limit=" + "/".join(f"{value:g}" for value in road.speed_limits_kph) + " km/h",
+                "set the speed limit sign value", cost=policy.COST_PARAMETER))
+    present = {"speed_limit": bool(road.speed_limits_kph), "traffic_light": bool(road.furniture.get("traffic_light"))}
+    for control in sorted(wanted):
+        if road.file_missing:
+            differences.append(ReuseDifference("road", control, "road file missing", "verify traffic control",
+                                               cost=policy.COST_ROAD, verified=False))
+        elif not present[control]:
+            differences.append(ReuseDifference("road", control, f"no {control}", "add traffic control to OpenDRIVE",
+                                               cost=policy.COST_ROAD))
+    return differences
+
+
+def _route_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
+    """The way the ego leaves the junction: another turn is a route to change in the same junction,
+    an unread one is to verify (scene_facts.ego_turn reads one wherever the road leaves no choice)."""
+    if not query.ego_turn or query.ego_turn == candidate.ego_turn:
+        return []
+    requested = f"ego_turn={query.ego_turn}"
+    if not candidate.ego_turn:
+        return [ReuseDifference("ego_route", requested, "not read", "verify the ego's route",
+                                cost=policy.COST_PARAMETER, verified=False)]
+    return [ReuseDifference("ego_route", requested, f"ego_turn={candidate.ego_turn}", "change the ego's route",
+                            cost=policy.COST_BEHAVIOR)]
 
 
 def _occlusion_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:

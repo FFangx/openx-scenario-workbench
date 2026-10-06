@@ -46,6 +46,7 @@ TIER_BY_CATEGORY = {
     "trigger": TIER_ADJUSTABLE,
     "placement": TIER_ADJUSTABLE,  # where a moving participant starts, which way a standing one faces
     "environment": TIER_ADJUSTABLE,
+    "variant": TIER_NOTE,  # which of a requirement's alternatives the asset builds
 }
 # Requirement items the comparison cannot check yet ("unverified"), by "key=value", then by key.
 # Only a functional test intent is a note: a misuse or activation-boundary test is another kind
@@ -86,7 +87,7 @@ FACING_OPPOSITE_MIN = 5 * math.pi / 6  # from 150° faces the opposite way; betw
 # ---------- value tolerances ----------
 # Absolute tolerance within which an extracted value satisfies a requirement.
 
-PARAMETER_TOLERANCE = {"ttc_s": 0.05, "distance_m": 0.1, "ego_speed_kph": 0.5}
+PARAMETER_TOLERANCE = {"ttc_s": 0.05, "distance_m": 0.1, "ego_speed_kph": 0.5, "speed_limit_kph": 0.5}
 TARGET_SPEED_TOLERANCE_KPH = 0.5
 # Relative: a road drawn as R251 serves an R250 test; R250 and R500 test variants stay apart.
 CURVE_RADIUS_TOLERANCE = 0.1

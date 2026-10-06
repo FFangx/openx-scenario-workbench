@@ -14,6 +14,7 @@ export const PARAM_LABEL: Record<string, [string, string]> = {
   lane_count: ["车道数", "Lane count"],
   curve_radius_m: ["弯道半径（m）", "Curve radius (m)"],
   fog_visibility_m: ["能见度（m）", "Visibility (m)"],
+  speed_limits_kph: ["限速标志（km/h）", "Speed limit signs (km/h)"],
   target_speeds_kph: ["目标速度（km/h）", "Target speeds (km/h)"],
   lateral_direction: ["横向方向", "Lateral direction"],
   lane_direction: ["车道方向", "Lane direction"],
@@ -50,7 +51,8 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
   if (isStructured(scene)) {
     const s = scene.structure;
     rows.push([t("道路类型", "Road type"), s.road_class], [t("被测功能", "Tested function"), s.tested_function],
-      [t("试验目的", "Test intent"), s.test_intent], [t("主车动作", "Ego actions"), s.ego_actions], [t("触发条件", "Trigger types"), s.semantic_triggers]);
+      [t("试验目的", "Test intent"), s.test_intent], [t("主车动作", "Ego actions"), s.ego_actions], [t("主车路口走向", "Ego at the junction"), s.ego_turn],
+      [t("交通控制设施", "Traffic control"), s.traffic_controls], [t("触发条件", "Trigger types"), s.semantic_triggers]);
     params = s.params ?? {};
     primary = ["ego_speed_kph", "target_speeds_kph", "ttc_value", "lane_count", "weather", "time_of_day"];
   } else {
@@ -103,11 +105,11 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
           <div className="sec-title facts-sub">{t("其他参与者", "Other participants")}</div>
           <table className="fact-sheet actors">
             <thead>
-              <tr>{[t("参与者类型", "Participant"), t("方位", "Bearing"), t("朝向", "Facing"), t("动作", "Actions"), t("速度（km/h）", "Speed (km/h)")].map((h) => <th key={h} scope="col">{h}</th>)}</tr>
+              <tr>{[t("参与者类型", "Participant"), t("方位", "Bearing"), t("朝向", "Facing"), t("动作", "Actions"), t("速度（km/h）", "Speed (km/h)"), t("任选组", "Either-or")].map((h) => <th key={h} scope="col">{h}</th>)}</tr>
             </thead>
             <tbody>
               {participants.map((a, i) => (
-                <tr key={i}>{(["kind", "bearing", "facing", "actions", "speed_kph"] as const).map((k) => <td key={k}>{value(a[k])}</td>)}</tr>
+                <tr key={i}>{(["kind", "bearing", "facing", "actions", "speed_kph", "alternative_group"] as const).map((k) => <td key={k}>{value(a[k])}</td>)}</tr>
               ))}
             </tbody>
           </table>

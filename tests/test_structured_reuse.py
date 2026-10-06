@@ -494,3 +494,68 @@ def test_the_tested_function_is_a_setting_not_a_rebuild():
 def test_a_parking_requirement_needs_a_parking_asset():
     result = search(requirement(parking_operation="泊入"), authored_asset())[0]
     assert result.reuse_level == "new_build"
+
+
+def test_either_or_participants_need_one_of_them():
+    car, tricycle, walker = ({"kind": kind, "bearing": "正前方", "facing": "同向", "actions": ["匀速行驶"],
+                              "alternative_group": "A"} for kind in ("乘用车", "三轮车", "行人"))
+    result = search(requirement(participants=[tricycle, car, walker]), authored_asset())[0]
+    assert result.reuse_level == "direct", result.differences
+    assert [(item.category, item.candidate, item.tier) for item in result.differences] == [
+        ("variant", "vehicle@front_same_lane:same:cruise", "note")]
+    # Listed side by side, all three take part.
+    together = [{key: value for key, value in item.items() if key != "alternative_group"} for item in (car, tricycle, walker)]
+    assert search(requirement(participants=together), authored_asset())[0].reuse_level == "new_build"
+
+
+def test_the_age_of_an_alternative_left_out_is_no_longer_required():
+    from openx_workbench.reuse_structured import compare_structure
+
+    adult, kid = ({"kind": "行人", "bearing": "正前方", "facing": "同向", "actions": ["匀速行驶"], "age": age,
+                   "alternative_group": "A"} for age in ("成人", "儿童"))
+    query = scene_package_to_query(requirement(participants=[adult, kid]))
+    assert sorted(query.unverified) == ["participant age=儿童", "participant age=成人"]
+    assert [item.requested for item in compare_structure(query, authored_asset())
+            if item.requested.startswith("participant age")] == ["participant age=成人"]
+
+
+def test_traffic_lights_and_speed_limit_signs_come_from_the_road_file():
+    def road(limits=(), lights=0, missing=False):
+        asset = authored_asset()
+        asset.bundle.road.speed_limits_kph = list(limits)
+        asset.bundle.road.furniture = {"traffic_light": lights} if lights else {}
+        if missing:
+            asset.bundle.road.file_missing, asset.bundle.road.inferred_features = True, ["straight"]
+        return asset
+
+    lights = requirement(traffic_controls=["交通信号灯"])
+    assert _road_differences(lights, road(lights=4)) == []
+    assert _road_differences(lights, road()) == [("traffic_light", True)]
+    assert search(lights, road())[0].reuse_level == "modify"
+    assert _road_differences(lights, road(missing=True)) == [("traffic_light", False)]
+
+    def limits(*values):
+        return requirement(traffic_controls=["限速标志"],
+                           params={**requirement().structure["params"], "speed_limits_kph": list(values)})
+
+    assert _road_differences(limits(60), road([40, 60, 80])) == []
+    assert _road_differences(limits(100, 80), road([60, 80])) == []  # alternatives: any one will do
+    assert [(item.candidate, item.cost) for item in search(limits(50), road([40, 60]))[0].differences
+            if item.category == "road"] == [("speed_limit=40/60 km/h", 0.5)]
+    assert _road_differences(limits(60), road()) == [("speed_limit=60 km/h", True)]
+    assert _road_differences(requirement(traffic_controls=["限速标志"]), road([30])) == []
+
+
+def test_round_c_fields_are_optional_in_the_stored_structure():
+    from openx_workbench.pdf_v2.scene_schemas import SceneStructure, parse_scene_structure
+
+    dumped = SceneStructure.model_validate(requirement().structure).model_dump(mode="json")
+    assert not {"ego_turn", "traffic_controls"} & set(dumped) and "speed_limits_kph" not in dumped["params"]
+    assert "alternative_group" not in dumped["participants"][0]
+    dropped = set()
+    parsed = parse_scene_structure({
+        "ego_turn": "左转", "traffic_controls": ["交通信号灯", "红绿灯"], "params": {"speed_limits_kph": [80, "60", 0, "x"]},
+        "participants": [{"kind": "乘用车", "alternative_group": "A"}, {"kind": "行人", "alternative_group": " "}]}, dropped)
+    assert (parsed.ego_turn, parsed.traffic_controls, parsed.params.speed_limits_kph) == ("左转", ("交通信号灯",), (60.0, 80.0))
+    assert [item.alternative_group for item in parsed.participants] == ["A", None]
+    assert dropped == {"traffic_control=红绿灯", "speed_limit='x'"}

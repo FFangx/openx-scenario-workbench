@@ -303,12 +303,37 @@ def route_turn_angle(bundle: ParseBundle, actor: str = "ego") -> float | None:
     return None
 
 
+U_TURN_MIN = 3 * math.pi / 4  # a routing that turns the actor at least this far turns it around
+
+
 def route_turn(bundle: ParseBundle, actor: str = "ego") -> str:
-    """Which way the actor's routing turns it: "left", "right", "straight", or "" when not read."""
+    """Which way the actor's routing turns it: "left", "right", "u_turn", "straight", or "" when not read."""
     turn = route_turn_angle(bundle, actor)
     if turn is None:
         return ""
+    if abs(turn) >= U_TURN_MIN:
+        return "u_turn"
     return "left" if turn >= ROUTE_TURN_MIN else "right" if turn <= -ROUTE_TURN_MIN else "straight"
+
+
+# Map-name road types (parser.map_road_features) with a junction to turn at; a parking area's aisles too.
+_TURNING_PLACES = frozenset({"junction", "roundabout", "parking"})
+
+
+def ego_turn(bundle: ParseBundle) -> str:
+    """Which way the ego leaves a junction: "straight", "left", "right", "u_turn", or "" when not read.
+
+    A road file without a junction leaves nowhere to turn: straight, whatever the routing says (the
+    bend of a curve is no turn). Otherwise the routing decides (route_turn). Without a road file a
+    routing outweighs the map name, which is only read for a road with nowhere to turn.
+    """
+    road = bundle.road
+    if not road.file_missing and not road.junction_count:
+        return "straight"
+    turn = route_turn(bundle)
+    if not turn and road.file_missing and road.inferred_features and not set(road.inferred_features) & _TURNING_PLACES:
+        return "straight"
+    return turn
 
 
 # ---------- named conditions ----------

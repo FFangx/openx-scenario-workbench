@@ -19,7 +19,7 @@
 | `scene_package.py` | Stable PDF-to-retrieval contract with source evidence |
 | `pdf_pipeline.py` | Explicit legacy offline extraction for historical compatibility |
 | `pdf_tables.py` | Geometrically verified native cell spans; original slots retained on ambiguity |
-| `pdf_v2/`, `pdf_extraction.py` | Migrated V2 chapter tree, scene-first extraction (prompt v7), typed structures and evidence validation |
+| `pdf_v2/`, `pdf_extraction.py` | Migrated V2 chapter tree, scene-first extraction (prompt v8), typed structures and evidence validation |
 | `llm_service.py` | Shared model configuration, credential protection, discovery and probes |
 | `classification.py` | Rule/model/final asset labels and manual review history |
 | `reuse.py` | Participant interaction signatures, grounded differences, and change cost |
@@ -84,7 +84,7 @@ A free-text query without a selected `ScenePackage` is recall-only. Before it is
 
 Unknown topology is a distinct state rather than a mismatch. If participant type and actions agree but either side lacks a resolvable bearing or facing direction, the result requires placement verification and cannot be marked as direct reuse.
 
-The default PDF path uses the migrated ScenarioManager V2 native block parser, chain chapter decoder, scene-first model extraction (prompt v7; v6 stays frozen), subtree resolution and Stage D review checks. Native tables preserve row/cell boundaries and verified row/column spans; cross-page continuation follows chapter ownership, retaining separate page evidence. Scanned pages (including image bodies with native footers) pass through an isolated local PP-StructureV3 worker; native pages retain their existing parser. Both paths preserve page/bbox/provenance in the same scene contract. Confirmed revisions can enter a shared requirement library. Native chapter quality failures can start an isolated PP-DocLayoutV2 overlay using the same runtime/cache runner; it retains original evidence and rechecks coverage before model extraction. Image semantics and complete cross-page/merged-table interpretation remain deferred. See [migration scope and validation](PDF_MIGRATION.md). No private corpus or internal evaluation results are bundled.
+The default PDF path uses the migrated ScenarioManager V2 native block parser, chain chapter decoder, scene-first model extraction (prompt v8; earlier prompts stay frozen), subtree resolution and Stage D review checks. Native tables preserve row/cell boundaries and verified row/column spans; cross-page continuation follows chapter ownership, retaining separate page evidence. Scanned pages (including image bodies with native footers) pass through an isolated local PP-StructureV3 worker; native pages retain their existing parser. Both paths preserve page/bbox/provenance in the same scene contract. Confirmed revisions can enter a shared requirement library. Native chapter quality failures can start an isolated PP-DocLayoutV2 overlay using the same runtime/cache runner; it retains original evidence and rechecks coverage before model extraction. Image semantics and complete cross-page/merged-table interpretation remain deferred. See [migration scope and validation](PDF_MIGRATION.md). No private corpus or internal evaluation results are bundled.
 
 The road-reference check first resolves the referenced relative path against the scenario directory, then falls back to a unique basename. Ambiguous same-name roads are rejected. Pairing does not prove that the scene can execute.
 

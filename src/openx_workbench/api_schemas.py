@@ -176,6 +176,8 @@ class SceneSchema(Shape):
     facing: list[str]
     participant_actions: list[str]
     age: list[str]
+    ego_turn: list[str]
+    traffic_controls: list[str]
 
 
 class Publication(Shape):
