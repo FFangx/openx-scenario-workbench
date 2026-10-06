@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import replace
 from itertools import permutations
 
@@ -291,6 +292,16 @@ def _extra_difference(actual: ParticipantSignature) -> ReuseDifference:
                            "remove extra participant", cost=policy.COST_EXTRA_PARTICIPANT)
 
 
+def _background_differences(left_over: list[ParticipantSignature]) -> list[ReuseDifference]:
+    """Left-over background participants, one low-cost difference per signature, as props are
+    grouped: 34 parked cars along a narrow passage do not make the asset a major change."""
+    counts = Counter(item.key() for item in left_over)
+    return [ReuseDifference("background_participant", "no additional participant",
+                            key if count == 1 else f"{count} × {key}", "keep or remove background participants",
+                            cost=policy.COST_BACKGROUND_PARTICIPANT)
+            for key, count in sorted(counts.items())]
+
+
 def _score(differences: list[ReuseDifference]) -> tuple[int, float, int]:
     """The ranking key of a set of differences (blocking count, then change cost), then unverified count."""
     return (sum(item.blocking for item in differences), sum(item.cost for item in differences),
@@ -306,12 +317,12 @@ def _pair(
     Pairing is one-to-one, so participant multiplicity counts. Among all pairings it picks the one
     whose differences rank best, the same order candidates are ranked by. The last `scenery`
     candidates are scenery groups: they may stand for a requested participant, but cost nothing
-    when left unpaired.
+    when left unpaired. Nor do background participants here: their low cost is per group.
     """
     table = [[_score(_pair_differences(expected, actual)) for actual in candidates] for expected in requested]
     absent = [_score(_pair_differences(expected, None)) for expected in requested]
-    extra = [_score([_extra_difference(actual)]) if index < len(candidates) - scenery else (0, 0, 0)
-             for index, actual in enumerate(candidates)]
+    extra = [_score([_extra_difference(actual)]) if index < len(candidates) - scenery and not actual.background
+             else (0, 0, 0) for index, actual in enumerate(candidates)]
     if max(len(requested), len(candidates)) <= ENUMERATION_LIMIT:
         return _enumerate(table, absent, extra)
     return _assign(table, absent, extra)
@@ -396,5 +407,7 @@ def participant_differences(
     for expected, column in zip(requested, pairing):
         result.extend(_pair_differences(expected, pool[column] if column is not None else None))
     paired = set(pairing)
-    result.extend(_extra_difference(actual) for column, actual in enumerate(candidates) if column not in paired)
+    left_over = [actual for column, actual in enumerate(candidates) if column not in paired]
+    result.extend(_extra_difference(actual) for actual in left_over if not actual.background)
+    result.extend(_background_differences([actual for actual in left_over if actual.background]))
     return result

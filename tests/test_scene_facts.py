@@ -11,7 +11,13 @@ from openx_workbench.reuse_facts import (
     bundle_scenery_signatures,
 )
 from openx_workbench.reuse_structured import compare_structure
-from openx_workbench.scene_facts import asset_environment, command_facts, scenery_summary
+from openx_workbench.reuse import classify_reuse_level
+from openx_workbench.scene_facts import (
+    asset_environment,
+    background_participants,
+    command_facts,
+    scenery_summary,
+)
 from openx_workbench.scene_package import ScenePackage, scene_package_to_query
 
 
@@ -186,3 +192,63 @@ def test_occlusion_is_read_from_widths_and_the_crossing_sweep():
     assert not [difference for difference in differences if difference.category == "relation"]
     assert [difference.requested for difference in differences if difference.category == "ego_action"] == [
         "driver_intervention"]
+
+
+def watched_by(actor, watched):
+    """A maneuver group whose event starts when the ego comes near `watched`."""
+    condition = ('<Condition name="near" delay="0" conditionEdge="rising"><ByEntityCondition><TriggeringEntities '
+                 'triggeringEntitiesRule="any"><EntityRef entityRef="Ego"/></TriggeringEntities><EntityCondition>'
+                 f'<RelativeDistanceCondition entityRef="{watched}" relativeDistanceType="longitudinal" value="30" '
+                 'freespace="false" rule="lessThan"/></EntityCondition></ByEntityCondition></Condition>')
+    return group(actor, ("go", speed(5))).replace("<StartTrigger/>",
+                                                  f"<StartTrigger><ConditionGroup>{condition}</ConditionGroup></StartTrigger>")
+
+
+def test_background_participants_take_no_part_in_the_test():
+    # A lead car brakes; a row of parked cars stands in the ego's lane edge, another row and a
+    # bystander further left. Of the row in the path only the first is met, the rest is hidden.
+    lane_row = [f"Lane{index}" for index in range(4)]
+    side_row = [f"Side{index}" for index in range(3)]
+    entities = vehicle("Lead") + "".join(map(vehicle, lane_row + side_row)) + pedestrian("Bystander")
+    init = (place("Ego", 0, 0, 10) + place("Lead", 20, 0, 10)
+            + "".join(place(name, 50 + 6 * index, -0.9) for index, name in enumerate(lane_row))
+            + "".join(place(name, 50 + 6 * index, 5.5) for index, name in enumerate(side_row))
+            + place("Bystander", 60, 9))
+    item = asset(scenario(entities, init, group("Lead", ("brake", speed(0)))))
+    assert background_participants(item.bundle) == {name.casefold() for name in lane_row[1:] + side_row + ["Bystander"]}
+    signatures = {signature.actor: signature.background for signature in asset_structure_query(item).participant_signatures}
+    assert not signatures["Lead"] and not signatures["Lane0"] and signatures["Side0"]
+
+
+def test_referenced_occluding_and_lone_participants_take_part():
+    # The watched car is referenced by a condition; the van hides the crossing pedestrian.
+    entities = vehicle("Watched") + vehicle("Van", width=2.2) + pedestrian("Walker") + vehicle("Far")
+    init = (place("Ego", 0, 0, 10) + place("Watched", -30, 3.5) + place("Van", 20, -3.5)
+            + place("Walker", 25, -8) + place("Far", 80, 12))
+    item = asset(scenario(entities, init, watched_by("Walker", "Watched")))
+    assert background_participants(item.bundle) == {"far"}
+    # With nothing taking part there is no lead to set a background against.
+    lone = asset(scenario(vehicle("Parked"), place("Ego", 0, 0, 10) + place("Parked", 80, 12)))
+    assert background_participants(lone.bundle) == frozenset()
+
+
+def test_a_thin_pedestrian_hides_no_car():
+    entities = pedestrian("Walker") + vehicle("Parked")
+    init = place("Ego", 0, 0, 10) + place("Walker", 40, 0) + place("Parked", 44, 0)
+    item = asset(scenario(entities, init, group("Ego", ("on", command("EnableAEB")))))
+    assert background_participants(item.bundle) == frozenset()
+
+
+def test_left_over_background_costs_little_and_is_grouped():
+    parked = [f"Parked{index}" for index in range(6)]
+    entities = vehicle("Lead") + "".join(map(vehicle, parked))
+    init = place("Ego", 0, 0, 10) + place("Lead", 30, 0, 10) + "".join(
+        place(name, 40 + 6 * index, 5.5) for index, name in enumerate(parked))
+    item = asset(scenario(entities, init, group("Lead", ("brake", speed(0)))))
+    package = ScenePackage("REQ", "Lead brakes", "", structure={
+        "participants": [{"kind": "乘用车", "bearing": "正前方", "facing": "同向", "actions": ["刹停"]}]})
+    differences = [difference for difference in compare_structure(scene_package_to_query(package), item)
+                   if difference.category.endswith("participant") or difference.category.startswith("participant")]
+    assert [(difference.category, difference.candidate) for difference in differences] == [
+        ("background_participant", "6 × vehicle@front_left:same:static")]
+    assert classify_reuse_level(tuple(differences)) == "modify"

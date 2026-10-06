@@ -268,15 +268,21 @@ def scenery_summary(bundle: ParseBundle) -> dict[str, dict[str, int]]:
 def occlusions(bundle: ParseBundle, kind_of) -> frozenset[tuple[str, str]]:
     """(occluder kind, occluded kind) pairs: a nearer object covers the ego's line of sight.
 
-    Read per instance before props are grouped. An occluder's angular width comes from
-    its own BoundingBox; a moving target sweeps its line of sight from where it starts
-    to the ego's path, so it counts as occluded if any part of that sweep is covered.
-    Props occluding props are scenery and not recorded.
+    Read per instance before props are grouped. Props occluding props are scenery and
+    not recorded.
+    """
+    return frozenset((kind_of(blocker), kind_of(target)) for blocker, target in _occluding(bundle))
+
+
+def _occluding(bundle: ParseBundle) -> list[tuple[EntityIR, EntityIR]]:
+    """(occluder, occluded) entity pairs. An occluder's angular width comes from its own
+    BoundingBox; a moving target sweeps its line of sight from where it starts to the
+    ego's path, so it counts as occluded if any part of that sweep is covered.
     """
     positions = {item.actor.casefold(): item for item in bundle.scenario.positions if item.actor}
     ego = positions.get("ego")
     if ego is None:
-        return frozenset()
+        return []
     placed = []
     for entity in bundle.scenario.entities:
         name = entity.name.casefold()
@@ -287,7 +293,7 @@ def occlusions(bundle: ParseBundle, kind_of) -> frozenset[tuple[str, str]]:
             continue
         moving = speed_behaviour(bundle, entity.name) not in {"static", "unknown"}
         placed.append((entity, offset, moving))
-    result = set()
+    result = []
     for blocker, (forward, left), _ in placed:
         if not blocker.width:
             continue
@@ -301,5 +307,71 @@ def occlusions(bundle: ParseBundle, kind_of) -> frozenset[tuple[str, str]]:
             near = math.atan2(target_left, target_forward)
             low, high = (min(near, 0.0), max(near, 0.0)) if moving else (near, near)
             if low <= angle + half_width and high >= angle - half_width:
-                result.add((kind_of(blocker), kind_of(target)))
-    return frozenset(result)
+                result.append((blocker, target))
+    return result
+
+
+# ---------- background participants ----------
+
+def background_participants(bundle: ParseBundle) -> frozenset[str]:
+    """Names (casefolded) of traffic participants that take no part in the test.
+
+    A participant takes part when it moves (a speed set only in Init is enough), a
+    trigger condition refers to it, it has a story action, it stands in the ego's path
+    ahead, its position cannot be read, or it occludes a participant that takes part or
+    a prop in the ego's path. Of a row in the path, what is hidden behind another such
+    participant takes no part. The rest is background: the parked cars of a narrow passage, a VRU crowd standing by. When no
+    participant takes part, the scenario has no lead to set a background against (a lone
+    stationary car whose position on a curve the straight-line reading misses): none is.
+    Structure only, never names.
+    """
+    scenario = bundle.scenario
+    positions = {item.actor.casefold(): item for item in scenario.positions if item.actor}
+    ego = positions.get("ego")
+    # Triggering entities, and the entity a condition measures against (RelativeDistanceCondition).
+    referenced = {name.casefold() for trigger in scenario.triggers
+                  for name in (*trigger.entity_refs, trigger.attributes.get("entityRef", "")) if name}
+    acting = {name.strip().casefold() for action in scene_actions(bundle) if action.phase == "story"
+              for name in (action.actor or "").split(",")}
+    candidates = {entity.name.casefold() for entity in scenario.entities
+                  if entity.name.casefold() != "ego" and not is_scenery(entity)}
+    props = {entity.name.casefold() for entity in scenario.entities if is_scenery(entity)}
+    widths = {entity.name.casefold(): entity.width or 0.0 for entity in scenario.entities}
+    ego_half_width = (widths.get("ego") or policy.EGO_WIDTH_M) / 2
+
+    offsets = {name: _relative_offset(ego, positions[name], bundle.road_geometry)
+               for name in candidates | props if ego is not None and name in positions}
+
+    def in_path(name: str) -> bool:
+        """Ahead, in the ego's lane or with its body reaching into the ego's width."""
+        offset = offsets.get(name)
+        if offset is None:
+            return True
+        lateral = abs(offset[1])
+        return offset[0] > 0 and (lateral <= policy.SAME_LANE_M or lateral - widths[name] / 2 < ego_half_width)
+
+    def span(name: str) -> tuple[float, float]:
+        forward, left = offsets[name]
+        angle, half = math.atan2(left, forward), math.atan2(widths[name] / 2, math.hypot(forward, left))
+        return angle - half, angle + half
+
+    def hides(blocker: str, target: str) -> bool:
+        """A nearer participant covers most of the target's width (a thin pedestrian hides no car)."""
+        if None in (offsets.get(blocker), offsets.get(target)) or not widths[target]:
+            return False
+        if math.hypot(*offsets[blocker]) >= math.hypot(*offsets[target]):
+            return False
+        (low, high), (target_low, target_high) = span(blocker), span(target)
+        covered = min(high, target_high) - max(low, target_low)
+        return covered >= policy.HIDDEN_SHARE * (target_high - target_low)
+
+    moving = {entity.name.casefold() for entity in scenario.entities
+              if entity.name.casefold() in candidates and speed_behaviour(bundle, entity.name) != "static"}
+    active = {name for name in candidates if name in referenced or name in acting or name in moving}
+    in_lane = {name for name in candidates - active if in_path(name)}
+    hidden = {target for target in in_lane if any(hides(blocker, target) for blocker in in_lane - {target})}
+    pairs = [(blocker.name.casefold(), target.name.casefold()) for blocker, target in _occluding(bundle)]
+    relevant = active | (in_lane - hidden)
+    targets = relevant | {name for name in props if in_path(name)}
+    relevant |= {blocker for blocker, target in pairs if target in targets}
+    return frozenset(candidates - relevant) if relevant & candidates else frozenset()

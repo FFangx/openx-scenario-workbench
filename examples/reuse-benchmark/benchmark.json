@@ -1,6 +1,6 @@
 {
   "name": "OpenX reuse benchmark",
-  "version": "2026-10-05",
+  "version": "2026-10-06",
   "license": "MIT. Every scenario, road and requirement here was written for this repository; none is taken from a test protocol, a company library or a third-party dataset.",
   "scope": "Retrieval and reuse-verdict regression for typed requirements against a small authored library. It does not measure PDF extraction, simulator execution or ASAM conformance.",
   "labels": "For each requirement, 'relevant' lists every library asset that needs the least change, with the verdict a reviewer following the documented reuse contract expects. 'confusers' lists further assets that look similar and the verdict they deserve. Labels were declared from the asset specifications below, not from system output.",
@@ -105,7 +105,7 @@
                    "params": {"ego_speed_kph": 50, "target_speeds_kph": [20]}},
      "relevant": {"aeb-ccrm-50": "direct"},
      "confusers": {"aeb-ccrm-50-unplaced": "review", "acc-follow-60": "modify", "aeb-ccrs-50": "modify",
-                   "aeb-ccrs-50-roadside-ped": "major_modify"}},
+                   "aeb-ccrs-50-roadside-ped": "modify"}},
     {"id": "ccrb-50-en", "language": "en", "title": "Lead car brakes to a stop",
      "text": "The lead car travels at 50 km/h and brakes hard to a standstill while the ego car follows at the same speed; dry road.",
      "structure": {"tested_function": "AEB", "road_class": "直道", "ego_actions": ["匀速行驶"],

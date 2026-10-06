@@ -18,7 +18,7 @@ tell whether the top hit may be reused as is.
 | Families | AEB car-to-car (stationary, moving, braking), truck, motorcycle, cyclist and pedestrian cases, oncoming car, ACC follow/brake/cut-in/cut-out, BSM with and without a lead car |
 | Variants | ego speed, night, rain, curve, an extra roadside pedestrian, and one asset whose target start position is not declared |
 | Requirements | 38 typed requirements, 20 in Chinese and 18 in English, each with a title and protocol-style text |
-| Expected best verdict | 25 direct, 8 modify, 1 review, 4 new build (two confusers are labelled major modify) |
+| Expected best verdict | 25 direct, 8 modify, 1 review, 4 new build (one confuser is labelled major modify) |
 
 Every asset is generated from its specification in
 [`benchmark.json`](../examples/reuse-benchmark/benchmark.json) by
@@ -88,6 +88,13 @@ Benchmark version 2026-10-05 relabels seven confusers from `new_build` to `modif
 following against AEB moving-target assets and ACC lead braking against AEB braking-target
 assets, both ways. They share the story; only the tested function and its scoring differ,
 which is now a change rather than a rebuild. No requirement's best candidate changed.
+Benchmark version 2026-10-06 relabels one confuser from `major_modify` to `modify`: the
+stationary car with a pedestrian standing at the roadside, against the moving-target
+requirement `ccrm-50-zh`. The pedestrian neither moves, nor is referenced by a trigger,
+nor stands in the ego's path, so it is a background participant
+(`scene_facts.background_participants`), left over at a low cost per group
+(`COST_BACKGROUND_PARTICIPANT`) instead of the cost of an extra participant. Behavior
+change, background pedestrian and target speed add up to 2.75, below `MAJOR_MODIFY_COST`.
 
 ## What the numbers say
 

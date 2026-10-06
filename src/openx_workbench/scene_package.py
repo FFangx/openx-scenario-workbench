@@ -49,6 +49,9 @@ class ParticipantSignature:
     actor: str = field(default="", compare=False)
     # Initial speed of this participant, compared after pairing; None when not stated or not read.
     speed_kph: float | None = field(default=None, compare=False)
+    # Takes no part in the test (scene_facts.background_participants): an asset's parked cars or
+    # bystanders. Left over, it costs little; it can still stand for a requested participant.
+    background: bool = field(default=False, compare=False)
 
     def __post_init__(self) -> None:
         if not self.actions:

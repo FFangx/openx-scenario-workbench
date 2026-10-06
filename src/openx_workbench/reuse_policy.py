@@ -18,6 +18,7 @@ COST_FUNCTION = 2  # switch the tested function and its scoring (AEB vs FCW); th
 COST_PARTICIPANT = 8  # a required participant is missing or interacts differently
 COST_ENTITY = 6  # legacy keywords: a required entity class is absent
 COST_EXTRA_PARTICIPANT = 3  # the candidate has a participant the requirement does not
+COST_BACKGROUND_PARTICIPANT = 0.25  # per group of left-over background participants (parked cars)
 COST_UNKNOWN_FAMILY = 2  # the candidate's scenario family cannot be read
 COST_BEHAVIOR = 2  # change one participant's or the ego's storyboard behavior
 COST_VERIFY_PARTICIPANT = 2  # participant facts must be checked by hand
@@ -39,6 +40,7 @@ TIER_CORE, TIER_ADJUSTABLE, TIER_NOTE = "core", "adjustable", "note"
 # file does at all is unclear until it is resolved.
 TIER_BY_CATEGORY = {
     "function": TIER_ADJUSTABLE,  # a setting of the reuse, rarely in the file (2026-10-05)
+    "background_participant": TIER_ADJUSTABLE,  # kept or removed while reusing, like scenery
     "parameter": TIER_ADJUSTABLE,
     "trigger": TIER_ADJUSTABLE,
     "environment": TIER_ADJUSTABLE,
@@ -72,6 +74,8 @@ MAJOR_MODIFY_COST = 5.0
 ALONGSIDE_M = 5.0  # |longitudinal offset| up to this is "alongside", beyond it front/rear
 SAME_LANE_M = 1.5  # |lateral offset| up to this is the same lane, beyond it left/right
 LANE_WIDTH_M = 3.5  # assumed lane width when only lane IDs are known
+EGO_WIDTH_M = 2.0  # assumed ego width when its BoundingBox is not declared
+HIDDEN_SHARE = 0.8  # a standing participant covering this share of another's width hides it
 FACING_SAME_MAX = math.pi / 6  # heading difference up to 30° faces the same way
 FACING_OPPOSITE_MIN = 5 * math.pi / 6  # from 150° faces the opposite way; between: crossing
 

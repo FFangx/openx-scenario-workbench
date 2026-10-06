@@ -9,6 +9,7 @@ from .reuse_geometry import _adjacent_lane, _bearing, _relative_facing, _relativ
 from .scene_facts import (
     actor_behaviors,
     asset_environment,
+    background_participants,
     command_facts,
     driver_overrides,
     is_scenery,
@@ -126,6 +127,7 @@ def bundle_participant_signatures(
         for actor in (name.strip() for name in (action.actor or "").split(",")):
             if actor:
                 actions.setdefault(actor.casefold(), set()).update(action_kinds)
+    background = background_participants(bundle) if not scenery else frozenset()
 
     signatures: list[ParticipantSignature] = []
     for entity in scenario.entities:
@@ -157,6 +159,7 @@ def bundle_participant_signatures(
                     )
                 ),
                 speed_kph=actor_speed_kph(bundle, actor),
+                background=actor in background,
             )
         )
     return tuple(sorted(signatures, key=ParticipantSignature.key))

@@ -105,6 +105,17 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   object whose BoundingBox width covers the ego's line of sight to a farther one (for
   a moving target, any part of its sweep toward the ego's path); props occluding props
   are not recorded.
+- **Background participants** (2026-10-06). A standing traffic participant that no
+  trigger condition refers to, that has no story action, that does not stand in the
+  ego's path ahead (its lane, or its body reaching into the ego's width) and that hides
+  nothing taking part is background: the parked cars of a narrow passage, a VRU crowd
+  standing by. Of a row standing in the path, those hidden behind another (covering at
+  least `HIDDEN_SHARE` of their width) are background too. A scenario where no
+  participant takes part has no background. A background participant can still stand
+  for a requested one; left over, it costs `COST_BACKGROUND_PARTICIPANT` per group of
+  equal signatures instead of `COST_EXTRA_PARTICIPANT` each. Read from structure only;
+  the ego's path is taken as straight ahead, so a target in the lane the ego will
+  change into, or beside a parking ego, may be read as background.
 - **Speed.** An actor's speed is the highest absolute SpeedAction target, since
   initialization often sets 0 and the story accelerates. A story transition (not a
   step) to standstill is a stop; two distinct non-zero targets are a speed change; a
