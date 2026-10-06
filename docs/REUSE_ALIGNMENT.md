@@ -127,6 +127,15 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
 - **Driver input.** Active `OverrideControllerValueAction` channels make a
   driver-intervention test; an active reverse gear is reversing.
 - **Simulation control.** `TurnOff` and `just_for_test` events are dropped.
+- **Scoring** (2026-10-06). The sidecar keeps the case's scoring criteria
+  (`caseData.judgements`); `scene_facts.scoring_criteria` lists the enabled ones beyond
+  the authoring tool's defaults (timeout, collision): distance to lane crossing
+  (`dtlc>1.75`), longitudinal acceleration limits (`lonacc<-5`), leaving the road
+  (`offtrack`), a red-light stop region (`stopandgo: stopTrigger=red`). Like `EnableXXX`
+  they are the simulator's convention, not OpenSCENARIO: they describe what a run
+  measures when present and mean nothing when absent. A requirement states no scoring,
+  so they enter no comparison; they describe the asset to a reviewer. Re-importing a
+  SIM archive refreshes the sidecar of versions imported before it was read.
 - **Environment.** Every declared environment is read; story changes to rain, snow
   or fog make the scenario that weather, conflicting readings stay unknown. Missing
   values come from the case's environment preset, where rain and snow amounts

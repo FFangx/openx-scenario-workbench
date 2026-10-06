@@ -12,6 +12,14 @@ from openx_workbench.sim_archive import expand_sim_archives, _osc_json_to_xml
 RAIN_PRESET = {"id": "rainy02", "category": "rainy", "time": "20:00:00", "rain": 3, "snow": 0, "fog": 3}
 
 
+LANE_CRITERION = {
+    "id": "c65b", "name": "custom", "type": "customized", "category": "general", "enabled": True,
+    "scope": {"type": "global", "position": {"x": -160.25, "y": -100.5, "z": 0}},
+    "conditions": [{"variable": "dtlc", "operator": "gt", "value": 1.75}],
+    "settings": {"action": "failure", "logLevel": "info", "logInfo": ""}, "builtIn": True, "lock": True,
+}
+
+
 def _sim_bytes(road_name: str = "demo.xodr", include_road: bool = True,
                map_id: str = "demo", map_name: str = "three-lane junction") -> bytes:
     payload = {
@@ -19,6 +27,7 @@ def _sim_bytes(road_name: str = "demo.xodr", include_road: bool = True,
         "caseData": {
             "environments": {"byId": {"rainy02": RAIN_PRESET}, "allIds": ["rainy02"]},
             "currEnvId": "rainy02",
+            "judgements": {"byId": {"c65b": LANE_CRITERION}, "allIds": ["c65b"]},
             "openSCENARIO": {
                 "FileHeader": {"revMajor": "1", "revMinor": "1", "description": "Cut-in", "author": "demo"},
                 "RoadNetwork": {"LogicFile": {"filepath": road_name}},
@@ -93,6 +102,9 @@ def test_sim_case_keeps_map_and_environment_presets() -> None:
     assert case["environments"] == [RAIN_PRESET]
     assert case["current_environment_id"] == "rainy02"
     assert case["road_missing"] is False
+    assert case["judgements"] == [{"type": "customized", "name": "custom", "enabled": True, "scope": "global",
+                                   "conditions": [{"variable": "dtlc", "operator": "gt", "value": 1.75}],
+                                   "action": "failure"}]
     asset = build_catalog(files)[0]
     assert asset.bundle.source_case["map_name"] == "three-lane junction"
     assert not asset.bundle.road.file_missing

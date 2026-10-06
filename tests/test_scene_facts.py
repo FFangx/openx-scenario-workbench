@@ -17,6 +17,7 @@ from openx_workbench.scene_facts import (
     background_participants,
     command_facts,
     scenery_summary,
+    scoring_criteria,
 )
 from openx_workbench.scene_package import ScenePackage, scene_package_to_query
 
@@ -80,10 +81,11 @@ def scenario(entities, init, groups="", environment=""):
             f'<Story name="Story"><Act name="Act">{groups}</Act></Story><StopTrigger/></Storyboard></OpenSCENARIO>')
 
 
-def asset(xosc, environments=(), current=None):
+def asset(xosc, environments=(), current=None, judgements=()):
     """A ScenarioManager case on a built-in road: no road file, only its sidecar."""
     case = {"case_id": "c", "map_id": "ThreeLanes", "map_name": "three lanes", "road_reference": "ThreeLanes.xodr",
-            "road_missing": True, "environments": list(environments), "current_environment_id": current}
+            "road_missing": True, "environments": list(environments), "current_environment_id": current,
+            "judgements": list(judgements)}
     return build_catalog([AssetFile("lib/c.xosc", xosc.encode()),
                           AssetFile("lib/c.case.json", json.dumps(case).encode())])[0]
 
@@ -144,6 +146,23 @@ def test_preset_completes_the_environment_without_its_fog_level():
     assert asset_environment(item.bundle) == {"weather": "rain", "time_of_day": "day"}
     night = asset(scenario("", place("Ego", 0, 0, 10)), presets[:1])
     assert asset_environment(night.bundle) == {"weather": "dry", "time_of_day": "night"}
+
+
+def criterion(kind, *conditions, enabled=True):
+    return {"type": kind, "name": kind, "enabled": enabled, "scope": "global", "action": "failure",
+            "conditions": [dict(zip(("variable", "operator", "value"), item)) for item in conditions]}
+
+
+def test_scoring_criteria_skip_the_defaults_every_case_carries():
+    judgements = [criterion("timeout", ("timeout", None, 600)), criterion("collision", enabled=False),
+                  criterion("customized", ("lonacc", "lt", -5)), criterion("customized", ("lonacc", "ge", 5.0)),
+                  criterion("customized", ("dtlc", "gt", 0.3), enabled=False), criterion("offtrack"),
+                  criterion("stopandgo", ("stopTrigger", None, {"red": True, "vru": False}),
+                            ("startDelay", None, 10))]
+    item = asset(scenario("", place("Ego", 0, 0, 10)), judgements=judgements)
+    assert scoring_criteria(item.bundle) == (
+        "lonacc<-5", "lonacc>=5", "offtrack", "stopandgo: stopTrigger=red, startDelay=10")
+    assert scoring_criteria(asset(scenario("", place("Ego", 0, 0, 10))).bundle) == ()
 
 
 def test_story_environment_outranks_the_preset():

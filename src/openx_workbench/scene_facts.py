@@ -242,6 +242,50 @@ def asset_environment(bundle: ParseBundle) -> dict[str, str | float]:
     return {**preset_environment(bundle.source_case), **bundle.scenario.environment}
 
 
+# ---------- scoring ----------
+
+# Criteria every case of the authoring tool carries alike (a 600 s timeout; collision, switched
+# on or off with no pattern across a library): they tell nothing about the test.
+_DEFAULT_CRITERIA = frozenset({"timeout", "collision"})
+_OPERATORS = {"gt": ">", "ge": ">=", "lt": "<", "le": "<=", "eq": "=", "ne": "!="}
+
+
+def _condition_text(condition: dict[str, Any]) -> str:
+    variable, value = condition.get("variable"), condition.get("value")
+    if isinstance(value, dict):  # stopTrigger {red: true, vru: false}: the flags that are set
+        value = "+".join(str(key) for key, flag in value.items() if flag is True) or "none"
+    operator = _OPERATORS.get(str(condition.get("operator") or "").casefold(), "=")
+    return f"{variable}{operator}{_scalar_text(value)}" if value is not None else str(variable)
+
+
+def _scalar_text(value: Any) -> str:
+    number = _number(value)
+    return f"{number:g}" if number is not None and not isinstance(value, bool) else str(value)
+
+
+def scoring_criteria(bundle: ParseBundle) -> tuple[str, ...]:
+    """What the authoring tool scores a run by, beyond its defaults, in authoring order.
+
+    The lateral distance to the lane line (dtlc>1.75) marks a lane-keeping or lane-change test,
+    longitudinal acceleration limits (lonacc<-5) a following test, a red-light stop region
+    (stopandgo: stopTrigger=red) a traffic-light test, leaving the road (offtrack) a lateral
+    control test. A simulator's own scoring, not OpenSCENARIO: present, it tells what the test
+    measures; absent, nothing.
+    """
+    result: list[str] = []
+    for item in bundle.source_case.get("judgements") or []:
+        kind = str(item.get("type") or "") if isinstance(item, dict) else ""
+        if not kind or not item.get("enabled", True) or kind in _DEFAULT_CRITERIA:
+            continue
+        conditions = [_condition_text(condition) for condition in item.get("conditions") or []
+                      if isinstance(condition, dict) and condition.get("variable")]
+        text = ", ".join(conditions) if kind == "customized" else (
+            f"{kind}: {', '.join(conditions)}" if conditions else kind)
+        if text and text not in result:
+            result.append(text)
+    return tuple(result)
+
+
 # ---------- scenery ----------
 
 def scenery_summary(bundle: ParseBundle) -> dict[str, dict[str, int]]:

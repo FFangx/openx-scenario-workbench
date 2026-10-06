@@ -111,10 +111,11 @@ def _expand_sim(
 
 def _case_metadata(case_id: str, case_def: dict, case_data: dict, road_reference: str,
                    *, road_missing: bool) -> bytes:
-    """Case facts the OpenSCENARIO JSON leaves out: the map and the environment presets.
+    """Case facts the OpenSCENARIO JSON leaves out: the map, the environment presets, the scoring.
 
     ScenarioManager keeps weather and time of day as presets in
-    `caseData.environments` unless the story sets them with an EnvironmentAction.
+    `caseData.environments` unless the story sets them with an EnvironmentAction,
+    and what a run is scored by in `caseData.judgements`.
     """
     environments = case_data.get("environments") or {}
     by_id = environments.get("byId") or {}
@@ -127,8 +128,27 @@ def _case_metadata(case_id: str, case_def: dict, case_data: dict, road_reference
         "environments": [by_id[key] for key in environments.get("allIds") or []
                          if isinstance(by_id.get(key), dict)],
         "current_environment_id": case_data.get("currEnvId"),
+        "judgements": _judgements(case_data),
     }
     return json.dumps(metadata, ensure_ascii=False, sort_keys=True).encode("utf-8")
+
+
+def _judgements(case_data: dict) -> list[dict]:
+    """The case's scoring criteria in authoring order, without the editor's bookkeeping.
+
+    A criterion has a type (timeout, collision, offtrack, stopandgo, customized), conditions
+    on a variable (dtlc gt 1.75, lonacc lt -5), the region it applies to and what a hit does.
+    """
+    judgements = case_data.get("judgements") or {}
+    by_id = judgements.get("byId") or {}
+    items = (by_id.get(key) for key in judgements.get("allIds") or by_id)
+    return [{"type": str(item.get("type") or ""), "name": str(item.get("name") or ""),
+             "enabled": item.get("enabled") is not False,
+             "scope": str((item.get("scope") or {}).get("type") or ""),
+             "conditions": [condition for condition in item.get("conditions") or []
+                            if isinstance(condition, dict)],
+             "action": str((item.get("settings") or {}).get("action") or "")}
+            for item in items if isinstance(item, dict)]
 
 
 def _logical_road_name(path: PurePosixPath) -> str:

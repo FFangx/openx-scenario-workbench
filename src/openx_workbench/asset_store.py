@@ -162,19 +162,20 @@ class AssetStore:
 
     def _backfill_case(self, version: AssetVersion, case: AssetFile | None,
                        existing: list[AssetVersion]) -> AssetVersion:
-        """Add SIM case metadata to a version imported before it was kept.
+        """Add SIM case metadata to a version imported before it was kept, or refresh it.
 
         The metadata is derived from the version's own source archive, so the
-        version's content identity is unchanged.
+        version's content identity is unchanged; a newer import reads more of it.
         """
-        if case is None or any(record["role"] == "case" for record in version.files):
+        stored = [record for record in version.files if record["role"] == "case"]
+        if case is None or any(record["sha256"] == _digest(case.data) for record in stored):
             return version
         from dataclasses import replace
         folder = self._manifest_path(version.asset_id, version.version_id).parent
         write_bytes(folder / "case.json", case.data, prefix="case-", suffix=".tmp")
         record = {"role": "case", "original_name": case.name, "stored_name": "case.json",
                   "sha256": _digest(case.data)}
-        updated = replace(version, files=(*version.files, record))
+        updated = replace(version, files=(*(item for item in version.files if item["role"] != "case"), record))
         self._write_manifest(updated)
         existing[existing.index(version)] = updated
         return updated

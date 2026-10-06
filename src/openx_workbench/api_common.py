@@ -43,12 +43,15 @@ def _classification_stamp(store: AssetStore, version: AssetVersion) -> int:
 def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
     """The latest version of every asset, as `AssetStore.catalog` returns it.
 
-    A version's files never change, so each is parsed once and reparsed only when its classification
-    or the installed XSD registry does. The catalog fingerprint is computed once per change, not per request.
+    A version's scenario and road never change, so each is parsed once and reparsed only when its
+    classification, its SIM case metadata (refreshed by a re-import) or the installed XSD registry does.
+    The catalog fingerprint is computed once per change, not per request.
     """
     store = _store()
     latest = store.latest()
-    stamps = [_classification_stamp(store, version) for version in latest]
+    stamps = [(_classification_stamp(store, version),
+               tuple(record["sha256"] for record in version.files if record["role"] == "case"))
+              for version in latest]
     schemas = registry_stamp()
     key = (schemas, tuple(sorted((version.version_id, version.compatibility, stamp)
                                  for version, stamp in zip(latest, stamps))))
