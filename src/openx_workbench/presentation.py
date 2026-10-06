@@ -48,6 +48,9 @@ LABELS = {
     "driver_intervention": "驾驶员干预", "no driver_intervention": "无驾驶员干预",
     "add driver input override": "添加驾驶员输入接管", "remove driver input override": "移除驾驶员输入接管",
     "park_in": "泊入", "park_out": "泊出", "no parking": "无泊车操作", "change parking operation": "调整泊车操作",
+    "placement": "摆位", "move start position or retime trigger": "调整起点或触发时机",
+    "turn standing participant": "调整静止参与者朝向",
+    "not scripted": "文件未写", "confirm the system changes lanes": "核对被测系统自行换道",
 }
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):
     LABELS.update({value: key for key, value in vocabulary.items()})

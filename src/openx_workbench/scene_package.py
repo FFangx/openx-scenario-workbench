@@ -109,6 +109,8 @@ class RetrievalQuery:
     # Radius of the curve: a requirement's stated one (also kept among `unverified` until an
     # asset's road states its own), an asset's first curve ahead of the ego.
     curve_radius_m: float | None = None
+    # Where an asset's ego drives beyond the road shape (scene_facts.in_tunnel), likewise confirming.
+    venue_features: frozenset[str] = frozenset()
 
 
 STRUCTURE_KINDS = {
@@ -180,6 +182,7 @@ STRUCTURE_PARKING = {"泊入": "park_in", "泊出": "park_out"}
 STRUCTURE_INTENTS = {"激活边界试验": "activation_boundary"}
 STRUCTURE_AGES = {"儿童": "child"}
 STRUCTURE_LATERAL = {"左": "left", "右": "right"}
+STRUCTURE_VENUES = {"隧道": "tunnel"}
 STRUCTURE_TRIGGERS = {
     "TTC": "ttc",
     "相对距离": "distance",
@@ -276,8 +279,10 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     intervention = structure["test_intent"] == "驾驶员干预试验"
     # Keep unsupported declared requirements visible in the verdict. They must
     # never disappear just because the XML reader does not yet understand them.
-    if structure["venue_features"] and structure["venue_features"] != "未知":
-        unverified.append(f"venue_features={structure['venue_features']}")
+    venues = structure["venue_features"]
+    if venues and venues != "未知":
+        # One item per venue, so an asset can confirm each (a tunnel by its lighting).
+        unverified.extend(f"venue_features={item}" for item in ([venues] if isinstance(venues, str) else venues))
     lane_marking = STRUCTURE_LANE_MARKINGS.get(structure["lane_marking"] or "", "")
     if structure["lane_marking"] and structure["lane_marking"] != "未知" and not lane_marking:
         unverified.append(f"lane_marking={structure['lane_marking']}")

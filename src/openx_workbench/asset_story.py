@@ -25,6 +25,7 @@ from .scene_facts import (
     driver_overrides,
     ego_curve_radius,
     environment_events,
+    in_tunnel,
     lateral_direction,
     named_conditions,
     occlusions,
@@ -155,6 +156,8 @@ def _environment(bundle: ParseBundle) -> list[str]:
         lines.append("environment changes: " + "; ".join(
             f"{name} -> " + ", ".join(f"{key}={value}" for key, value in reading.items())
             for name, reading in changes))
+    if in_tunnel(bundle):
+        lines.append("tunnel: the light turns to night and back to day")
     return lines
 
 

@@ -279,10 +279,14 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
         "WorldPosition", "LanePosition", "RoadPosition", "RelativeObjectPosition",
         "RelativeWorldPosition", "RelativeLanePosition", "RelativeRoadPosition",
     }
+    # Init also says where an actor is sent (route waypoints, an AcquirePosition target, a
+    # synchronization point): that is not where it starts, and read last it moved the ego past
+    # the junction or the construction zone it drives into.
+    destinations = ("RoutingAction", "Routing", "SynchronizeAction", "Synchronize")
     for private in _all(root, "Private"):
         actor = private.get("entityRef")
         for node in private.iter():
-            if _local(node) in position_names:
+            if _local(node) in position_names and all(enclosing(node, tag) is None for tag in destinations):
                 scenario.positions.append(
                     PositionIR(
                         _local(node),

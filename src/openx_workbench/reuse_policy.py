@@ -24,6 +24,7 @@ COST_BEHAVIOR = 2  # change one participant's or the ego's storyboard behavior
 COST_VERIFY_PARTICIPANT = 2  # participant facts must be checked by hand
 COST_RELATION = 2  # legacy keywords: move a participant (front/left/adjacent lane)
 COST_TRIGGER = 1.5  # change a start trigger
+COST_PLACEMENT = 1.5  # move a moving participant's start or retime its trigger; turn a standing one
 COST_ROAD = 1.0  # select or modify the OpenDRIVE road
 COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
 
@@ -43,6 +44,7 @@ TIER_BY_CATEGORY = {
     "background_participant": TIER_ADJUSTABLE,  # kept or removed while reusing, like scenery
     "parameter": TIER_ADJUSTABLE,
     "trigger": TIER_ADJUSTABLE,
+    "placement": TIER_ADJUSTABLE,  # where a moving participant starts, which way a standing one faces
     "environment": TIER_ADJUSTABLE,
 }
 # Requirement items the comparison cannot check yet ("unverified"), by "key=value", then by key.
@@ -50,6 +52,7 @@ TIER_BY_CATEGORY = {
 # of test, which an asset does not show, so it stays core.
 TIER_BY_REQUIREMENT = {
     "lateral_direction": TIER_ADJUSTABLE,
+    "ego_action=lane_change": TIER_ADJUSTABLE,  # under system control the system changes lanes itself
     "trigger": TIER_ADJUSTABLE,
     "test_intent=功能试验": TIER_NOTE,
     "end_condition": TIER_NOTE,

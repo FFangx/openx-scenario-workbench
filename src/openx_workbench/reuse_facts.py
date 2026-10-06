@@ -14,6 +14,7 @@ from .scene_facts import (
     condition_facts,
     driver_overrides,
     ego_curve_radius,
+    in_tunnel,
     is_scenery,
     lateral_direction,
     model_traits,
@@ -94,6 +95,7 @@ def asset_structure_query(asset: OpenXAsset) -> RetrievalQuery:
         test_intent="activation_boundary" if checks["activation_boundary"] else "",
         lateral_direction=lateral_direction(bundle),
         curve_radius_m=ego_curve_radius(bundle),
+        venue_features=frozenset({"tunnel"}) if in_tunnel(bundle) else frozenset(),
     )
 
 

@@ -382,6 +382,13 @@ def environment_events(bundle: ParseBundle) -> list[tuple[str, dict[str, str | f
             if action.phase == "story" and action.environment]
 
 
+def in_tunnel(bundle: ParseBundle) -> bool:
+    """The story turns the light to night and back to day: the ego drives through a tunnel, lit
+    the way a library without tunnel roads simulates one. A night test turns once."""
+    lighting = [reading["time_of_day"] for _, reading in environment_events(bundle) if reading.get("time_of_day")]
+    return "night" in lighting and "day" in lighting[lighting.index("night") + 1:]
+
+
 # ---------- scoring ----------
 
 # Criteria every case of the authoring tool carries alike (a 600 s timeout; collision, switched

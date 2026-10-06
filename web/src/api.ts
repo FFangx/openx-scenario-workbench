@@ -207,7 +207,7 @@ export const facetLabel = (key: string, lang: Lang) => FACET_LABEL[key]?.[lang] 
 const CATEGORY_EN: Record<string, string> = {
   unverified: "Unverified fact", function: "Tested function", road: "Road", road_type: "Road type",
   participant_signature: "Participant", participant: "Participant", participant_topology: "Participant relation",
-  background_participant: "Background participant", ego_action: "Ego action", action: "Action", entity: "Participant", trigger: "Trigger", environment: "Environment",
+  background_participant: "Background participant", placement: "Placement", ego_action: "Ego action", action: "Action", entity: "Participant", trigger: "Trigger", environment: "Environment",
   parameter: "Parameter", parameter_resolution: "Parameter resolution", weather: "Weather", time_of_day: "Time of day",
 };
 export const categoryLabel = (d: { category: string; category_label: string }, lang: Lang) =>

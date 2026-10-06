@@ -19,6 +19,7 @@ from openx_workbench.scene_facts import (
     command_facts,
     ego_curve_radius,
     environment_events,
+    in_tunnel,
     lateral_direction,
     named_conditions,
     route_turn,
@@ -417,16 +418,58 @@ def test_curve_radius_ahead_of_the_ego_confirms_or_changes_a_requested_radius():
     assert radius(250) == [("road", True)]
 
 
+def light(name, hour):
+    environment = (f'<GlobalAction><EnvironmentAction><Environment name="{name}"><TimeOfDay animation="false" '
+                   f'dateTime="2020-11-11T{hour}:00:00"/></Environment></EnvironmentAction></GlobalAction>')
+    return (f'<ManeuverGroup name="{name}" maximumExecutionCount="1"><Actors selectTriggeringEntities="false"/>'
+            f'<Maneuver name="m"><Event name="{name}" priority="overwrite"><Action name="a">{environment}</Action>'
+            '<StartTrigger/></Event></Maneuver></ManeuverGroup>')
+
+
 def test_story_environment_changes_are_listed_in_order():
-    def change(name, hour):
-        environment = (f'<GlobalAction><EnvironmentAction><Environment name="{name}"><TimeOfDay animation="false" '
-                       f'dateTime="2020-11-11T{hour}:00:00"/></Environment></EnvironmentAction></GlobalAction>')
-        return (f'<ManeuverGroup name="{name}" maximumExecutionCount="1"><Actors selectTriggeringEntities="false"/>'
-                f'<Maneuver name="m"><Event name="{name}" priority="overwrite"><Action name="a">{environment}</Action>'
-                '<StartTrigger/></Event></Maneuver></ManeuverGroup>')
-    item = asset(scenario("", place("Ego", 0, 0, 10), change("DayToNight", 21) + change("NightToDay", 12)))
+    item = asset(scenario("", place("Ego", 0, 0, 10), light("DayToNight", 21) + light("NightToDay", 12)))
     assert [(name, reading["time_of_day"]) for name, reading in environment_events(item.bundle)] == [
         ("DayToNight", "night"), ("NightToDay", "day")]
+
+
+def test_light_turning_to_night_and_back_is_a_tunnel():
+    through = asset(scenario("", place("Ego", 0, 0, 10), light("DayToNight", 21) + light("NightToDay", 12)))
+    night = asset(scenario("", place("Ego", 0, 0, 10), light("DayToNight", 21)))
+    assert in_tunnel(through.bundle) and not in_tunnel(night.bundle)
+    assert "tunnel: the light turns to night and back to day" in asset_story(through)
+    query = scene_package_to_query(ScenePackage("REQ", "Tunnel", "", structure={"venue_features": ["隧道"]}))
+
+    def unverified(item):
+        return [difference.requested for difference in compare_structure(query, item) if difference.category == "unverified"]
+
+    assert "venue_features=隧道" not in unverified(through)
+    assert "venue_features=隧道" in unverified(night)  # a tunnel may be built another way
+
+
+def test_where_init_sends_the_ego_is_not_where_it_starts():
+    # Route waypoints and an AcquirePosition target past the junction came last and moved the ego there.
+    goal = ('<PrivateAction><RoutingAction><AcquirePositionAction><Position><WorldPosition x="300" y="0" h="0"/>'
+            '</Position></AcquirePositionAction></RoutingAction></PrivateAction>')
+    ego = place("Ego", 0, 0, 10).replace("</Private>", route(0, 0) + goal + "</Private>")
+    item = asset(scenario(vehicle("T1"), ego + place("T1", 40, 0)))
+    assert [position.attributes["x"] for position in item.bundle.scenario.positions if position.actor == "Ego"] == ["0"]
+    assert [signature.bearing for signature in bundle_participant_signatures(item.bundle, semantic=True)] == [
+        "front_same_lane"]
+
+
+def test_a_system_under_test_changes_lanes_without_a_scripted_lane_change():
+    package = ScenePackage("REQ", "System lane change", "", structure={"ego_actions": ["匀速行驶", "变道", "被测系统控制"]})
+
+    def lane_change_differences(*events):
+        item = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", *events)))
+        return [(difference.category, difference.cost, difference.verified, difference.tier)
+                for difference in compare_structure(scene_package_to_query(package), item)
+                if "lane_change" in difference.requested]
+
+    assert lane_change_differences(("on", command("SysEngReq"))) == [("unverified", 0, False, "adjustable")]
+    assert lane_change_differences(("on", command("SysEngReq")), ("lc", command("LaneChangeReq"))) == []
+    # Without the system in control, the file has to script the lane change.
+    assert lane_change_differences(("go", speed(20))) == [("ego_action", 2, True, "core")]
 
 
 def test_asset_story_retells_the_scenario_without_its_name():

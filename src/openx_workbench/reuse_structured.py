@@ -17,7 +17,14 @@ from .reuse_differences import (
 )
 from .reuse_facts import asset_structure_query, bundle_parameters
 from .scene_facts import asset_environment
-from .scene_package import STRUCTURE_AGES, STRUCTURE_INTENTS, STRUCTURE_LATERAL, ParticipantSignature, RetrievalQuery
+from .scene_package import (
+    STRUCTURE_AGES,
+    STRUCTURE_INTENTS,
+    STRUCTURE_LATERAL,
+    STRUCTURE_VENUES,
+    ParticipantSignature,
+    RetrievalQuery,
+)
 
 ENUMERATION_LIMIT = 6  # up to 6! = 720 participant pairings are enumerated; beyond, solve the assignment problem
 
@@ -49,12 +56,15 @@ def compare_structure(
             "resolve parameter before confirming reuse", verified=False,
         ))
     # The asset's named checks show the declared kind of test (an activation-boundary test), its ego
-    # moves to the declared side, its 3D models show a declared child (once per participant shown):
-    # confirmed. Anything else stays unverified; the requirement may mean another participant's side.
+    # moves to the declared side, its 3D models show a declared child (once per participant shown),
+    # its lighting shows a tunnel: confirmed. Anything else stays unverified; the requirement may
+    # mean another participant's side, a tunnel may be built another way.
     confirmed = Counter({f"test_intent={label}": 1 for label, intent in STRUCTURE_INTENTS.items()
                          if intent == candidate.test_intent})
     confirmed.update(f"lateral_direction={label}" for label, side in STRUCTURE_LATERAL.items()
                      if side == candidate.lateral_direction)
+    confirmed.update(f"venue_features={label}" for label, venue in STRUCTURE_VENUES.items()
+                     if venue in candidate.venue_features)
     for label, trait in STRUCTURE_AGES.items():
         confirmed[f"participant age={label}"] = sum(trait in item.traits for item in candidate.participant_signatures)
     if query.curve_radius_m and candidate.curve_radius_m:
@@ -134,6 +144,14 @@ def compare_structure(
     )
     if query.ego_actions:
         absent = query.ego_actions - candidate.ego_actions
+        # A system under test changes lanes by itself: its asset need not script the lane change
+        # (a system-triggered lane change shows none). To confirm, at no cost; an asset that shows
+        # one still scores higher.
+        unscripted = absent & {"lane_change"} if "system_control" in query.ego_actions & candidate.ego_actions else set()
+        absent -= unscripted
+        if unscripted:
+            differences.append(ReuseDifference("unverified", "ego_action=lane_change", "not scripted",
+                                               "confirm the system changes lanes", cost=0, verified=False))
         if absent or (candidate.ego_actions - query.ego_actions - {"unknown"}):
             differences.append(
                 ReuseDifference(
@@ -248,13 +266,51 @@ def _kind(signature: ParticipantSignature, other: ParticipantSignature) -> str:
     return other.kind if other.kind in signature.traits else signature.kind
 
 
+def _moves(signature: ParticipantSignature) -> bool:
+    return bool(set(signature.actions) - {"static", "unknown"})
+
+
+def _side(bearing: str) -> str:
+    return bearing.split("_", 1)[1] if "_" in bearing else ""
+
+
+def _retimed(expected: ParticipantSignature, actual: ParticipantSignature) -> bool:
+    """Both move the same way on the same side of the ego, one further ahead or behind.
+
+    Where a moving participant is depends on when it is looked at: a requirement describes the
+    interaction (right alongside when the ego changes lanes), an asset where it starts (right
+    behind, catching up). Moving its start or retiming its trigger, not another story. Doing
+    something else as well is another interaction (a car cutting in from ahead does not overtake
+    from behind), and the same lane stays apart (a lead car, a car closing in from behind).
+    """
+    return (expected.bearing != actual.bearing and set(expected.actions) == set(actual.actions)
+            and _moves(expected) and _side(expected.bearing) == _side(actual.bearing) in {"left", "right"})
+
+
+def _turned(expected: ParticipantSignature, actual: ParticipantSignature) -> bool:
+    """Both stand still and face different known ways: one heading to set (a stopped car turned
+    oblique, a child turned to the road). Near 30° the facing classes split noisily: an oblique car
+    reads as crossing in a standard and as same-way in its asset."""
+    return (set(expected.actions) == set(actual.actions) == {"static"} and not _static_obstacles(expected, actual)
+            and expected.facing != actual.facing and "unknown" not in {expected.facing, actual.facing})
+
+
+def _placement(expected: ParticipantSignature, actual: ParticipantSignature) -> str:
+    """The change that places `actual` like `expected` when that is all that differs, else ""."""
+    if _retimed(expected, actual):
+        return "move start position or retime trigger"
+    return "turn standing participant" if _turned(expected, actual) else ""
+
+
 def _conflicts(expected: ParticipantSignature, actual: ParticipantSignature) -> tuple[int, bool, int]:
     """(known identity conflicts, known behavior conflict, unknown components of `actual`).
 
     An unknown component never proves a conflict. A stop satisfies a requested speed change.
+    A difference in placement alone (_placement) is a change, not a conflict.
     """
     identity = zip(
-        (expected.kind, expected.bearing, _facing(expected, actual)),
+        (expected.kind, actual.bearing if _retimed(expected, actual) else expected.bearing,
+         actual.facing if _turned(expected, actual) else _facing(expected, actual)),
         (_kind(actual, expected), actual.bearing, _facing(actual, expected)),
     )
     mismatches = sum(left != right and "unknown" not in {left, right} for left, right in identity)
@@ -289,6 +345,8 @@ def _pair_differences(expected: ParticipantSignature, actual: ParticipantSignatu
         if extra_actions:
             result.append(ReuseDifference("action", signature, actual.key(), "remove additional participant behavior",
                                           cost=policy.COST_BEHAVIOR))
+    if not mismatch and (placement := _placement(expected, actual)):
+        result.append(ReuseDifference("placement", signature, actual.key(), placement, cost=policy.COST_PLACEMENT))
     if not mismatch and any(
         "unknown" in (item.kind, item.bearing, _facing(item, other), *item.actions)
         for item, other in ((expected, actual), (actual, expected))
@@ -425,8 +483,11 @@ def participant_differences(
     requested: tuple[ParticipantSignature, ...], candidates: tuple[ParticipantSignature, ...],
     scenery: tuple[ParticipantSignature, ...] = (),
 ) -> list[ReuseDifference]:
-    pool = (*candidates, *scenery)
-    pairing = _pair(requested, pool, len(scenery))
+    # A scenery group is every prop standing there: it can stand for each requested obstacle
+    # there (cones and barriers ahead are both the group ahead).
+    copies = max(1, sum(item.kind == "obstacle" for item in requested))
+    pool = (*candidates, *(item for item in scenery for _ in range(copies)))
+    pairing = _pair(requested, pool, len(pool) - len(candidates))
     result = []
     for expected, column in zip(requested, pairing):
         result.extend(_pair_differences(expected, pool[column] if column is not None else None))

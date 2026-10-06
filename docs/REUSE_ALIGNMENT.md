@@ -17,6 +17,20 @@ It does not introduce a second ingestion, model or indexing stack.
   lowest change cost, over all pairings. A participant's own initial speed, when the
   requirement states it, is compared after pairing; otherwise the requirement's speed
   list is compared with duplicates when it has one speed per participant.
+- Placement (2026-10-06). A participant that differs from the requested one only in
+  where it is placed is moved, not rebuilt: a `placement` change costing
+  `COST_PLACEMENT`, adjustable. Two cases. A moving participant doing the same on the
+  same side of the ego, only further ahead or behind: a standard describes the
+  interaction (right alongside when the ego changes lanes), an asset where it starts
+  (right behind, catching up), so its start or trigger moves. Doing something else as
+  well stays a rebuild (a car cutting in from ahead does not overtake from behind), as
+  does the ego's own lane (a lead car, a car closing in from behind). A standing
+  participant facing another way is turned: near 30° the facing classes split noisily
+  (an oblique car reads as crossing in a standard and as same-way in its asset).
+- When both the requirement and the asset put the ego under system control, a
+  requested lane change the asset does not script is the system's to make (a
+  system-triggered lane change leaves nothing in the file): listed to confirm, at no
+  cost. An asset that shows a lane change still scores higher.
 - Verdicts (2026-10-04, tiers 2026-10-05): `direct`; `modify` for changes to make;
   `major_modify` when they cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus
   an extra participant removed); `review` for an unverified core fact; `new_build` for
@@ -25,7 +39,7 @@ It does not introduce a second ingestion, model or indexing stack.
   parameters, 2026-07-27). **Core**: participants, behaviors, occlusion, road type,
   lane count and lane lines, venue, a misuse or activation-boundary test intent,
   unresolved asset parameters. **Adjustable**: tested function, speeds, TTC, distances,
-  triggers, environment, lateral direction. **Note**: a functional test intent and the
+  triggers, placement, environment, lateral direction, a lane change left to the system. **Note**: a functional test intent and the
   end condition, which describe the evaluation and are listed but never compared or
   costed. An unverified core fact makes a review; an unverified adjustable fact is
   listed as "confirm when changing" and makes a modification. Unknown categories are
@@ -100,7 +114,8 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   as a standard copy or confirmed as `direct`.
 - **Scenery.** A `MiscObject` (cone, barrier, carton) is scenery, not a participant.
   Props are counted by 3D model and lane, and grouped by position: a group can stand
-  for a requested obstacle but is never an extra participant. A standing obstacle's
+  for every requested obstacle there (cones and barriers ahead are both the group
+  ahead) but is never an extra participant. A standing obstacle's
   facing is not compared. Occlusion is read per instance before grouping: a nearer
   object whose BoundingBox width covers the ego's line of sight to a farther one (for
   a moving target, any part of its sweep toward the ego's path); props occluding props
@@ -116,6 +131,11 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   equal signatures instead of `COST_EXTRA_PARTICIPANT` each. Read from structure only;
   the ego's path is taken as straight ahead, so a target in the lane the ego will
   change into, or beside a parking ego, may be read as background.
+- **Start position** (2026-10-06). An actor starts where its Init teleports it. Init
+  may also say where it is sent (route waypoints, an `AcquirePositionAction` target,
+  a synchronization point); read last, those moved the ego to where it goes (42 of 336
+  cases in a real library), past the junction or construction zone it drives into, so
+  the targets and props there read as behind it.
 - **Speed.** An actor's speed is the highest absolute SpeedAction target, since
   initialization often sets 0 and the story accelerates. A story transition (not a
   step) to standstill is a stop; two distinct non-zero targets are a speed change; a
@@ -171,7 +191,11 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   `curve_radius_m` within `CURVE_RADIUS_TOLERANCE`; another radius is a road change.
 - **Environment changes.** The story's EnvironmentActions are also listed in order
   (rain growing from 10 to 70 mm/h, fog closing to 25 m, a tunnel's day-night-day)
-  to describe the asset; the comparison keeps using the merged environment.
+  to describe the asset; the comparison keeps using the merged environment. Light
+  turning to night and back to day is a tunnel, lit the way a library without tunnel
+  roads simulates one (2026-10-06): it confirms a requirement's tunnel venue, which
+  otherwise stays unverified (a tunnel may be built another way). A night test turns
+  once.
 - **Asset story** (2026-10-06, ScenarioManager `scene_context`). `asset_story` retells
   an asset line by line for a reviewer: road (curve ahead, lanes, lines, speed-limit
   signs, traffic lights, crosswalks), environment and its changes, the ego's speed

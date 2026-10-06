@@ -290,6 +290,30 @@ def test_participants_are_paired_for_the_fewest_blocking_differences():
     assert differences[0].requested.startswith("pedestrian")
 
 
+def test_a_moving_participant_further_ahead_or_behind_is_retimed_not_rebuilt():
+    # A standard describes the interaction (right alongside), an asset where it starts (right behind).
+    count, differences = _blocking(["vehicle@alongside_right:same:cruise"], ["vehicle@rear_right:same:cruise"])
+    assert count == 0
+    assert [(item.category, item.action, item.tier) for item in differences] == [
+        ("placement", "move start position or retime trigger", "adjustable")]
+    # Doing something else as well, the ego's own lane, or standing still: another interaction.
+    assert _blocking(["vehicle@rear_left:same:cruise"], ["vehicle@front_left:same:cruise+lane_change"])[0] == 1
+    assert _blocking(["vehicle@front_same_lane:same:cruise"], ["vehicle@rear_same_lane:same:cruise"])[0] == 1
+    assert _blocking(["vehicle@front_right:same:static"], ["vehicle@rear_right:same:static"])[0] == 1
+
+
+def test_a_standing_participant_facing_another_way_is_turned():
+    count, differences = _blocking(["vehicle@front_same_lane:crossing:static"], ["vehicle@front_same_lane:same:static"])
+    assert count == 0 and [item.action for item in differences] == ["turn standing participant"]
+    assert _blocking(["vehicle@front_same_lane:crossing:cruise"], ["vehicle@front_same_lane:same:cruise"])[0] == 1
+
+
+def test_a_scenery_group_stands_for_every_requested_obstacle_there():
+    requested = (_signature("obstacle@front_same_lane:crossing:static"),) * 2
+    scenery = tuple(map(_signature, ["obstacle@front_left:unknown:static", "obstacle@front_same_lane:unknown:static"]))
+    assert participant_differences(requested, (), scenery) == []
+
+
 def test_pairing_prefers_the_cheaper_change_among_equally_blocking_pairings():
     count, differences = _blocking(
         ["vehicle@front_same_lane:same:stop", "vehicle@front_same_lane:same:cruise"],
