@@ -7,6 +7,7 @@ from .catalog import OpenXAsset
 from .models import EntityIR, ParseBundle
 from .reuse_geometry import _adjacent_lane, _bearing, _relative_facing, _relative_offset
 from .scene_facts import (
+    ROUTE_TURN_MIN,
     actor_behaviors,
     asset_environment,
     background_participants,
@@ -19,6 +20,7 @@ from .scene_facts import (
     lateral_direction,
     model_traits,
     occlusions,
+    route_turn_angle,
     scene_speed_mps,
 )
 from .scene_package import (
@@ -138,6 +140,8 @@ def bundle_participant_signatures(
             if actor:
                 actions.setdefault(actor.casefold(), set()).update(action_kinds)
     background = background_participants(bundle) if not scenery else frozenset()
+    turn = route_turn_angle(bundle) if not scenery else None
+    turns = turn is not None and abs(turn) >= ROUTE_TURN_MIN
 
     signatures: list[ParticipantSignature] = []
     for entity in scenario.entities:
@@ -171,6 +175,11 @@ def bundle_participant_signatures(
                 speed_kph=actor_speed_kph(bundle, actor),
                 background=actor in background,
                 traits=model_traits(entity),
+                turned_facing=(
+                    _relative_facing(ego, target, bundle.road_geometry, turn)
+                    if turns and ego is not None and target is not None
+                    else ""
+                ),
             )
         )
     return tuple(sorted(signatures, key=ParticipantSignature.key))

@@ -279,15 +279,36 @@ def ego_curve_radius(bundle: ParseBundle) -> float | None:
     return path_curve_radius(bundle.road_geometry, *pose) if pose is not None else None
 
 
-def route_turn(bundle: ParseBundle, actor: str = "ego") -> str:
-    """Which way the actor's assigned route turns, from its waypoints' headings: "left", "right",
-    "straight", or "" without a route whose waypoints state headings."""
+ROUTE_TURN_MIN = math.pi / 4  # a routing that turns the actor less than this goes straight
+
+
+def route_turn_angle(bundle: ParseBundle, actor: str = "ego") -> float | None:
+    """How far the actor's routing turns it (radians, left positive), or None without a routing
+    whose positions state headings.
+
+    From the stated headings in order, from where the actor starts through its route waypoints,
+    trajectory vertices or AcquirePosition target. Summing each step's change telescopes to the
+    last heading minus the first, so one heading stated wrong in between (a vertex at 0 inside a
+    curve) cancels out.
+    """
+    name = actor.casefold()
+    start = next((_world_pose(position, bundle.road_geometry) for position in bundle.scenario.positions
+                  if (position.actor or "").casefold() == name), None)
     for action in actions_of(bundle, actor):
         headings = [heading for waypoint in action.waypoints if (heading := _number(waypoint.get("h"))) is not None]
+        if start is not None and headings:
+            headings.insert(0, start[2])
         if len(headings) >= 2:
-            turn = sum(math.remainder(after - before, math.tau) for before, after in zip(headings, headings[1:]))
-            return "left" if turn >= math.pi / 4 else "right" if turn <= -math.pi / 4 else "straight"
-    return ""
+            return sum(math.remainder(after - before, math.tau) for before, after in zip(headings, headings[1:]))
+    return None
+
+
+def route_turn(bundle: ParseBundle, actor: str = "ego") -> str:
+    """Which way the actor's routing turns it: "left", "right", "straight", or "" when not read."""
+    turn = route_turn_angle(bundle, actor)
+    if turn is None:
+        return ""
+    return "left" if turn >= ROUTE_TURN_MIN else "right" if turn <= -ROUTE_TURN_MIN else "straight"
 
 
 # ---------- named conditions ----------

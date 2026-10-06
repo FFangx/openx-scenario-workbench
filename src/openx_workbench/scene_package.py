@@ -55,6 +55,10 @@ class ParticipantSignature:
     # What an asset's 3D model shows beyond its category (scene_facts.model_traits): a child, a
     # tricycle authored as a car. Evidence that confirms a requirement, never a conflict.
     traits: tuple[str, ...] = field(default=(), compare=False)
+    # Which way it faces relative to the ego once the ego's routing has turned it (an asset whose
+    # ego turns at a junction; empty otherwise). A requirement may describe either moment: people
+    # crossing the road the ego turns into walk the ego's starting way.
+    turned_facing: str = field(default="", compare=False)
 
     def __post_init__(self) -> None:
         if not self.actions:

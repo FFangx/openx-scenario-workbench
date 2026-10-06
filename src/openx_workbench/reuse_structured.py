@@ -143,7 +143,15 @@ def compare_structure(
         )
     )
     if query.ego_actions:
-        absent = query.ego_actions - candidate.ego_actions
+        # Whether the system under test drives is a setting of the reuse, like the tested function:
+        # a requirement that does not say so asks for nothing else, and a library that never writes
+        # its engage command into the file still drives with the system on. To confirm, never a change.
+        controlled = {"system_control"}
+        if controlled <= query.ego_actions - candidate.ego_actions:
+            differences.append(ReuseDifference("unverified", "ego_action=system_control", "not in the file",
+                                               "confirm the system under test drives", cost=policy.COST_PARAMETER,
+                                               verified=False))
+        absent = query.ego_actions - candidate.ego_actions - controlled
         # A system under test changes lanes by itself: its asset need not script the lane change
         # (a system-triggered lane change shows none). To confirm, at no cost; an asset that shows
         # one still scores higher.
@@ -152,7 +160,7 @@ def compare_structure(
         if unscripted:
             differences.append(ReuseDifference("unverified", "ego_action=lane_change", "not scripted",
                                                "confirm the system changes lanes", cost=0, verified=False))
-        if absent or (candidate.ego_actions - query.ego_actions - {"unknown"}):
+        if absent or (candidate.ego_actions - query.ego_actions - {"unknown"} - controlled):
             differences.append(
                 ReuseDifference(
                     "ego_action",
@@ -258,7 +266,10 @@ def _static_obstacles(expected: ParticipantSignature, actual: ParticipantSignatu
 
 
 def _facing(signature: ParticipantSignature, other: ParticipantSignature) -> str:
-    return "any" if _static_obstacles(signature, other) else signature.facing
+    """The facing compared with `other`: either moment when the ego turns (turned_facing)."""
+    if _static_obstacles(signature, other):
+        return "any"
+    return other.facing if signature.turned_facing and other.facing == signature.turned_facing else signature.facing
 
 
 def _kind(signature: ParticipantSignature, other: ParticipantSignature) -> str:
@@ -292,7 +303,7 @@ def _turned(expected: ParticipantSignature, actual: ParticipantSignature) -> boo
     oblique, a child turned to the road). Near 30° the facing classes split noisily: an oblique car
     reads as crossing in a standard and as same-way in its asset."""
     return (set(expected.actions) == set(actual.actions) == {"static"} and not _static_obstacles(expected, actual)
-            and expected.facing != actual.facing and "unknown" not in {expected.facing, actual.facing})
+            and expected.facing != _facing(actual, expected) and "unknown" not in {expected.facing, actual.facing})
 
 
 def _placement(expected: ParticipantSignature, actual: ParticipantSignature) -> str:

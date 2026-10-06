@@ -31,6 +31,11 @@ It does not introduce a second ingestion, model or indexing stack.
   requested lane change the asset does not script is the system's to make (a
   system-triggered lane change leaves nothing in the file): listed to confirm, at no
   cost. An asset that shows a lane change still scores higher.
+- Whether the system under test drives is a setting of the reuse, like the tested
+  function, and never a change (2026-10-06): an asset under system control serves a
+  requirement that does not say who drives, and a requirement under system control
+  against an asset without an engage command lists it to confirm (`COST_PARAMETER`,
+  adjustable). Standards differ in whether they say it at all.
 - Verdicts (2026-10-04, tiers 2026-10-05): `direct`; `modify` for changes to make;
   `major_modify` when they cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus
   an extra participant removed); `review` for an unverified core fact; `new_build` for
@@ -179,9 +184,15 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   command naming the side (`ALCAMode=left`, `LaneOffset=right`, the library's
   convention). It confirms a requirement's `lateral_direction`; a different side
   leaves it unverified, since a requirement may mean another participant's side (a
-  cut-in "from the left"). An `AssignRouteAction` route turns left or right when its
-  waypoint headings change by 45° or more; no requirement field states a turn yet, so
-  it describes the asset only.
+  cut-in "from the left"). The ego's routing turns left or right when the stated
+  headings from where it starts through its `AssignRouteAction` waypoints,
+  `FollowTrajectoryAction` vertices or `AcquirePositionAction` target change by 45°
+  or more (each step's change summed, so one vertex heading stated wrong inside a curve
+  cancels out). No requirement field states a turn yet, so the turn itself is not
+  compared. It changes how participants face: after a turn, people crossing the road
+  the ego enters walk its starting way, so each participant also carries its facing
+  relative to the turned ego, and either reading matches the requested one (a
+  requirement may describe the start or the interaction).
 - **Curve radius** (2026-10-06, ScenarioManager `ego_curve_radius`). The radius is the
   first curve ahead of where the ego starts, not the map's: one road can hold curves
   of R251 to R833. Junction connectors are left out; spirals are transitions; segments

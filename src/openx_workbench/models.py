@@ -37,7 +37,8 @@ class ActionIR:
     overrides: dict[str, str] = field(default_factory=dict)
     # LaneChangeAction target: {"kind": "RelativeTargetLane", "value": "1", "entityRef": ...}.
     lane_target: dict[str, str] = field(default_factory=dict)
-    # AssignRouteAction waypoints in order: {"kind": "WorldPosition", "x": ..., "h": ...}.
+    # Where a routing action sends the actor, in order: route waypoints, trajectory vertices or an
+    # AcquirePosition target, e.g. {"kind": "WorldPosition", "x": ..., "h": ...}.
     waypoints: list[dict[str, str]] = field(default_factory=list)
     # EnvironmentAction reading (weather, time_of_day, fog_visibility_m), as for the scenario.
     environment: dict[str, str | float] = field(default_factory=dict)

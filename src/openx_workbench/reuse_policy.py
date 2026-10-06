@@ -53,6 +53,7 @@ TIER_BY_CATEGORY = {
 TIER_BY_REQUIREMENT = {
     "lateral_direction": TIER_ADJUSTABLE,
     "ego_action=lane_change": TIER_ADJUSTABLE,  # under system control the system changes lanes itself
+    "ego_action=system_control": TIER_ADJUSTABLE,  # switched on while reusing, often not in the file
     "trigger": TIER_ADJUSTABLE,
     "test_intent=功能试验": TIER_NOTE,
     "end_condition": TIER_NOTE,

@@ -72,7 +72,7 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
         overrides=_overrides(node),
         lane_target={"kind": _local(lane), **lane.attrib} if lane is not None else {},
         waypoints=[{"kind": _local(position[0]), **position[0].attrib}
-                   for waypoint in _all(node, "Waypoint")
+                   for waypoint in (*_all(node, "Waypoint"), *_all(node, "Vertex"), *_all(node, "AcquirePositionAction"))
                    if (position := _first(waypoint, "Position")) is not None and len(position)],
         environment=_environment_reading(environment) if environment is not None else {},
     )

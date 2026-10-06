@@ -29,17 +29,29 @@ def _relative_facing(
     ego: PositionIR,
     target: PositionIR,
     roads: dict[str, RoadReferenceLine],
+    ego_turn: float = 0.0,
 ) -> str:
+    """Which way the target faces relative to the ego; with `ego_turn` (radians, left positive),
+    relative to the ego after its routing turned it that far."""
+    relative = _relative_heading(ego, target, roads)
+    return _facing(relative - ego_turn) if relative is not None else "unknown"
+
+
+def _relative_heading(
+    ego: PositionIR,
+    target: PositionIR,
+    roads: dict[str, RoadReferenceLine],
+) -> float | None:
     if target.kind == "RelativeObjectPosition":
         relative = _number(target.orientation, "h")
         if relative is None:
-            return "same"
+            return 0.0
         if target.orientation.get("type") == "absolute":
             ego_heading = _ego_heading(ego, roads)
             if ego_heading is None:
-                return "unknown"
+                return None
             relative -= ego_heading
-        return _facing(relative)
+        return relative
 
     road_id = ego.attributes.get("roadId") or target.attributes.get("roadId")
     road = roads.get(road_id or "")
@@ -61,13 +73,13 @@ def _relative_facing(
             ):
                 ego_deviation = _wrap(ego_heading - ego_reference)
                 target_deviation = _wrap(target_heading - target_reference)
-                return _facing(target_deviation - ego_deviation)
+                return target_deviation - ego_deviation
 
     ego_heading = _ego_heading(ego, roads)
     target_heading = _position_heading(target, None)
     if ego_heading is None or target_heading is None:
-        return "unknown"
-    return _facing(target_heading - ego_heading)
+        return None
+    return target_heading - ego_heading
 
 
 def _heading_on_road(

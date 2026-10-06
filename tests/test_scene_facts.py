@@ -361,6 +361,21 @@ def route(*headings):
             '</AssignRouteAction></RoutingAction></PrivateAction>')
 
 
+def trajectory(*headings, name="Ego"):
+    vertices = "".join(f'<Vertex time="0"><Position><WorldPosition x="{index * 20}" y="0" h="{heading}"/></Position></Vertex>'
+                       for index, heading in enumerate(headings))
+    return (f'<Private entityRef="{name}"><PrivateAction><RoutingAction><FollowTrajectoryAction><Trajectory name="t" '
+            f'closed="false"><Shape><Polyline>{vertices}</Polyline></Shape></Trajectory><TimeReference><None/>'
+            '</TimeReference><TrajectoryFollowingMode followingMode="follow"/></FollowTrajectoryAction></RoutingAction>'
+            '</PrivateAction></Private>')
+
+
+def acquire(heading, name="Ego"):
+    return (f'<Private entityRef="{name}"><PrivateAction><RoutingAction><AcquirePositionAction><Position>'
+            f'<WorldPosition x="100" y="100" h="{heading}"/></Position></AcquirePositionAction></RoutingAction>'
+            '</PrivateAction></Private>')
+
+
 def test_lateral_direction_and_route_turn_of_the_ego():
     lane_start = ('<Private entityRef="Ego"><PrivateAction><TeleportAction><Position><LanePosition roadId="1" '
                   'laneId="-2" s="10" offset="0"/></Position></TeleportAction></PrivateAction></Private>')
@@ -374,8 +389,13 @@ def test_lateral_direction_and_route_turn_of_the_ego():
     assert lateral_direction(read(lane_start, ("lc", lane_change(-3, "AbsoluteTargetLane")))) == "right"
     assert lateral_direction(read(place("Ego", 0, 0, 10), ("lc", command("LaneChangeReq")))) == ""
     assert route_turn(read(place("Ego", 0, 0, 10), ("go", route(0, 0, -1.57)))) == "right"
-    assert route_turn(read(place("Ego", 0, 0, 10), ("go", route(3.14, 2.62, 1.57)))) == "right"
+    assert route_turn(read(place("Ego", 0, 0, 10, 3.14), ("go", route(3.14, 2.62, 1.57)))) == "right"
     assert route_turn(read(place("Ego", 0, 0, 10), ("go", route(0.0, 0.01)))) == "straight"
+    # A trajectory turns the ego too; a vertex heading stated wrong inside the curve cancels out.
+    assert route_turn(read(place("Ego", 0, 0, 10) + trajectory(0, 0.9, 0, 1.57))) == "left"
+    # So does an AcquirePosition target, read against where the ego starts.
+    assert route_turn(read(place("Ego", 0, 0, 10, 1.57) + acquire(1.57))) == "straight"
+    assert route_turn(read(place("Ego", 0, 0, 10) + acquire(-1.57))) == "right"
 
     package = ScenePackage("REQ", "Lane change to the left", "", structure={
         "ego_actions": ["变道"], "params": {"lateral_direction": "左"},
@@ -470,6 +490,39 @@ def test_a_system_under_test_changes_lanes_without_a_scripted_lane_change():
     assert lane_change_differences(("on", command("SysEngReq")), ("lc", command("LaneChangeReq"))) == []
     # Without the system in control, the file has to script the lane change.
     assert lane_change_differences(("go", speed(20))) == [("ego_action", 2, True, "core")]
+
+
+def test_whether_the_system_drives_is_confirmed_never_a_change():
+    def ego_differences(ego_actions, *events):
+        package = ScenePackage("REQ", "Cruise", "", structure={"ego_actions": ego_actions})
+        item = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", *events)))
+        return [(difference.category, difference.requested, difference.cost, difference.verified, difference.tier)
+                for difference in compare_structure(scene_package_to_query(package), item)
+                if "ego_action" in difference.category + difference.requested]
+
+    # Not stated in the requirement: the asset's engage command asks for nothing else.
+    assert ego_differences(["匀速行驶"], ("on", command("SysEngReq"))) == []
+    # Stated, but the library does not write it into the file: confirmed while reusing.
+    assert ego_differences(["匀速行驶", "被测系统控制"]) == [
+        ("unverified", "ego_action=system_control", 0.5, False, "adjustable")]
+    assert ego_differences(["匀速行驶", "被测系统控制"], ("on", command("SysEngReq"))) == []
+
+
+def test_people_crossing_the_road_a_turning_ego_enters_cross_its_path():
+    # The ego turns right; two pedestrians walk along its starting way on the road it turns into.
+    ego = place("Ego", 0, 0, 10) + trajectory(0, -0.8, -1.57)
+    walkers = place("P1", 30, -8, 1.4) + place("P2", 30, -12, 1.4)
+    item = asset(scenario(pedestrian("P1") + pedestrian("P2"), ego + walkers))
+    assert {signature.turned_facing for signature in bundle_participant_signatures(item.bundle, semantic=True)} == {
+        "crossing"}
+    crossing = {"kind": "行人", "bearing": "右前方", "facing": "横向", "actions": ["匀速行驶"]}
+    package = ScenePackage("REQ", "Right turn, people crossing", "", structure={"participants": [crossing, crossing]})
+    assert not [difference for difference in compare_structure(scene_package_to_query(package), item)
+                if difference.category in {"participant_signature", "placement"}]
+    # Going straight, the same people walk alongside the ego: another story.
+    straight = asset(scenario(pedestrian("P1") + pedestrian("P2"), place("Ego", 0, 0, 10) + walkers))
+    assert [difference.blocking for difference in compare_structure(scene_package_to_query(package), straight)
+            if difference.category == "participant_signature"] == [True, True]
 
 
 def test_asset_story_retells_the_scenario_without_its_name():
