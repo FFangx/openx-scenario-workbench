@@ -162,6 +162,25 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   cut-in "from the left"). An `AssignRouteAction` route turns left or right when its
   waypoint headings change by 45° or more; no requirement field states a turn yet, so
   it describes the asset only.
+- **Curve radius** (2026-10-06, ScenarioManager `ego_curve_radius`). The radius is the
+  first curve ahead of where the ego starts, not the map's: one road can hold curves
+  of R251 to R833. Junction connectors are left out; spirals are transitions; segments
+  under 30 m or flatter than R1000 count as straight (the gap between real test curves,
+  R15–R833, and transition polynomials, R1174 and up). The search follows up to two
+  joined roads. A road that states the radius confirms a requirement's
+  `curve_radius_m` within `CURVE_RADIUS_TOLERANCE`; another radius is a road change.
+- **Environment changes.** The story's EnvironmentActions are also listed in order
+  (rain growing from 10 to 70 mm/h, fog closing to 25 m, a tunnel's day-night-day)
+  to describe the asset; the comparison keeps using the merged environment.
+- **Asset story** (2026-10-06, ScenarioManager `scene_context`). `asset_story` retells
+  an asset line by line for a reviewer: road (curve ahead, lanes, lines, speed-limit
+  signs, traffic lights, crosswalks), environment and its changes, the ego's speed
+  targets in file order, its commands and driver inputs, which way it moves, where the
+  driver's closing brake fires (AEB tests close within about 100 m, pilot tests after
+  about 1 km), participants with their 3D models, props by model and lane, occlusion,
+  the events and what starts them, named checks and scoring. Nothing comes from the
+  asset's name; what cannot be read is left out. The model explanation receives it as
+  evidence `S1` next to the raw facts `X1` and `R1`.
 - **Environment.** Every declared environment is read; story changes to rain, snow
   or fog make the scenario that weather, conflicting readings stay unknown. Missing
   values come from the case's environment preset, where rain and snow amounts

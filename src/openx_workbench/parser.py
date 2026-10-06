@@ -59,6 +59,7 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
     command = _first(node, "CustomCommandAction")
     lane = next((child for child in node.iter()
                  if _local(child) in {"RelativeTargetLane", "AbsoluteTargetLane"}), None)
+    environment = _first(node, "Environment") if _first(node, "EnvironmentAction") is not None else None
     return ActionIR(
         name,
         _local(kind_node) if kind_node is not None else "Action",
@@ -73,6 +74,7 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
         waypoints=[{"kind": _local(position[0]), **position[0].attrib}
                    for waypoint in _all(node, "Waypoint")
                    if (position := _first(waypoint, "Position")) is not None and len(position)],
+        environment=_environment_reading(environment) if environment is not None else {},
     )
 
 
@@ -244,6 +246,7 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
                 ]
                 condition_node = condition_nodes[-1] if condition_nodes else None
                 condition_kind = _local(condition_node) if condition_node is not None else "Condition"
+                place = _first(condition_node, "Position") if condition_node is not None else None
                 scenario.triggers.append(TriggerIR(
                     scope=scope,
                     condition_name=condition.get("name", "unnamed"),
@@ -260,6 +263,7 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
                     source_path=paths[condition],
                     event_path=paths[event] if (event := enclosing(condition, "Event")) is not None else "",
                     attributes=dict(condition_node.attrib) if condition_node is not None else {},
+                    position={"kind": _local(place[0]), **place[0].attrib} if place is not None and len(place) else {},
                 ))
 
     for event in _all(root, "Event"):

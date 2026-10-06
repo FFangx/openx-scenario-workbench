@@ -39,6 +39,8 @@ class ActionIR:
     lane_target: dict[str, str] = field(default_factory=dict)
     # AssignRouteAction waypoints in order: {"kind": "WorldPosition", "x": ..., "h": ...}.
     waypoints: list[dict[str, str]] = field(default_factory=list)
+    # EnvironmentAction reading (weather, time_of_day, fog_visibility_m), as for the scenario.
+    environment: dict[str, str | float] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -54,6 +56,8 @@ class TriggerIR:
     source_path: str = ""
     event_path: str = ""
     attributes: dict[str, str] = field(default_factory=dict)
+    # The position a condition refers to (ReachPositionCondition, DistanceCondition): its kind and attributes.
+    position: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

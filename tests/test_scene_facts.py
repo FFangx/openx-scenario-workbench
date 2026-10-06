@@ -2,6 +2,7 @@
 
 import json
 
+from openx_workbench.asset_story import asset_story
 from openx_workbench.catalog import AssetFile, build_catalog
 from openx_workbench.reuse_facts import (
     actor_actions,
@@ -16,6 +17,8 @@ from openx_workbench.scene_facts import (
     asset_environment,
     background_participants,
     command_facts,
+    ego_curve_radius,
+    environment_events,
     lateral_direction,
     named_conditions,
     route_turn,
@@ -386,3 +389,55 @@ def test_lateral_direction_and_route_turn_of_the_ego():
     assert side(asset(scenario(entities, init, group("Ego", ("lc", command("ALCAMode=left")))))) == []
     assert side(asset(scenario(entities, init, group("Ego", ("lc", command("ALCAMode=right")))))) == [
         "lateral_direction=左"]
+
+
+CURVED_ROAD = (  # 100 m straight, then 200 m of R500 to the left, as one road
+    '<OpenDRIVE><header revMajor="1" revMinor="6"/><road id="1" length="300" junction="-1"><planView>'
+    '<geometry s="0" x="0" y="0" hdg="0" length="100"><line/></geometry>'
+    '<geometry s="100" x="100" y="0" hdg="0" length="200"><arc curvature="0.002"/></geometry></planView>'
+    '<lanes><laneSection s="0"><center><lane id="0" type="none"/></center><right><lane id="-1" type="driving">'
+    '<width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></right></laneSection></lanes></road></OpenDRIVE>')
+
+
+def test_curve_radius_ahead_of_the_ego_confirms_or_changes_a_requested_radius():
+    def on_road(heading):
+        xosc = scenario("", place("Ego", 10, -1.75, 10, heading))
+        return build_catalog([AssetFile("lib/c.xosc", xosc.encode()), AssetFile("ThreeLanes.xodr", CURVED_ROAD.encode())])[0]
+
+    assert ego_curve_radius(on_road(0.0).bundle) == 500
+    assert ego_curve_radius(on_road(3.14159).bundle) is None  # driving away from the curve
+    assert ego_curve_radius(asset(scenario("", place("Ego", 10, -1.75, 10))).bundle) is None  # no road file
+
+    def radius(requested):
+        package = ScenePackage("REQ", "Curve", "", structure={"road_class": "弯道", "params": {"curve_radius_m": requested}})
+        return [(difference.category, difference.verified) for difference in compare_structure(
+            scene_package_to_query(package), on_road(0.0)) if "radius" in difference.requested]
+
+    assert radius(520) == []
+    assert radius(250) == [("road", True)]
+
+
+def test_story_environment_changes_are_listed_in_order():
+    def change(name, hour):
+        environment = (f'<GlobalAction><EnvironmentAction><Environment name="{name}"><TimeOfDay animation="false" '
+                       f'dateTime="2020-11-11T{hour}:00:00"/></Environment></EnvironmentAction></GlobalAction>')
+        return (f'<ManeuverGroup name="{name}" maximumExecutionCount="1"><Actors selectTriggeringEntities="false"/>'
+                f'<Maneuver name="m"><Event name="{name}" priority="overwrite"><Action name="a">{environment}</Action>'
+                '<StartTrigger/></Event></Maneuver></ManeuverGroup>')
+    item = asset(scenario("", place("Ego", 0, 0, 10), change("DayToNight", 21) + change("NightToDay", 12)))
+    assert [(name, reading["time_of_day"]) for name, reading in environment_events(item.bundle)] == [
+        ("DayToNight", "night"), ("NightToDay", "day")]
+
+
+def test_asset_story_retells_the_scenario_without_its_name():
+    xosc = checks(scenario(prop("Cone1") + child("Kid"), place("Ego", 0, 0, 0) + place("Cone1", 20, 0) + place("Kid", 40, 3, 1),
+                           group("Ego", ("SpeedUp", speed(22.22)), ("on", command("EnableAEB")))), "Check_Stopped")
+    item = asset(xosc, judgements=[criterion("customized", ("lonacc", "lt", -5))])
+    item.title = item.bundle.scenario.name = "Secret library name"
+    story = asset_story(item)
+    assert "Secret" not in story
+    assert "ego speeds: init 0 km/h [step] -> SpeedUp 80 km/h" in story
+    assert "ego commands: EnableAEB (function AEB)" in story
+    assert "model Child01, child" in story and "props: TrafficCone x1" in story
+    assert "named checks: Check_Stopped" in story and "scored by: lonacc<-5" in story
+    assert story.splitlines()[0].startswith("road: file missing")

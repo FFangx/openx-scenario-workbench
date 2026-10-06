@@ -106,6 +106,9 @@ class RetrievalQuery:
     test_intent: str = ""
     # Which way an asset's ego moves sideways (scene_facts.lateral_direction), likewise confirming.
     lateral_direction: str = ""
+    # Radius of the curve: a requirement's stated one (also kept among `unverified` until an
+    # asset's road states its own), an asset's first curve ahead of the ego.
+    curve_radius_m: float | None = None
 
 
 STRUCTURE_KINDS = {
@@ -341,6 +344,7 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         lane_count=lane_count,
         lane_count_scope=lane_scope,
         lane_marking=lane_marking,
+        curve_radius_m=params["curve_radius_m"],
     )
     if not any(
         (

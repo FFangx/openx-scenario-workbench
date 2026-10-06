@@ -57,6 +57,13 @@ def compare_structure(
                      if side == candidate.lateral_direction)
     for label, trait in STRUCTURE_AGES.items():
         confirmed[f"participant age={label}"] = sum(trait in item.traits for item in candidate.participant_signatures)
+    if query.curve_radius_m and candidate.curve_radius_m:
+        # The asset's road states the radius of the curve ahead of the ego: no longer unverified.
+        confirmed[f"curve_radius_m={query.curve_radius_m}"] += 1
+        if abs(candidate.curve_radius_m - query.curve_radius_m) > policy.CURVE_RADIUS_TOLERANCE * query.curve_radius_m:
+            differences.append(ReuseDifference(
+                "road", f"curve radius {query.curve_radius_m:g} m", f"{candidate.curve_radius_m:g} m",
+                "select or modify OpenDRIVE curve", cost=policy.COST_ROAD))
     for value in query.unverified:
         if confirmed[value] > 0:
             confirmed[value] -= 1

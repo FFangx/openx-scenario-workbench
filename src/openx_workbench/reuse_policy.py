@@ -84,6 +84,8 @@ FACING_OPPOSITE_MIN = 5 * math.pi / 6  # from 150° faces the opposite way; betw
 
 PARAMETER_TOLERANCE = {"ttc_s": 0.05, "distance_m": 0.1, "ego_speed_kph": 0.5}
 TARGET_SPEED_TOLERANCE_KPH = 0.5
+# Relative: a road drawn as R251 serves an R250 test; R250 and R500 test variants stay apart.
+CURVE_RADIUS_TOLERANCE = 0.1
 MOVING_SPEED_MPS = 0.3  # speeds up to this (about 1 km/h) are standstill; targets are compared to 0.1 m/s
 
 # ---------- ranking ----------

@@ -34,7 +34,9 @@ def test_structural_explanation_keeps_verdict_and_file_page_citations(tmp_path):
     explanation = deterministic_explanation(package, result, version)
     assert explanation.verdict == result.reuse_level
     assert not explanation.insufficient_evidence
-    assert {item.evidence_id for item in explanation.evidence} == {"P1", "X1", "R1"}
+    assert {item.evidence_id for item in explanation.evidence} == {"P1", "X1", "R1", "S1"}
+    story = next(item.text for item in explanation.evidence if item.evidence_id == "S1")
+    assert story.startswith("road: straight") and "participants (" in story
     assert "public-rules.pdf" in explanation.evidence[0].location
     assert all("P1" in item.citations for item in explanation.observations)
     road_evidence = json.loads(next(item.text for item in explanation.evidence if item.evidence_id == "R1"))

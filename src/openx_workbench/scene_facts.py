@@ -16,8 +16,9 @@ from collections import Counter
 from typing import Any
 
 from . import reuse_policy as policy
-from .models import ActionIR, EntityIR, ParseBundle
-from .reuse_geometry import _relative_offset
+from .models import ActionIR, EntityIR, ParseBundle, PositionIR
+from .reuse_geometry import _position_heading, _relative_offset
+from .road_geometry import path_curve_radius
 
 # Events that only operate the simulation: TurnOff switches the system under test
 # off when the scenario ends; just_for_test teleports and zeroes the ego. The
@@ -244,6 +245,40 @@ def lateral_direction(bundle: ParseBundle, actor: str = "ego") -> str:
     return directions.pop() if len(directions) == 1 else ""
 
 
+def _world_pose(position: PositionIR, roads: dict) -> tuple[float, float, float] | None:
+    """World x, y and heading of a world, lane or road position (OpenSCENARIO's h defaults to 0)."""
+    attributes = position.attributes
+    if position.kind == "WorldPosition":
+        x, y = _number(attributes.get("x")), _number(attributes.get("y"))
+        return (x, y, _number(attributes.get("h")) or 0.0) if x is not None and y is not None else None
+    road, s = roads.get(attributes.get("roadId", "")), _number(attributes.get("s"))
+    lane = _number(attributes.get("laneId"))
+    if road is None or s is None:
+        return None
+    if position.kind == "LanePosition" and lane is not None:
+        pose = road.world_from_lane(s, int(lane), _number(attributes.get("offset")) or 0.0)
+    elif position.kind == "RoadPosition":
+        pose = road.world_from_road(s, _number(attributes.get("t")) or 0.0)
+    else:
+        return None
+    if pose is None:
+        return None
+    x, y, reference = pose
+    heading = _position_heading(position, reference)
+    # Without a stated heading, a vehicle drives its lane's way: against the reference line on the left.
+    return x, y, heading if heading is not None else reference + (math.pi if lane and lane > 0 else 0.0)
+
+
+def ego_curve_radius(bundle: ParseBundle) -> float | None:
+    """Radius of the first curve ahead of where the ego starts (road_geometry.path_curve_radius).
+
+    None when the road file is missing, the start cannot be placed or no curve lies ahead.
+    """
+    ego = next((item for item in bundle.scenario.positions if (item.actor or "").casefold() == "ego"), None)
+    pose = _world_pose(ego, bundle.road_geometry) if ego is not None else None
+    return path_curve_radius(bundle.road_geometry, *pose) if pose is not None else None
+
+
 def route_turn(bundle: ParseBundle, actor: str = "ego") -> str:
     """Which way the actor's assigned route turns, from its waypoints' headings: "left", "right",
     "straight", or "" without a route whose waypoints state headings."""
@@ -337,6 +372,14 @@ def preset_environment(source_case: dict[str, Any]) -> dict[str, str]:
 def asset_environment(bundle: ParseBundle) -> dict[str, str | float]:
     """Environment set in the scenario, completed from the authoring tool's preset."""
     return {**preset_environment(bundle.source_case), **bundle.scenario.environment}
+
+
+def environment_events(bundle: ParseBundle) -> list[tuple[str, dict[str, str | float]]]:
+    """The story's environment changes in file order, as (event name, reading): rain growing from
+    10 to 70 mm/h, fog closing in to 25 m, day turning to night. The scenario's environment
+    already merges them (asset_environment); the sequence describes the test."""
+    return [(action.event_name or action.name, action.environment) for action in scene_actions(bundle)
+            if action.phase == "story" and action.environment]
 
 
 # ---------- scoring ----------
