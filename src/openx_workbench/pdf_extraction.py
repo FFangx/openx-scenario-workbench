@@ -14,11 +14,12 @@ from .llm_service import ModelClient, ModelError, base_url
 from .pdf_v2.parser import parse_pdf_structure
 from .pdf_v2.quality import assess_structure_quality
 from .pdf_v2.section_tree import build_section_tree
-from .pdf_v2.scene_first import run_scene_first_extraction
+from .pdf_v2.figures import find_figures
+from .pdf_v2.scene_first import run_scene_first_extraction, scene_figures
 from .scene_package import EvidenceRef, ScenePackage, canonical_features, synchronize_structure
 
 ENGINE_VERSION = "openx-v2-scene-first-5"
-PROMPT_VERSION = "scene-first-prompt-v9"
+PROMPT_VERSION = "scene-first-prompt-v10"
 # Calls one extraction may make beyond its cache: a guard against a runaway loop, not a budget
 # (each structure call is already limited to a few attempts; a long standard needs scenes x readings).
 CALL_LIMIT = 1000
@@ -73,6 +74,17 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
     texts = {node.node_id: "\n".join(blocks[bid].text for bid in node.block_ids if bid in blocks) for node in tree.nodes}
     flagged = {flag.block_id for flag in document.structure_flags}
     flagged_nodes = frozenset(node.node_id for node in tree.nodes if node.heading_block_id in flagged)
+    figures, figure_audit = [], {"status": "off"}
+    if client.config.image_input:
+        # The scenes' figures go to a model that reads images; without them it reads the text alone.
+        try:
+            figures = find_figures(data, document.blocks, tree)
+            figure_audit = {"status": "rendered", "figures": [
+                {"label": figure.label, "caption": figure.caption, "page": figure.page_number,
+                 "node_id": figure.node_id, "clip": [round(value, 1) for value in figure.clip]}
+                for figure in figures]}
+        except Exception as error:  # a figure the renderer cannot draw must not stop the extraction
+            figures, figure_audit = [], {"status": "failed", "reason": f"{type(error).__name__}: {error}"}
     cache_root = Path(root or default_store_root()) / "model_cache"
     calls = 0
     requests = []
@@ -112,8 +124,8 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
     run = run_scene_first_extraction(tree, texts, standard=standard or "PDF", heading_decoder="chain",
                                      model=client.config.model, prompt_version=PROMPT_VERSION,
                                      transport=transport, retry_enabled=True, flagged_node_ids=flagged_nodes,
-                                     concurrency=client.config.concurrency, progress=notify)
-    audit = {**_structure_audit(data, filename, document, quality),
+                                     concurrency=client.config.concurrency, figures=figures, progress=notify)
+    audit = {**_structure_audit(data, filename, document, quality), "figures": figure_audit,
              "nodes": [dict(node.model_dump(mode="json"), source_text=texts[node.node_id]) for node in tree.nodes],
              "run": run.model_dump(mode="json"), "requests": requests}
     if run.status not in {"ok", "retried_ok"} or run.extraction is None:
@@ -122,6 +134,7 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
         raise ExtractionError("模型的场景引用均无效，请重新提取或检查原文 / All scene references were invalid.", audit)
     notify("校验原文引用并保存场景 / Validating evidence and saving scenes")
     nodes = {node.node_id: node for node in tree.nodes}
+    sent = scene_figures(tree, texts, run.extraction, figures) if figures else {}
     packages = []
     for scene in run.extraction.scenes:
         # Anchor first makes the default evidence preview the scene itself, not shared setup.
@@ -154,6 +167,10 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
                         "structure_flags": source_flags,
                         "anchor_node_id": scene.anchor_node_id, "node_ids": list(scene.node_ids),
                         "shared_node_ids": list(scene.declared_shared_node_ids),
+                        # The figures the structure was read with: where they are, for a reviewer.
+                        "figures": [{"label": figure.label, "caption": figure.caption, "page": figure.page_number,
+                                     "clip": [round(value, 1) for value in figure.clip]}
+                                    for figure in sent.get(scene.scene_id, ())],
                         "validation": {**run.validation.model_dump(mode="json"),
                                        "issues": [issue.model_dump(mode="json") for issue in run.validation.issues if issue.scene_id in {None, scene.scene_id}]} if run.validation else {},
                         "review_status": "pending"},

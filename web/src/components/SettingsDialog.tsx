@@ -72,6 +72,11 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
   useEffect(() => {
     if (limit) form.setFieldValue("max_tokens", Math.min(limit, 1048576));
   }, [form, limit]);
+  // A model that declares image input reads each scene's figures with its text.
+  const reads = chosen?.image_input;
+  useEffect(() => {
+    if (reads !== undefined) form.setFieldValue("image_input", reads);
+  }, [form, reads]);
 
   const run = async <T,>(kind: NonNullable<typeof busy>, work: (d: ModelDraft) => Promise<T>, done: (r: T) => string) => {
     setBusy(kind);
@@ -154,6 +159,12 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
                 <InputNumber min={256} max={1048576} step={256} />
               </Form.Item>
               <Form.Item name="timeout" label={t("超时（秒）", "Timeout (seconds)")}><InputNumber min={10} max={1800} step={10} /></Form.Item>
+              <Form.Item name="image_input" label={t("读取示意图", "Read figures")} valuePropName="checked"
+                extra={reads === false ? t("该模型没有声明图片输入。", "This model declares no image input.")
+                  : reads ? t("该模型支持图片输入：PDF 提取时把场景示意图一起发给模型。", "This model reads images: PDF extraction sends each scene's figures.")
+                  : t("获取模型清单后按模型是否支持图片自动设置。", "Fetch the model list to set this from the model's image support.")}>
+                <Switch disabled={reads === false} />
+              </Form.Item>
               <Form.Item name="concurrency" label={t("PDF 并发请求数", "Concurrent PDF requests")}
                 extra={t("PDF 提取同时发出的模型请求数；服务限流时调低。", "Model requests a PDF extraction sends at once; lower it if the service rate-limits.")}>
                 <InputNumber min={1} max={256} />

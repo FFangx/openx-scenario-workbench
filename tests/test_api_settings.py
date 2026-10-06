@@ -58,7 +58,7 @@ def test_model_list_and_probe_use_the_draft_with_the_saved_key(client, monkeypat
             seen.append(config)
 
         def catalog(self):
-            return [ModelInfo("a", ("low", "high"), "high", 4096), ModelInfo("b")]
+            return [ModelInfo("a", ("low", "high"), "high", 4096, True), ModelInfo("b")]
 
         def probe(self):
             if seen[-1].model == "broken":
@@ -69,8 +69,9 @@ def test_model_list_and_probe_use_the_draft_with_the_saved_key(client, monkeypat
     client.put("/api/settings/model", json=model(api_key=SECRET))
     assert client.post("/api/settings/model/models", json=model()).json() == {
         "models": ["a", "b"],
-        "details": [{"id": "a", "effort_levels": ["low", "high"], "default_effort": "high", "max_output_tokens": 4096},
-                    {"id": "b", "effort_levels": [], "default_effort": "", "max_output_tokens": None}]}
+        "details": [{"id": "a", "effort_levels": ["low", "high"], "default_effort": "high", "max_output_tokens": 4096,
+                     "image_input": True},
+                    {"id": "b", "effort_levels": [], "default_effort": "", "max_output_tokens": None, "image_input": False}]}
     assert seen[-1].api_key == SECRET
     assert client.post("/api/settings/model/test", json=model(model="draft-model")).json() == {"model": "draft-model"}
     failed = client.post("/api/settings/model/test", json=model(model="broken"))

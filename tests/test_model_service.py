@@ -65,7 +65,7 @@ def test_http_200_error_or_missing_completion_is_a_sanitized_service_failure(res
 
 def test_effort_levels_come_from_the_model_list_and_are_sent_only_while_thinking():
     calls = []
-    listing = {"data": [{"id": "deepseek-flash", "max_output_tokens": 393216,
+    listing = {"data": [{"id": "deepseek-flash", "max_output_tokens": 393216, "input_modalities": ["text", "image"],
                          "effort": {"supported_levels": ["low", "high", "max"], "default_level": "high"}},
                         {"id": "plain"}]}
 
@@ -80,6 +80,7 @@ def test_effort_levels_come_from_the_model_list_and_are_sent_only_while_thinking
     assert [(item.id, item.effort_levels, item.default_effort) for item in catalog] == [
         ("deepseek-flash", ("low", "high", "max"), "high"), ("plain", (), "")]
     assert catalog[0].max_output_tokens == 393216
+    assert [item.image_input for item in catalog] == [True, False]
     ModelClient(config, opener=opener).probe()
     sent = json.loads(calls[-1].data)
     assert sent["thinking"] == {"type": "enabled"} and sent["reasoning_effort"] == "max"
@@ -88,7 +89,7 @@ def test_effort_levels_come_from_the_model_list_and_are_sent_only_while_thinking
 
 
 def test_effort_is_saved_and_validated(tmp_path):
-    save_config(ModelConfig(api_key="", reasoning_effort="low"), tmp_path)
-    assert load_config(tmp_path).reasoning_effort == "low"
+    save_config(ModelConfig(api_key="", reasoning_effort="low", image_input=True), tmp_path)
+    assert load_config(tmp_path).reasoning_effort == "low" and load_config(tmp_path).image_input is True
     with pytest.raises(ModelError):
         save_config(ModelConfig(reasoning_effort="High; drop"), tmp_path)

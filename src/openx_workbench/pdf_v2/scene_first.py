@@ -6,10 +6,11 @@ import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .figures import Figure, referenced_labels
 from .models import SectionTree
 from .scene_proposer import (
     DEFAULT_SCENE_PROMPT_VERSION,
@@ -61,6 +62,7 @@ _PAGE_NUMBER = re.compile(r"\d{1,4}")
 # levels (7.4.4), so a decimal such as 3.5 m is none; a figure or table number (图C.5) is none either.
 _CLAUSE_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.图表])([A-Z]\.\d+(?:\.\d+)*|\d+(?:\.\d+){2,})(?!\.?\d)")
 REFERENCED_CHARS = 20_000  # at most this much referenced text per scene
+MAX_FIGURES = 6  # figures sent with one scene
 
 
 def structure_timeout(scene_count: int) -> int:
@@ -97,6 +99,8 @@ class StructureCall(BaseModel):
     usage: dict[str, int] = Field(default_factory=dict)
     rejected_values: tuple[str, ...] = ()
     failure_detail: str | None = None
+    # Figures sent with the batch, by number.
+    figures: tuple[str, ...] = ()
 
 class ConfidenceSummary(BaseModel):
 
@@ -178,7 +182,8 @@ def _add_usage(total: dict[str, int], envelope: dict[str, Any]) -> None:
 class _Document:
     """The text a structure batch is read from, and each scene's own text for checking quotes."""
 
-    def __init__(self, tree: SectionTree, text_by_node: dict[str, str], extraction: SceneFirstExtraction):
+    def __init__(self, tree: SectionTree, text_by_node: dict[str, str], extraction: SceneFirstExtraction,
+                 figures: Sequence[Figure] = ()):
         self.nodes = {node.node_id: node for node in tree.nodes}
         self.order = {node.node_id: index for index, node in enumerate(tree.nodes)}
         self.parent = {child: node.node_id for node in tree.nodes for child in node.child_ids}
@@ -189,6 +194,25 @@ class _Document:
         # on every page): a quote leaves it out of the sentence it spans.
         lines = Counter(line.strip() for text in text_by_node.values() for line in (text or "").splitlines())
         self.furniture = {line for line, count in lines.items() if line and (count >= 3 or _PAGE_NUMBER.fullmatch(line))}
+        # Figures by the section their caption is in, and by number where the number is unique.
+        self.figures_in: dict[str, list[Figure]] = {}
+        for figure in figures:
+            self.figures_in.setdefault(figure.node_id or "", []).append(figure)
+        labels = Counter(figure.label for figure in figures)
+        self.figure_named = {figure.label: figure for figure in figures if labels[figure.label] == 1}
+
+    def figures(self, scene: ResolvedScene) -> tuple[Figure, ...]:
+        """The figures a scene is read with: those its own text names by number ("如图C.10所示"),
+        in its order, then those captioned in its own sections, then those of the clauses it refers
+        to. Figures of the sections it shares with other scenes (how light is measured, what a
+        target looks like) stay out unless its own text names them."""
+        own = [node_id for node_id in scene.node_ids
+               if node_id not in self.context and node_id not in scene.declared_shared_node_ids]
+        found = [self.figure_named[label] for node_id in own for label in referenced_labels(self.text.get(node_id) or "")
+                 if label in self.figure_named]
+        found += [figure for node_id in own for figure in self.figures_in.get(node_id, ())]
+        found += [figure for node_id in self.referenced(scene) for figure in self.figures_in.get(node_id, ())]
+        return tuple({(figure.page_number, figure.clip): figure for figure in found}.values())[:MAX_FIGURES]
 
     def view(self, node_ids) -> str:
         parts = []
@@ -249,6 +273,8 @@ class _Document:
         lines.append("  本场景章节：" + ", ".join(own))
         if shared:
             lines.append("  共用章节：" + ", ".join(shared))
+        if figures := self.figures(scene):
+            lines.append("  示意图：" + "、".join(figure.label for figure in figures))
         return "\n".join(lines)
 
     def source(self, scene: ResolvedScene) -> str:
@@ -275,15 +301,21 @@ class _Document:
                 batches.append([scene])
         return batches
 
+    def batch_figures(self, scenes) -> tuple[Figure, ...]:
+        return tuple({(figure.page_number, figure.clip): figure for scene in scenes for figure in self.figures(scene)}.values())
+
     def request(self, scenes, *, model: str, prompt_version: str) -> dict[str, Any]:
         own = {node_id for scene in scenes for node_id in self.own_nodes(scene)}
         return build_structure_request(self.context_view, self.view(own), "\n".join(self.scene_line(scene) for scene in scenes),
-                                       model=model, prompt_version=prompt_version)
+                                       model=model, prompt_version=prompt_version, figures=self.batch_figures(scenes))
 
 
 def _retry_note(request: dict[str, Any], note: str) -> dict[str, Any]:
     messages = [dict(message) for message in request["messages"]]
-    messages[-1]["content"] += f"\n\n注意：上一次回复有问题（{note}）。请严格只输出符合要求的 JSON。"
+    text = f"\n\n注意：上一次回复有问题（{note}）。请严格只输出符合要求的 JSON。"
+    content = messages[-1]["content"]
+    # With figures the message is a list of parts; the note is one more text part after them.
+    messages[-1]["content"] = [*content, {"type": "text", "text": text.strip()}] if isinstance(content, list) else content + text
     return {**request, "messages": messages}
 
 
@@ -335,7 +367,8 @@ def _read_batch(document: _Document, batch_index: int, scenes: list[ResolvedScen
     status = "ok" if len(found) == len(expected) else "partial" if found else "failed"
     return StructureCall(batch=batch_index, sample=sample, scene_ids=tuple(expected), status=status, attempts=attempts,
                          request_sha256=tuple(hashes), usage=usage, rejected_values=tuple(sorted(rejected)),
-                         failure_detail=None if status == "ok" else failure), found
+                         failure_detail=None if status == "ok" else failure,
+                         figures=tuple(figure.label for figure in document.batch_figures(scenes))), found
 
 
 def read_structures(
@@ -348,12 +381,14 @@ def read_structures(
     prompt_version: str,
     samples: int = STRUCTURE_SAMPLES,
     concurrency: int = DEFAULT_CONCURRENCY,
+    figures: Sequence[Figure] = (),
     progress: Callable[[str], None] | None = None,
 ) -> tuple[SceneFirstExtraction, tuple[StructureCall, ...], list[str]]:
-    """Each scene's structure, read batch by batch with evidence that is checked against its text.
+    """Each scene's structure, read batch by batch with evidence that is checked against its text
+    and figures (find_figures; none for a model that reads no images).
 
     Returns the extraction with structures, the calls made and the scenes left without one."""
-    document = _Document(tree, text_by_node, extraction)
+    document = _Document(tree, text_by_node, extraction, figures)
     batches = document.batches(extraction.scenes)
     jobs = [(index, sample) for index in range(len(batches)) for sample in range(samples)]
     readings: dict[str, list[SceneStructure | None]] = {scene.scene_id: [None] * samples for scene in extraction.scenes}
@@ -372,8 +407,8 @@ def read_structures(
                     progress(f"读取场景结构 {len(calls)}/{len(jobs)} / Reading scene structure")
     scenes, missing = [], []
     for scene in extraction.scenes:
-        source = document.source(scene)
-        structure = reconcile_readings([ground_structure(reading, source) if reading else None
+        source, sent = document.source(scene), [figure.label for figure in document.figures(scene)]
+        structure = reconcile_readings([ground_structure(reading, source, sent) if reading else None
                                         for reading in readings[scene.scene_id]])
         if structure is None:
             missing.append(scene.scene_id)
@@ -382,6 +417,13 @@ def read_structures(
         scenes.append(scene.model_copy(update={"structure": structure}))
     calls.sort(key=lambda call: (call.batch, call.sample))
     return extraction.model_copy(update={"scenes": tuple(scenes)}), tuple(calls), missing
+
+def scene_figures(tree: SectionTree, text_by_node: dict[str, str], extraction: SceneFirstExtraction,
+                  figures: Sequence[Figure]) -> dict[str, tuple[Figure, ...]]:
+    """The figures each scene is read with, by scene id (as read_structures sends them)."""
+    document = _Document(tree, text_by_node, extraction, figures)
+    return {scene.scene_id: document.figures(scene) for scene in extraction.scenes}
+
 
 def run_scene_first_extraction(
     tree: SectionTree,
@@ -397,6 +439,7 @@ def run_scene_first_extraction(
     flagged_node_ids: frozenset[str] = frozenset(),
     concurrency: int = DEFAULT_CONCURRENCY,
     structure_samples: int | None = None,
+    figures: Sequence[Figure] = (),
     progress: Callable[[str], None] | None = None,
 ) -> SceneFirstRun:
     """Find the document's scenes in one call; with a prompt that has a structure step, then read
@@ -509,7 +552,7 @@ def run_scene_first_extraction(
             progress(f"找到 {len(extraction.scenes)} 个场景，正在读取结构 / Found {len(extraction.scenes)} scenes, reading structure")
         extraction, structure_calls, missing = read_structures(
             tree, text_by_node, extraction, transport=transport, model=model, prompt_version=structure_version,
-            samples=structure_samples or STRUCTURE_SAMPLES, concurrency=concurrency, progress=progress)
+            samples=structure_samples or STRUCTURE_SAMPLES, concurrency=concurrency, figures=figures, progress=progress)
         for call in structure_calls:
             for key, value in call.usage.items():
                 usage[key] = usage.get(key, 0) + value

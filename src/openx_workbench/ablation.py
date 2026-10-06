@@ -27,6 +27,7 @@ from .catalog import AssetFile, OpenXAsset, build_catalog
 from .checkout import checkout_root
 from .retrieval import OpenXIndex, build_encoder
 from .reuse import LEVELS, change_cost, classify_reuse_level, compare_query_to_asset
+from .reuse_facts import asset_structure_query
 from .scene_package import ScenePackage, query_structure_text, scene_package_to_query
 
 RANKERS = ("name", "structure-text", "rules", "full")
@@ -68,12 +69,24 @@ def load_benchmark(path: Path, naming: str = "descriptive"):
     return assets, cases
 
 
+_structures_of: tuple[list[OpenXAsset] | None, list] = (None, [])
+
+
+def _asset_structures(assets: list[OpenXAsset]) -> list:
+    """Each asset's structure, read once per library list rather than once per comparison."""
+    global _structures_of
+    if _structures_of[0] is not assets:
+        _structures_of = (assets, [asset_structure_query(asset) for asset in assets])
+    return _structures_of[1]
+
+
 def rank(index: OpenXIndex | None, assets: list[OpenXAsset], query, ranker: str) -> list[tuple[str, str | None]]:
     """The whole library in ranked order, with each asset's verdict where the ranker gives one."""
     if ranker == "rules":
+        structures = index.structures if index is not None and index.assets is assets else _asset_structures(assets)
         keyed = []
         for position, asset in enumerate(assets):
-            differences = compare_query_to_asset(query, asset)
+            differences = compare_query_to_asset(query, asset, candidate_structure=structures[position])
             keyed.append(((sum(item.blocking for item in differences), change_cost(differences), position),
                           asset.asset_id, classify_reuse_level(differences)))
         return [(asset_id, level) for _, asset_id, level in sorted(keyed)]

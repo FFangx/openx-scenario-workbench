@@ -1,9 +1,9 @@
 """Ground a scene structure's spatial facts in the scene's own text (prompt v9 on).
 
 Each spatial field (a participant's bearing, facing and either-or group; the ego's turn and lane)
-names its source: stated, implied with a reason, or unknown. A fact keeps its value only when its
-quote is found in the text the scene was extracted from; otherwise it reads as unknown and a person
-is asked to check it. Contradictions are pointed out, never corrected. Where two independent
+names its source: stated, implied with a reason, read from a figure, or unknown. A fact keeps its
+value only when its quote is found in the text the scene was extracted from, or names a figure sent
+with the scene; otherwise it reads as unknown and a person is asked to check it. Contradictions are pointed out, never corrected. Where two independent
 readings of the same text disagree, the fact reads as unknown.
 """
 from __future__ import annotations
@@ -11,7 +11,9 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter
+from typing import Iterable
 
+from .figures import referenced_labels
 from .scene_schemas import FieldEvidence, SceneParticipant, SceneStructure
 
 # The unknown value of each field that has one. An either-or group has none: unsupported, it is
@@ -54,11 +56,17 @@ def _with_note(evidence: dict, field: str, note: str) -> dict:
     return {**evidence, field: item.model_copy(update={"review": review[:300]})}
 
 
-def _problem(item: FieldEvidence | None, normalized_source: str) -> str:
+def _problem(item: FieldEvidence | None, normalized_source: str, figures: frozenset[str]) -> str:
     if item is None or item.source == "未知":
         return "没有原文依据"
     if not item.quote:
         return "没有引用原文"
+    if item.source == "图":
+        # A figure reading names a figure sent with this scene and says what it shows.
+        named = referenced_labels(item.quote)
+        if not named or not set(named) <= figures:
+            return "引的图不是本场景附的示意图"
+        return "" if item.reason else "看图但没有写图里看到的"
     if item.source == "推出" and not item.reason:
         return "写了推出但没有理由"
     if not quote_found(item.quote, normalized_source):
@@ -66,13 +74,14 @@ def _problem(item: FieldEvidence | None, normalized_source: str) -> str:
     return ""
 
 
-def _ground_fields(values: dict, evidence: dict, fields: tuple[str, ...], source: str) -> tuple[dict, dict]:
+def _ground_fields(values: dict, evidence: dict, fields: tuple[str, ...], source: str,
+                   figures: frozenset[str]) -> tuple[dict, dict]:
     updates, kept = {}, {}
     for field in fields:
         value, item = values[field], evidence.get(field)
         if _unknown(field, value):
             continue  # nothing to ground; an unknown value needs no evidence
-        problem = _problem(item, source)
+        problem = _problem(item, source, figures)
         if not problem:
             kept[field] = item
         elif field in UNKNOWN:
@@ -84,16 +93,17 @@ def _ground_fields(values: dict, evidence: dict, fields: tuple[str, ...], source
     return updates, kept
 
 
-def ground_structure(structure: SceneStructure, source_text: str) -> SceneStructure:
-    """Keep the spatial facts whose quote the scene's own text contains; the rest read as unknown."""
-    source = normalize(source_text)
+def ground_structure(structure: SceneStructure, source_text: str, figures: Iterable[str] = ()) -> SceneStructure:
+    """Keep the spatial facts whose quote the scene's own text contains, or whose figure (by its
+    number, as in 图C.10) was sent with the scene; the rest read as unknown."""
+    source, sent = normalize(source_text), frozenset(figures)
     participants = []
     for participant in structure.participants:
         values = {field: getattr(participant, field) for field in PARTICIPANT_FIELDS}
-        updates, evidence = _ground_fields(values, participant.evidence, PARTICIPANT_FIELDS, source)
+        updates, evidence = _ground_fields(values, participant.evidence, PARTICIPANT_FIELDS, source, sent)
         participants.append(participant.model_copy(update={**updates, "evidence": evidence}))
     values = {field: getattr(structure, field) for field in SCENE_FIELDS}
-    updates, evidence = _ground_fields(values, structure.evidence, SCENE_FIELDS, source)
+    updates, evidence = _ground_fields(values, structure.evidence, SCENE_FIELDS, source, sent)
     return structure.model_copy(update={**updates, "participants": tuple(participants), "evidence": evidence})
 
 
@@ -109,9 +119,11 @@ def check_contradictions(structure: SceneStructure) -> SceneStructure:
     """Mark facts that contradict each other or the quoted wording; nothing is changed."""
     notes: list[list[str]] = [[] for _ in structure.participants]
     items = list(enumerate(structure.participants))
-    # Standing participants quoting the same sentence stand where it says, alike.
+    # Standing participants quoting the same sentence stand where it says, alike. A figure shows
+    # each where it is drawn, so the same figure number says nothing about their sides.
     for index, participant in items:
-        quote = (participant.evidence.get("bearing") or FieldEvidence()).quote
+        evidence = participant.evidence.get("bearing") or FieldEvidence()
+        quote = evidence.quote if evidence.source != "图" else None
         if not quote or _unknown("bearing", participant.bearing) or not _static(participant):
             continue
         for other_index, other in items:

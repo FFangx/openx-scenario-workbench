@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Alert, App, Button, Collapse, Modal, Popconfirm, Table, Tag, Tooltip } from "antd";
 import { CheckCircleOutlined, EditOutlined, HistoryOutlined } from "@ant-design/icons";
-import { api, type FieldEvidence, type Revision, type Scene, type SceneStructure } from "../api";
+import { api, urls, type FieldEvidence, type Revision, type Scene, type SceneStructure } from "../api";
 import { useT } from "../i18n";
 import { valueLabel } from "../vocab";
 import { FactEditor } from "./FactEditor";
@@ -25,18 +25,26 @@ export const PARAM_LABEL: Record<string, [string, string]> = {
 
 const isStructured = (s: Scene): s is Scene & { structure: SceneStructure } => Object.keys(s.structure ?? {}).length > 0;
 
-/** Where a spatial fact comes from: stated, implied (with its reasoning) or to check; the quote on hover. */
-function EvidenceMark({ item }: { item?: FieldEvidence }) {
+/** Where a spatial fact comes from: stated, implied (with its reasoning), read from a figure (shown
+ * on hover with what was seen in it) or to check; the quote on hover. */
+function EvidenceMark({ item, figure }: { item?: FieldEvidence; figure?: string }) {
   const { t } = useT();
   if (!item || (item.source === "未知" && !item.review)) return null;
-  const [label, tone] = item.review ? [t("待复核", "Check"), "review"] : item.source === "推出" ? [t("推出", "Implied"), "modify"] : [t("原文", "Stated"), "not"];
+  const drawn = item.source === "图";
+  const [label, tone] = item.review ? [t("待复核", "Check"), "review"]
+    : item.source === "推出" ? [t("推出", "Implied"), "modify"]
+    : drawn ? [t("看图", "Figure"), "modify"] : [t("原文", "Stated"), "not"];
   const lines = [
-    item.quote && t(`原文：“${item.quote}”`, `Source: “${item.quote}”`),
-    item.reason && t(`推理：${item.reason}`, `Reasoning: ${item.reason}`),
+    item.quote && (drawn ? t(`示意图：${item.quote}`, `Figure: ${item.quote}`) : t(`原文：“${item.quote}”`, `Source: “${item.quote}”`)),
+    // A figure reading says what the figure shows in its own words, under the figure.
+    item.reason && (drawn ? item.reason : t(`推理：${item.reason}`, `Reasoning: ${item.reason}`)),
     item.review,
   ].filter(Boolean) as string[];
   return (
-    <Tooltip title={<div className="evidence-tip">{lines.map((line, i) => <div key={i}>{line}</div>)}</div>}>
+    <Tooltip title={<div className="evidence-tip">
+      {figure && <img className="evidence-figure" src={figure} alt={item.quote ?? ""} />}
+      {lines.map((line, i) => <div key={i}>{line}</div>)}
+    </div>}>
       <Tag className={`mtag ${tone} evidence-mark`} tabIndex={0}>{label}</Tag>
     </Tooltip>
   );
@@ -89,6 +97,11 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
   const participants = isStructured(scene) ? scene.structure.participants ?? [] : [];
   const reviewFlags = isStructured(scene) ? scene.structure.review_flags ?? [] : [];
   const marked = rows.some(([, , item]) => item) || participants.some((a) => Object.keys(a.evidence ?? {}).length);
+  // The figure a fact was read from, cut out of its page.
+  const figure = (item?: FieldEvidence) => {
+    const found = item?.source === "图" ? scene.figures?.find((f) => f.label === item.quote?.replace(/\s+/g, "")) : undefined;
+    return found && urls.page(projectId, scene.document_id, found.page, 360, found.clip);
+  };
 
   const publish = async () => {
     setBusy(true);
@@ -116,7 +129,7 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
       <table className="fact-sheet">
         <tbody>
           {rows.map(([name, item, evidence], i) => (
-            <tr key={i}><th scope="row">{name}</th><td>{value(item)} <EvidenceMark item={evidence} /></td></tr>
+            <tr key={i}><th scope="row">{name}</th><td>{value(item)} <EvidenceMark item={evidence} figure={figure(evidence)} /></td></tr>
           ))}
         </tbody>
       </table>
@@ -130,14 +143,14 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
             <tbody>
               {participants.map((a, i) => (
                 <tr key={i}>{(["kind", "bearing", "facing", "actions", "speed_kph", "alternative_group"] as const).map((k) => (
-                  <td key={k}>{value(a[k])}{k in (a.evidence ?? {}) && <> <EvidenceMark item={a.evidence?.[k]} /></>}</td>
+                  <td key={k}>{value(a[k])}{k in (a.evidence ?? {}) && <> <EvidenceMark item={a.evidence?.[k]} figure={figure(a.evidence?.[k])} /></>}</td>
                 ))}</tr>
               ))}
             </tbody>
           </table>
         </>
       )}
-      {marked && <p className="muted facts-note">{t("“原文”“推出”标出方位、朝向、车道等事实的依据，悬停可看引句；“待复核”请对照原文核对。", "“Stated” and “Implied” show what bearings, facings and lanes rest on; hover for the quote. Check items marked “Check” against the source.")}</p>}
+      {marked && <p className="muted facts-note">{t("“原文”“推出”“看图”标出方位、朝向、车道等事实的依据，悬停可看引句或示意图；“待复核”请对照原文核对。", "“Stated”, “Implied” and “Figure” show what bearings, facings and lanes rest on; hover for the quote or the figure. Check items marked “Check” against the source.")}</p>}
       {reviewFlags.map((flag, i) => <Alert key={`r${i}`} type="warning" showIcon title={flag} className="facts-alert" />)}
       {scene.issues.map((issue, i) => <Alert key={i} type="warning" showIcon title={issue} className="facts-alert" />)}
       {scene.ocr && <p className="muted facts-note">{t("包含本机 OCR 识别的证据，请对照原文复核。", "Includes locally recognized OCR evidence; review against the source.")}</p>}

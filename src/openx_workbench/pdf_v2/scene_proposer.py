@@ -1,10 +1,12 @@
 """Adapted ScenarioManager V2 core; see docs/PDF_MIGRATION.md."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
-from typing import Any
+from typing import Any, Sequence
 
+from .figures import Figure
 from .models import SectionTree
 from .shared_containers import SharedContainerCandidate
 
@@ -651,6 +653,66 @@ _PROMPT_SCENE_STRUCTURE_V9 = (
     + _STRUCTURE_V9_OUTPUT
 )
 
+# ---------- v10: the scene's figures come with its text ----------
+# A model that reads images gets each scene's figures (pdf_v2.figures). A position the text leaves
+# to a figure ("如图C.10所示") is read from it, with the figure's number as the quote and what it
+# shows as the reason; the text still wins over a figure. A crossing target's bearing is the side
+# it starts from (v9 left the moment open, and readings named where it meets the ego).
+
+_V9_HEAD_SCENE_LIST = "最后是本批场景清单（scene_id、场景名、所在章节、属于它的 node_id）。\n"
+
+_V10_HEAD_SCENE_LIST = """最后是本批场景清单（scene_id、场景名、所在章节、属于它的 node_id、它的示意图）。
+场景章节里有示意图时，图片附在最后，每张前面写着图号和图题。
+"""
+
+_V9_BEARING_FIGURE_LINE = "      只画在图里、文字没写的位置（「如图 X 所示」）也填未知\n"
+
+_V10_BEARING_FIGURE_LINES = """      文字没写、只画在示意图里的位置（「如图 X 所示」）：附了这张图就按图读（依据来源填「图」，
+      见下面的「读示意图」），没附图就填未知
+    - 横穿的目标（行人、骑行者、横穿的车）按它**出发的一侧**定方位：从主车右侧出发 = 右前方，
+      从左侧出发 = 左前方；不是相遇、碰撞那一刻它在哪
+"""
+
+_V9_EVIDENCE_SOURCES = '  {"source": "原文" 或 "推出" 或 "未知", "quote": "原文引句", "reason": "推理（仅推出时写）"}\n'
+
+_V10_EVIDENCE_SOURCES = """  {"source": "原文" 或 "推出" 或 "图" 或 "未知", "quote": "原文引句（看图时写图号）",
+   "reason": "推理（推出时写）或图里看到的（看图时写）"}
+"""
+
+_V9_EVIDENCE_UNKNOWN = "- 未知：原文和推理都定不了。"
+
+_V10_EVIDENCE_FIGURE = """- 图：原文没写、附给这个场景的示意图里画清楚了。quote 只写图号（如「图C.10」），reason 用一句话写
+  图里看到的（如「图中儿童从主车右侧路边出发，被右前方停放的车挡住」）。原文写了的一律按原文。
+- 未知：原文、推理和附图都定不了。"""
+
+_V10_FIGURE_SECTION = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+读示意图（附了图时）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 示意图多是俯视图。先找主车（试验车辆 / 被试车辆 / SV / VUT / 主车）和它的行驶方向（车头朝向、箭头）。
+- 左右、前后都按**主车行驶方向**换算，不是图片的左右：主车朝图片右边开时，图片上方是主车左侧、
+  下方是主车右侧；主车朝图片上方开时，图片左边是主车左侧。
+- 参与者以原文为准：图只用来定原文提到的参与者的方位、朝向和主车车道、主车走向；不要因为图里
+  多画了东西就新增参与者，也不要用图改掉原文写明的事实。
+- 一个场景附了几张图（如不同目标物各一张）时，每个参与者按画它的那张图读。
+- 图里看不清、或几张图画得互相矛盾时，填未知。
+"""
+
+_V9_OUTPUT_REQUIREMENT = "- 每个非未知的空间字段都有依据，引句是给出原文里连续的原句\n"
+
+_V10_OUTPUT_REQUIREMENT = """- 每个非未知的空间字段都有依据，引句是给出原文里连续的原句；看图的依据只写附给这个场景的图号
+"""
+
+_PROMPT_SCENE_STRUCTURE_V10 = (
+    _PROMPT_SCENE_STRUCTURE_V9
+    .replace(_V9_HEAD_SCENE_LIST, _V10_HEAD_SCENE_LIST)
+    .replace(_V9_BEARING_FIGURE_LINE, _V10_BEARING_FIGURE_LINES)
+    .replace(_V9_EVIDENCE_SOURCES, _V10_EVIDENCE_SOURCES)
+    .replace(_V9_EVIDENCE_UNKNOWN, _V10_EVIDENCE_FIGURE)
+    .replace(_STRUCTURE_V9_OUTPUT, _V10_FIGURE_SECTION + _STRUCTURE_V9_OUTPUT)
+    .replace(_V9_OUTPUT_REQUIREMENT, _V10_OUTPUT_REQUIREMENT)
+)
+
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
     "scene-first-prompt-v2": _PROMPT_SCENE_FIRST_V2,
@@ -663,10 +725,13 @@ _PROMPT_REGISTRY: dict[str, str] = {
     # Finds the scenes only; their structure comes from STRUCTURE_PROMPTS below.
     "scene-first-prompt-v9": _PROMPT_SCENE_FIRST_V1,
     "scene-structure-prompt-v9": _PROMPT_SCENE_STRUCTURE_V9,
+    "scene-first-prompt-v10": _PROMPT_SCENE_FIRST_V1,
+    "scene-structure-prompt-v10": _PROMPT_SCENE_STRUCTURE_V10,
 }
 
 # Scene prompts whose structure is read in a second step, per batch of scenes.
-STRUCTURE_PROMPTS: dict[str, str] = {"scene-first-prompt-v9": "scene-structure-prompt-v9"}
+STRUCTURE_PROMPTS: dict[str, str] = {"scene-first-prompt-v9": "scene-structure-prompt-v9",
+                                     "scene-first-prompt-v10": "scene-structure-prompt-v10"}
 
 _FROZEN_PROMPT_SHA256: dict[str, str] = {
     "scene-first-prompt-v1": (
@@ -707,6 +772,14 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
 
     "scene-structure-prompt-v9": (
         "77af239241bf7b3a1606af59475fc3f677e6720c2e87ed0ad921bcaa0773414a"
+    ),
+    # The v1 scene-finding text, unchanged.
+    "scene-first-prompt-v10": (
+        "3c9b020cf9a664a8a2174b57692dbdb02f4dc6e527c0514d15144fa70659fd22"
+    ),
+
+    "scene-structure-prompt-v10": (
+        "140d79943591ef131e72be4ead8dbd02b7ba246c3aee1821769373e143887b06"
     ),
 }
 
@@ -809,19 +882,28 @@ def build_structure_request(
     *,
     model: str,
     prompt_version: str,
+    figures: Sequence[Figure] = (),
     max_output_tokens: int = MAX_OUTPUT_TOKENS,
     max_input_chars: int = MAX_INPUT_CHARS,
 ) -> dict[str, Any]:
     """One batch of scenes for the structure prompt. The document-wide conditions come first, the
-    same in every batch, so the service can reuse that prefix across batches."""
+    same in every batch, so the service can reuse that prefix across batches. The scenes' figures
+    follow the text as images (OpenAI content parts), each after a line with its number and caption."""
     prompt = resolve_scene_prompt(prompt_version)
-    content = ("===== 全文档共用的试验条件 =====\n" + (context_view or "（无）")
-               + "\n\n===== 本批场景用到的章节 =====\n" + batch_view
-               + "\n\n===== 本批场景清单 =====\n" + scene_list)
-    if len(prompt) + len(content) > max_input_chars:
+    text = ("===== 全文档共用的试验条件 =====\n" + (context_view or "（无）")
+            + "\n\n===== 本批场景用到的章节 =====\n" + batch_view
+            + "\n\n===== 本批场景清单 =====\n" + scene_list)
+    if len(prompt) + len(text) > max_input_chars:
         raise SceneDocumentTooLarge(
-            f"structure batch is {len(prompt) + len(content):,} chars, exceeding the {max_input_chars:,} limit"
+            f"structure batch is {len(prompt) + len(text):,} chars, exceeding the {max_input_chars:,} limit"
         )
+    content: str | list[dict[str, Any]] = text
+    if figures:
+        content = [{"type": "text", "text": text + f"\n\n===== 本批场景的示意图（{len(figures)} 张，附在下面）====="}]
+        for figure in figures:
+            content.append({"type": "text", "text": f"{figure.label}（第 {figure.page_number} 页）：{figure.caption}"})
+            content.append({"type": "image_url",
+                            "image_url": {"url": "data:image/png;base64," + base64.b64encode(figure.png).decode()}})
     return {
         "model": model,
         "messages": [

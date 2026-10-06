@@ -81,8 +81,10 @@ TrafficControl = Literal["交通信号灯", "限速标志"]
 EgoLane = Literal["最左侧车道", "最右侧车道", "中间车道", "未知"]
 
 # Where a spatial fact comes from: stated in the source, necessarily implied by it (with a
-# reason), or not determinable. Only a quote found in the scene's own text keeps a fact.
-EvidenceSource = Literal["原文", "推出", "未知"]
+# reason), drawn in one of the scene's figures (prompt v10 on: the quote names the figure, the
+# reason says what it shows), or not determinable. Only a quote found in the scene's own text, or
+# a figure sent with the scene, keeps a fact.
+EvidenceSource = Literal["原文", "推出", "图", "未知"]
 
 TestedFunction = Literal[
 

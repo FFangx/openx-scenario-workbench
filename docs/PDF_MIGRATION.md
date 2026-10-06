@@ -43,8 +43,20 @@ details were removed; no private corpus, configuration, model responses or
 evaluation data was copied. No ScenarioManager installation is needed at runtime.
 
 OpenX owns orchestration, HTTP transport, persistence and UI. It uses the same
-default `chain` heading decoder and, since 2026-10-06, `scene-first-prompt-v9`: the scenes
-are found in one call with the unchanged v1 instructions, then their structure is read scene by
+default `chain` heading decoder and, since 2026-10-07, `scene-first-prompt-v10`: v9 (below) with
+the scene's figures. Standards often place a target only in a figure ("如图C.10所示"); the text
+parser keeps only its caption. `pdf_v2/figures.py` reads captions from the page as laid out
+(a parser may fold one into a table or a heading), takes the region between a caption and the
+running text above it, cuts it to the vector drawings, pictures and labels there and renders it as
+PNG. A scene is read with the figures its own text names by number, then those captioned in its
+own sections, then those of the clauses it refers to (at most six; figures of sections it shares
+with other scenes stay out unless named). When the configured model declares image input (the
+settings take `input_modalities` from the model list), they follow the scene's text as image parts
+of the same request. `scene-structure-prompt-v10` adds the evidence source "图": the quote names a
+figure sent with the scene and the reason says what it shows; code checks both. The text still
+wins over a figure, and a crossing target's bearing is the side it starts from. The figures a
+structure was read with are stored per scene and shown, cut from the page, on the fact's tag.
+v9 found the scenes in one call with the unchanged v1 instructions, then read their structure scene by
 scene (`scene-structure-prompt-v9`): one scene per call with the clauses its text refers to by
 number ("按照C.3.3.2.3.9的方法"), each scene read three times, all calls sent concurrently (64 by
 default; DeepSeek allows thousands per account). Four scenes per call paraphrased some quotes and

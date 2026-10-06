@@ -68,6 +68,7 @@ class ModelInfo(Shape):
     effort_levels: list[str]
     default_effort: str
     max_output_tokens: int | None
+    image_input: bool
 
 
 class ModelList(Shape):
@@ -118,6 +119,14 @@ class SourceRegion(Shape):
     clip: tuple[float, float, float, float]
 
 
+class SceneFigure(Shape):
+    """A figure the scene's structure was read with: its number, caption and box on the page."""
+    label: str
+    caption: str
+    page: int
+    clip: tuple[float, float, float, float]
+
+
 class NoStructure(Shape):
     """A scene extracted without a typed structure (legacy rules)."""
 
@@ -145,6 +154,7 @@ class Scene(Shape):
     parameters: dict[str, float]
     issues: list[str]
     ocr: bool
+    figures: list[SceneFigure] = []
 
 
 class QueuedScene(Scene):
@@ -679,6 +689,7 @@ class ModelSettings(Shape):
     max_tokens: int
     timeout: int
     concurrency: int
+    image_input: bool
     has_key: bool
     readable: bool
 

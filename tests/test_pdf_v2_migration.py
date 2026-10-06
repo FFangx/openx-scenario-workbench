@@ -12,7 +12,7 @@ from openx_workbench.pdf_store import PdfStore
 from openx_workbench.project_store import ProjectStore
 
 
-def authored_pdf():
+def authored_pdf(figure=False):
     with pymupdf.open() as document:
         for heading, body in [
             ("1.1 Test conditions", "All tests use a dry straight road in daylight. No rain is permitted."),
@@ -22,27 +22,42 @@ def authored_pdf():
             page = document.new_page()
             page.insert_text((60, 60), heading, fontsize=16)
             page.insert_textbox((60, 90, 500, 200), body, fontsize=11)
+            if figure and heading.startswith("2.2"):  # a figure where the pedestrian starts
+                page.draw_rect(pymupdf.Rect(60, 220, 400, 320))
+                page.insert_text((150, 345), "图1 行人横穿示意图", fontname="china-s", fontsize=10)
         document.set_toc([[1, "1.1 Test conditions", 1], [1, "2.1 Stationary car braking", 2], [1, "2.2 Pedestrian crossing", 3]])
         return document.tobytes()
 
 
 def structure_reply(body):
     """A structure batch answered like the model: the stationary car is quoted from its text, the
-    pedestrian's side rests on a quote its text does not contain."""
-    text = body["messages"][1]["content"]
+    pedestrian's side rests on a quote its text does not contain, or on its figure when one is sent."""
+    text = message_text(body)
     assert text.startswith("===== 全文档共用的试验条件 =====")
+    figures = re.findall(r"示意图：(\S+)", text)
     scenes = []
     for scene_id in re.findall(r"scene_id: (\S+)", text):
         car = scene_id.endswith("2.1")
+        if car:
+            bearing = {"source": "原文", "quote": "a stationary target car ahead"}
+        elif figures:
+            bearing = {"source": "图", "quote": figures[0], "reason": "图中行人从右侧路边出发"}
+        else:
+            bearing = {"source": "原文", "quote": "from the right kerb"}
         participant = {"kind": "乘用车" if car else "行人", "bearing": "正前方" if car else "右前方",
                        "facing": "未知" if car else "横向", "actions": ["静止"] if car else ["匀速行驶"],
-                       "evidence": {"bearing": {"source": "原文", "quote": "a stationary target car ahead" if car
-                                                else "from the right kerb"},
+                       "evidence": {"bearing": bearing,
                                     **({} if car else {"facing": {"source": "原文", "quote": "A pedestrian crosses the road"}})}}
         scenes.append({"scene_id": scene_id, "structure": {"tested_function": "AEB", "road_class": "直道",
                                                            "ego_actions": ["匀速行驶"], "participants": [participant]}})
     return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps({"scenes": scenes})}}],
             "usage": {"total_tokens": 100}}
+
+
+def message_text(body):
+    """The text of the user message, also when figures come with it as content parts."""
+    content = body["messages"][1]["content"]
+    return content if isinstance(content, str) else "\n".join(part.get("text", "") for part in content)
 
 
 def fake_client(*, empty=False, hallucination=False):
@@ -51,7 +66,7 @@ def fake_client(*, empty=False, hallucination=False):
     structure_calls = []
     def opener(request, timeout):
         body = json.loads(request.data)
-        if "本批场景清单" in body["messages"][1]["content"]:
+        if "本批场景清单" in message_text(body):
             structure_calls.append(body)
             return io.BytesIO(json.dumps(structure_reply(body)).encode())
         calls.append(body)
@@ -113,6 +128,33 @@ def test_v2_classification_evidence_cache_and_immutable_library(tmp_path):
     assert store.library()[0]["revision"] == 2
     assert list((tmp_path / "requirements").glob("*/0001.json"))
     assert store.extraction_audit(record)["run"]["model"] == client.config.model
+
+
+def test_a_model_that_reads_images_gets_each_scene_figure(tmp_path):
+    from dataclasses import replace
+
+    from openx_workbench.api_common import _scene_json
+    client, _ = fake_client()
+    client.config = replace(client.config, image_input=True)
+    assets = AssetStore(tmp_path)
+    store = PdfStore(assets)
+    project = ProjectStore(assets).create("Figures")
+    data = authored_pdf(figure=True)
+    record = store.import_pdf(project.project_id, "figure.pdf", data, client=client)
+    with_images = [body for body in client.structure_calls if isinstance(body["messages"][1]["content"], list)]
+    assert len(with_images) == 3  # the pedestrian scene's three readings; the car's section has no figure
+    assert with_images[0]["messages"][1]["content"][-1]["image_url"]["url"].startswith("data:image/png;base64,")
+    car, pedestrian = store.scenes(project.project_id, record.document_id)
+    person = pedestrian.package.structure["participants"][0]
+    assert person["bearing"] == "右前方" and person["evidence"]["bearing"]["source"] == "图"
+    assert [figure["label"] for figure in pedestrian.package.extraction["figures"]] == ["图1"]
+    assert car.package.extraction["figures"] == []
+    shown = _scene_json(pedestrian)["figures"][0]
+    assert shown["page"] == 3 and len(shown["clip"]) == 4
+    assert store.extraction_audit(record)["figures"]["status"] == "rendered"
+    # Read without images, the same PDF is another document.
+    plain, _ = fake_client()
+    assert store.import_pdf(project.project_id, "figure.pdf", data, client=plain).document_id != record.document_id
 
 
 def test_confirmed_empty_pdf_is_persisted_without_repeat_call(tmp_path):
@@ -209,13 +251,17 @@ def test_prompts_are_frozen_and_chain_parser_is_selected():
                                          '"speed_limits_kph"'))
     # v9 finds the scenes with the unchanged v1 text and reads their structure in a second step.
     from openx_workbench.pdf_v2.scene_proposer import STRUCTURE_PROMPTS
-    assert PROMPT_VERSION == "scene-first-prompt-v9"
+    v9 = resolve_scene_prompt("scene-structure-prompt-v9")
+    assert all(field in v9 for field in ('"alternative_group": null', '"ego_turn"', '"ego_lane"',
+                                         '"evidence"', '"speed_limits_kph"', "参数表每行"))
+    # The bearing keeps only definitions that map from the wording itself.
+    assert "试验开始时" in v8 and "试验开始时" not in v9 and "对向车道驶来的车" in v9
+    # v10 reads the scene's figures too, and a crossing target's bearing from where it starts.
+    assert PROMPT_VERSION == "scene-first-prompt-v10"
     assert resolve_scene_prompt(PROMPT_VERSION) == resolve_scene_prompt("scene-first-prompt-v1")
     structure = resolve_scene_prompt(STRUCTURE_PROMPTS[PROMPT_VERSION])
-    assert all(field in structure for field in ('"alternative_group": null', '"ego_turn"', '"ego_lane"',
-                                                '"evidence"', '"speed_limits_kph"', "参数表每行"))
-    # The bearing keeps only definitions that map from the wording itself.
-    assert "试验开始时" in v8 and "试验开始时" not in structure and "对向车道驶来的车" in structure
+    assert '"图"' in structure and "读示意图" in structure and "出发的一侧" in structure
+    assert "也填未知" in v9 and "也填未知" not in structure
     assert _resolve_heading_decoder(None) == "chain"
 
 

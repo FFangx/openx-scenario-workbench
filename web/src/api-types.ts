@@ -1715,7 +1715,7 @@ export interface components {
              * @default 未知
              * @enum {string}
              */
-            source: "原文" | "推出" | "未知";
+            source: "原文" | "推出" | "图" | "未知";
         };
         /** FolderRequest */
         FolderRequest: {
@@ -1883,6 +1883,12 @@ export interface components {
              */
             concurrency?: number;
             /**
+             * Image Input
+             * @description The model reads images: PDF extraction sends scene figures.
+             * @default false
+             */
+            image_input?: boolean;
+            /**
              * Max Tokens
              * @default 64000
              */
@@ -1917,6 +1923,8 @@ export interface components {
             effort_levels: string[];
             /** Id */
             id: string;
+            /** Image Input */
+            image_input: boolean;
             /** Max Output Tokens */
             max_output_tokens: number | null;
         };
@@ -1957,6 +1965,8 @@ export interface components {
             concurrency: number;
             /** Has Key */
             has_key: boolean;
+            /** Image Input */
+            image_input: boolean;
             /** Max Tokens */
             max_tokens: number;
             /** Model */
@@ -2153,6 +2163,11 @@ export interface components {
             entities: string[];
             /** Evidence */
             evidence: components["schemas"]["Evidence"][];
+            /**
+             * Figures
+             * @default []
+             */
+            figures?: components["schemas"]["SceneFigure"][];
             /** Issues */
             issues: string[];
             /** Ocr */
@@ -2395,6 +2410,11 @@ export interface components {
             entities: string[];
             /** Evidence */
             evidence: components["schemas"]["Evidence"][];
+            /**
+             * Figures
+             * @default []
+             */
+            figures?: components["schemas"]["SceneFigure"][];
             /** Issues */
             issues: string[];
             /** Ocr */
@@ -2433,6 +2453,25 @@ export interface components {
             triggers: string[];
             /** Weather */
             weather: string[];
+        };
+        /**
+         * SceneFigure
+         * @description A figure the scene's structure was read with: its number, caption and box on the page.
+         */
+        SceneFigure: {
+            /** Caption */
+            caption: string;
+            /** Clip */
+            clip: [
+                number,
+                number,
+                number,
+                number
+            ];
+            /** Label */
+            label: string;
+            /** Page */
+            page: number;
         };
         /** SceneParams */
         SceneParams: {

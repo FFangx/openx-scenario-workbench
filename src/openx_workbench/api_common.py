@@ -141,6 +141,8 @@ def _scene_json(stored: StoredScene) -> dict[str, Any]:
                    for issue in package.extraction.get("validation", {}).get("issues", [])]
         + [flag["detail"] for flag in package.extraction.get("structure_flags", [])],
         "ocr": any(block.get("source") == "ocr" for block in package.extraction.get("source_blocks", [])),
+        "figures": [figure for figure in package.extraction.get("figures", [])
+                    if isinstance(figure, dict) and len(figure.get("clip") or []) == 4],
     }
 
 

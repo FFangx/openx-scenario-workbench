@@ -32,6 +32,9 @@ class ModelConfig:
     # Model requests a PDF extraction sends at once (its structure calls). DeepSeek allows thousands
     # per account; a service that rate-limits answers 429 and the call is retried after a pause.
     concurrency: int = 64
+    # The model reads images: a PDF extraction then sends each scene's figures with its text. The
+    # settings take it from the service's model list (input_modalities).
+    image_input: bool = False
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,7 @@ class ModelInfo:
     effort_levels: tuple[str, ...] = ()
     default_effort: str = ""
     max_output_tokens: int | None = None
+    image_input: bool = False
 
 
 EFFORT = re.compile(r"^[a-z][a-z0-9_-]{0,19}$")
@@ -181,8 +185,10 @@ class ModelClient:
                            if isinstance(level, str) and EFFORT.match(level))
             default = effort.get("default_level") if effort.get("default_level") in levels else ""
             limit = item.get("max_output_tokens")
+            modalities = item.get("input_modalities") if isinstance(item.get("input_modalities"), list) else []
             found.setdefault(item["id"], ModelInfo(item["id"], levels, default,
-                                                   limit if isinstance(limit, int) and limit > 0 else None))
+                                                   limit if isinstance(limit, int) and limit > 0 else None,
+                                                   "image" in modalities))
         if not found:
             raise ModelError("服务未提供模型清单，可手动输入模型名 / No model list; enter a model ID manually.")
         return [found[key] for key in sorted(found)]
