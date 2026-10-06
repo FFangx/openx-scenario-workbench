@@ -59,6 +59,7 @@ LABELS = {
     "verify speed limit signs": "核对限速标志", "add a speed limit sign to OpenDRIVE": "在道路文件中添加限速标志",
     "set the speed limit sign value": "调整限速标志数值",
     "variant": "任选其一", "select or build the other alternatives": "其余任选项另选或另建素材",
+    "ego_lane": "主车车道",
 }
 LABELS.update({f"ego_turn={value}": "主车" + label for label, value in STRUCTURE_TURNS.items()})
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):

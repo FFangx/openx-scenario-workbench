@@ -11,6 +11,8 @@ export type Evidence = Schemas["Evidence"];
 export type Scene = Schemas["QueuedScene"];
 export type Participant = Schemas["SceneParticipant"];
 export type SceneStructure = Schemas["SceneStructure"];
+/** What a spatial fact rests on: a quote, the reasoning for an implied one, and why to check it. */
+export type FieldEvidence = Schemas["FieldEvidence"];
 export type SceneSchema = Schemas["SceneSchema"];
 export type Revision = Schemas["Revision"];
 export type ExtractionRecord = Schemas["ExtractionRecord"];

@@ -63,6 +63,14 @@ It does not introduce a second ingestion, model or indexing stack.
   of one participant per group is compared (`VARIANT_LIMIT`) and the best kept; the
   others are neither missing nor the asset's concern, and their ages leave the
   requirement with them. A `variant` note names the choice and costs nothing.
+  Prompt v9 also reads them from parameter tables whose rows differ in the target.
+- A driver's request to the system (a lane-change request or confirmation command,
+  `scene_facts.driver_requests`, a library convention) is a driver input for a
+  driver-intervention test whose ego changes lanes, and nothing to remove for a functional
+  test: "驾驶员触发的换道" reads either way. Only the inputs that take over the controls
+  (pedals, wheel) count against a functional test.
+- The ego's lane among its direction's lanes (`ego_lane`, prompt v9) is not compared with
+  an asset's start lane yet: it stays an adjustable item to verify, like a placement.
 - The way the ego leaves a junction (`ego_turn`: straight, left, right, U-turn) is read
   from the ego's routing (`scene_facts.ego_turn`). A road file without a junction leaves
   nowhere to turn, so its ego goes straight whatever the routing says (the bend of a

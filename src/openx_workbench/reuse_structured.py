@@ -326,14 +326,21 @@ def _occlusion_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> 
 
 def _intent_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
     differences = []
-    if query.driver_intervention is not None and query.driver_intervention != candidate.driver_intervention:
+    # A driver's request to the system (a lane-change request or confirmation) is a driver input a
+    # driver-intervention test can rest on when the ego is to change lanes, and also how a functional
+    # test triggers the function ("驾驶员触发的换道" reads either way): it satisfies such an
+    # intervention, and only the inputs that take over the controls (pedals, wheel) count against
+    # a functional test.
+    requested = bool(query.driver_intervention and candidate.driver_request and "lane_change" in query.ego_actions)
+    actual = candidate.driver_intervention or requested
+    if query.driver_intervention is not None and query.driver_intervention != actual:
         # A driver-intervention test is another kind of test than a functional one: an asset
         # without driver inputs cannot be made into one by a small change (blocking). The
         # other way, removing the driver inputs leaves the functional test (a change).
         differences.append(ReuseDifference(
             "ego_action",
             "driver_intervention" if query.driver_intervention else "no driver_intervention",
-            "driver_intervention" if candidate.driver_intervention else "no driver_intervention",
+            "driver_intervention" if actual else "no driver_intervention",
             "build a driver-intervention test" if query.driver_intervention else "remove driver input override",
             blocking=bool(query.driver_intervention),
             cost=policy.COST_PARTICIPANT if query.driver_intervention else policy.COST_BEHAVIOR,

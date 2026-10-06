@@ -67,6 +67,11 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
   useEffect(() => {
     form.setFieldsValue({ ...saved, api_key: "" });
   }, [form, saved]);
+  // Every call may use the model's whole output limit: only generated tokens are billed.
+  const limit = chosen?.max_output_tokens;
+  useEffect(() => {
+    if (limit) form.setFieldValue("max_tokens", Math.min(limit, 1048576));
+  }, [form, limit]);
 
   const run = async <T,>(kind: NonNullable<typeof busy>, work: (d: ModelDraft) => Promise<T>, done: (r: T) => string) => {
     setBusy(kind);
@@ -143,8 +148,16 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
                   options={[{ value: "", label: chosen?.default_effort ? t(`服务默认（${chosen.default_effort}）`, `Service default (${chosen.default_effort})`) : t("服务默认", "Service default") },
                     ...levels.map((level) => ({ value: level, label: level }))]} />
               </Form.Item>
-              <Form.Item name="max_tokens" label={t("最大输出 tokens", "Maximum output tokens")}><InputNumber min={256} max={131072} step={256} /></Form.Item>
+              <Form.Item name="max_tokens" label={t("最大输出 tokens", "Maximum output tokens")}
+                extra={limit ? t("已取该模型的上限；只按实际生成计费。", "Set to this model's limit; only generated tokens are billed.")
+                  : t("获取模型清单后自动取模型上限。", "Fetch the model list to use the model's limit.")}>
+                <InputNumber min={256} max={1048576} step={256} />
+              </Form.Item>
               <Form.Item name="timeout" label={t("超时（秒）", "Timeout (seconds)")}><InputNumber min={10} max={1800} step={10} /></Form.Item>
+              <Form.Item name="concurrency" label={t("PDF 并发请求数", "Concurrent PDF requests")}
+                extra={t("PDF 提取同时发出的模型请求数；服务限流时调低。", "Model requests a PDF extraction sends at once; lower it if the service rate-limits.")}>
+                <InputNumber min={1} max={256} />
+              </Form.Item>
             </div>
           ),
         }]}

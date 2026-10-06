@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Checkbox, Collapse, Drawer, Form, Input, InputNumber, Select, Space, Spin, Table } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import { api, type Participant, type Scene, type SceneSchema, type SceneStructure } from "../api";
+import { api, type FieldEvidence, type Participant, type Scene, type SceneSchema, type SceneStructure } from "../api";
 import { useT } from "../i18n";
 import { valueLabel } from "../vocab";
 
@@ -28,6 +28,21 @@ const LEGACY: [keyof Scene, string, string][] = [
   ["road_types", "道路", "Road types"], ["weather", "天气", "Weather"], ["time_of_day", "时段", "Time of day"],
 ];
 const EMPTY_ACTOR: Participant = { kind: "未知", bearing: "未知方位", facing: "未知", actions: [], age: "未知" };
+
+type Evidenced = { evidence?: Record<string, FieldEvidence> };
+/** A fact the person sets is theirs: the extracted evidence for it no longer applies. */
+const withoutEvidence = <T extends Evidenced>(item: T, keys: string[]): T => {
+  if (!item.evidence || !keys.some((k) => k in item.evidence!)) return item;
+  const evidence = { ...item.evidence };
+  keys.forEach((k) => delete evidence[k]);
+  return { ...item, evidence };
+};
+/** Review notes cleared once a person has checked the facts against the source. */
+const withoutReview = <T extends Evidenced>(item: T): T => item.evidence
+  ? { ...item, evidence: Object.fromEntries(Object.entries(item.evidence).map(([k, e]) => [k, { ...e, review: null }])) }
+  : item;
+const hasReview = (s: SceneStructure | undefined) => !!s && ((s.review_flags ?? []).length > 0
+  || [s, ...(s.participants ?? [])].some((item) => Object.values((item as Evidenced).evidence ?? {}).some((e) => e.review)));
 
 /** Typed requirement facts; saving creates a new revision and matching uses it. Narrative never overrides the structure. */
 export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) {
@@ -60,10 +75,12 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
   }, [open, scene, structured]);
 
   const options = (key: keyof SceneSchema) => (schema?.[key] ?? []).map((v) => ({ value: v, label: valueLabel(v, lang) }));
-  const set = (patch: Partial<SceneStructure>) => setDraft((d) => ({ ...d, ...patch }));
+  const set = (patch: Partial<SceneStructure>) => setDraft((d) => withoutEvidence({ ...d, ...patch }, Object.keys(patch)));
   const setParam = (key: string, value: unknown) => setDraft((d) => ({ ...d, params: { ...d.params, [key]: value } }));
   const actors = draft?.participants ?? [];
-  const setActor = (i: number, patch: Partial<Participant>) => set({ participants: actors.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
+  const setActor = (i: number, patch: Partial<Participant>) =>
+    set({ participants: actors.map((a, j) => (j === i ? withoutEvidence({ ...a, ...patch }, Object.keys(patch)) : a)) });
+  const clearReview = () => setDraft((d) => ({ ...withoutReview(d), review_flags: [], participants: (d.participants ?? []).map(withoutReview) }));
 
   const save = async () => {
     setSaving(true);
@@ -118,6 +135,11 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
           </Form.Item>
           {structured ? (
             <>
+              {hasReview(draft) && (
+                <Alert type="warning" showIcon className="facts-alert"
+                  title={t("有待复核的提示：请对照原文核对方位、朝向和车道。改过的字段会自动去掉提示。", "Some facts are marked to check against the source. Changing a field removes its mark.")}
+                  action={<Button size="small" onClick={clearReview} disabled={useJson}>{t("已核对，清除提示", "Checked, clear marks")}</Button>} />
+              )}
               <fieldset disabled={useJson} className="editor-fields">
                 <div className="editor-grid">
                   <Form.Item label={t("道路类型", "Road type")}><Select value={draft.road_class} options={options("road_class")} onChange={(v) => set({ road_class: v })} disabled={useJson} /></Form.Item>
@@ -127,6 +149,7 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
                   <Form.Item label={t("主车动作", "Ego actions")}><Select mode="multiple" value={draft.ego_actions} options={options("ego_actions")} onChange={(v) => set({ ego_actions: v })} disabled={useJson} /></Form.Item>
                   <Form.Item label={t("时段", "Time of day")}><Select value={(draft.params.time_of_day as string) ?? "未知"} options={options("time_of_day")} onChange={(v) => setParam("time_of_day", v)} disabled={useJson} /></Form.Item>
                   <Form.Item label={t("主车路口走向", "Ego at the junction")}><Select value={draft.ego_turn ?? "未知"} options={options("ego_turn")} onChange={(v) => set({ ego_turn: v })} disabled={useJson} /></Form.Item>
+                  <Form.Item label={t("主车车道", "Ego lane")}><Select value={draft.ego_lane ?? "未知"} options={options("ego_lane")} onChange={(v) => set({ ego_lane: v })} disabled={useJson} /></Form.Item>
                   <Form.Item label={t("交通控制设施", "Traffic control")}><Select mode="multiple" value={draft.traffic_controls ?? []} options={options("traffic_controls")} onChange={(v) => set({ traffic_controls: v })} disabled={useJson} /></Form.Item>
                 </div>
                 <p className="muted">{t("空白表示原文未明确；只有下面的数值字段参与匹配。文字说明不会自动转换为参数。", "Blank means unspecified. Matching uses these numeric fields; narrative does not update them.")}</p>

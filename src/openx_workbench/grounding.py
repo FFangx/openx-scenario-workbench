@@ -153,7 +153,7 @@ def model_explanation(package: ScenePackage, result: RetrievalResult,
     try:
         response_body = ModelClient(config, opener=opener).complete({
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "response_format": {"type": "json_object"}, "max_tokens": 1200, "stream": False,
+            "response_format": {"type": "json_object"}, "stream": False,
         })
     except ValueError as exc:
         raise RuntimeError(str(exc)) from None

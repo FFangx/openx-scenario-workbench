@@ -493,6 +493,27 @@ def test_a_system_under_test_changes_lanes_without_a_scripted_lane_change():
     assert lane_change_differences(("go", speed(20))) == [("ego_action", 2, True, "core")]
 
 
+def test_a_driver_lane_change_request_reads_as_either_test_intent():
+    def intent_differences(intent, *events):
+        package = ScenePackage("REQ", "Driver lane change", "", structure={"test_intent": intent, "ego_actions": ["变道"]})
+        item = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", ("on", command("SysEngReq")), *events)))
+        return [(difference.requested, difference.candidate, difference.blocking)
+                for difference in compare_structure(scene_package_to_query(package), item)
+                if "driver_intervention" in difference.requested]
+
+    request = ("lc", command("LaneChangeReq"))
+    # The driver's request is a driver input for an intervention test ...
+    assert intent_differences("驾驶员干预试验", request) == []
+    assert intent_differences("驾驶员干预试验", ("ok", command("LaneChangeConfirm"))) == []
+    assert intent_differences("驾驶员干预试验") == [("driver_intervention", "no driver_intervention", True)]
+    # ... and how a functional test triggers the function: nothing to remove.
+    assert intent_differences("功能试验", request) == []
+    # A request is no driver input for an intervention test whose ego keeps its lane (the wheel, a pedal).
+    package = ScenePackage("REQ", "Steering", "", structure={"test_intent": "驾驶员干预试验", "ego_actions": ["匀速行驶"]})
+    item = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", ("on", command("SysEngReq")), request)))
+    assert [d.blocking for d in compare_structure(scene_package_to_query(package), item) if "driver_intervention" in d.requested] == [True]
+
+
 def test_whether_the_system_drives_is_confirmed_never_a_change():
     def ego_differences(ego_actions, *events):
         package = ScenePackage("REQ", "Cruise", "", structure={"ego_actions": ego_actions})

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Alert, App, Button, Collapse, Modal, Popconfirm, Table, Tag } from "antd";
+import { Alert, App, Button, Collapse, Modal, Popconfirm, Table, Tag, Tooltip } from "antd";
 import { CheckCircleOutlined, EditOutlined, HistoryOutlined } from "@ant-design/icons";
-import { api, type Revision, type Scene, type SceneStructure } from "../api";
+import { api, type FieldEvidence, type Revision, type Scene, type SceneStructure } from "../api";
 import { useT } from "../i18n";
 import { valueLabel } from "../vocab";
 import { FactEditor } from "./FactEditor";
@@ -25,6 +25,23 @@ export const PARAM_LABEL: Record<string, [string, string]> = {
 
 const isStructured = (s: Scene): s is Scene & { structure: SceneStructure } => Object.keys(s.structure ?? {}).length > 0;
 
+/** Where a spatial fact comes from: stated, implied (with its reasoning) or to check; the quote on hover. */
+function EvidenceMark({ item }: { item?: FieldEvidence }) {
+  const { t } = useT();
+  if (!item || (item.source === "未知" && !item.review)) return null;
+  const [label, tone] = item.review ? [t("待复核", "Check"), "review"] : item.source === "推出" ? [t("推出", "Implied"), "modify"] : [t("原文", "Stated"), "not"];
+  const lines = [
+    item.quote && t(`原文：“${item.quote}”`, `Source: “${item.quote}”`),
+    item.reason && t(`推理：${item.reason}`, `Reasoning: ${item.reason}`),
+    item.review,
+  ].filter(Boolean) as string[];
+  return (
+    <Tooltip title={<div className="evidence-tip">{lines.map((line, i) => <div key={i}>{line}</div>)}</div>}>
+      <Tag className={`mtag ${tone} evidence-mark`} tabIndex={0}>{label}</Tag>
+    </Tooltip>
+  );
+}
+
 /** Saved facts exactly as stored: zero stays zero and missing stays "not specified"; nothing is inferred. */
 export function FactsPanel({ projectId, scene, onChanged }: { projectId: string; scene: Scene; onChanged: (s: Scene) => void }) {
   const { t, lang } = useT();
@@ -45,13 +62,14 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
   };
   const label = (key: string) => (PARAM_LABEL[key] ? t(...PARAM_LABEL[key]) : key);
 
-  const rows: [string, unknown][] = [];
+  const rows: [string, unknown, FieldEvidence?][] = [];
   let params: Record<string, unknown>;
   let primary: string[];
   if (isStructured(scene)) {
     const s = scene.structure;
     rows.push([t("道路类型", "Road type"), s.road_class], [t("被测功能", "Tested function"), s.tested_function],
-      [t("试验目的", "Test intent"), s.test_intent], [t("主车动作", "Ego actions"), s.ego_actions], [t("主车路口走向", "Ego at the junction"), s.ego_turn],
+      [t("试验目的", "Test intent"), s.test_intent], [t("主车动作", "Ego actions"), s.ego_actions],
+      [t("主车路口走向", "Ego at the junction"), s.ego_turn, s.evidence?.ego_turn], [t("主车车道", "Ego lane"), s.ego_lane, s.evidence?.ego_lane],
       [t("交通控制设施", "Traffic control"), s.traffic_controls], [t("触发条件", "Trigger types"), s.semantic_triggers]);
     params = s.params ?? {};
     primary = ["ego_speed_kph", "target_speeds_kph", "ttc_value", "lane_count", "weather", "time_of_day"];
@@ -69,6 +87,8 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
   Object.entries(params).forEach(([key, item]) => !primary.includes(key) && item != null && rows.push([label(key), item]));
   if (!isStructured(scene)) rows.push([label("weather"), scene.weather], [label("time_of_day"), scene.time_of_day]);
   const participants = isStructured(scene) ? scene.structure.participants ?? [] : [];
+  const reviewFlags = isStructured(scene) ? scene.structure.review_flags ?? [] : [];
+  const marked = rows.some(([, , item]) => item) || participants.some((a) => Object.keys(a.evidence ?? {}).length);
 
   const publish = async () => {
     setBusy(true);
@@ -95,8 +115,8 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
       {scene.preferred_text && <p className="facts-text">{scene.preferred_text}</p>}
       <table className="fact-sheet">
         <tbody>
-          {rows.map(([name, item], i) => (
-            <tr key={i}><th scope="row">{name}</th><td>{value(item)}</td></tr>
+          {rows.map(([name, item, evidence], i) => (
+            <tr key={i}><th scope="row">{name}</th><td>{value(item)} <EvidenceMark item={evidence} /></td></tr>
           ))}
         </tbody>
       </table>
@@ -109,12 +129,16 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
             </thead>
             <tbody>
               {participants.map((a, i) => (
-                <tr key={i}>{(["kind", "bearing", "facing", "actions", "speed_kph", "alternative_group"] as const).map((k) => <td key={k}>{value(a[k])}</td>)}</tr>
+                <tr key={i}>{(["kind", "bearing", "facing", "actions", "speed_kph", "alternative_group"] as const).map((k) => (
+                  <td key={k}>{value(a[k])}{k in (a.evidence ?? {}) && <> <EvidenceMark item={a.evidence?.[k]} /></>}</td>
+                ))}</tr>
               ))}
             </tbody>
           </table>
         </>
       )}
+      {marked && <p className="muted facts-note">{t("“原文”“推出”标出方位、朝向、车道等事实的依据，悬停可看引句；“待复核”请对照原文核对。", "“Stated” and “Implied” show what bearings, facings and lanes rest on; hover for the quote. Check items marked “Check” against the source.")}</p>}
+      {reviewFlags.map((flag, i) => <Alert key={`r${i}`} type="warning" showIcon title={flag} className="facts-alert" />)}
       {scene.issues.map((issue, i) => <Alert key={i} type="warning" showIcon title={issue} className="facts-alert" />)}
       {scene.ocr && <p className="muted facts-note">{t("包含本机 OCR 识别的证据，请对照原文复核。", "Includes locally recognized OCR evidence; review against the source.")}</p>}
 

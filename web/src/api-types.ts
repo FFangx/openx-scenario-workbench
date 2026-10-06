@@ -1698,6 +1698,25 @@ export interface components {
             /** Outdated */
             outdated: boolean;
         };
+        /**
+         * FieldEvidence
+         * @description What a spatial fact rests on: the quoted source, the reasoning for an implied one, and
+         *     why a person should check it (an unfound quote, a contradiction, two readings that differ).
+         */
+        FieldEvidence: {
+            /** Quote */
+            quote?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Review */
+            review?: string | null;
+            /**
+             * Source
+             * @default 未知
+             * @enum {string}
+             */
+            source: "原文" | "推出" | "未知";
+        };
         /** FolderRequest */
         FolderRequest: {
             /**
@@ -1858,6 +1877,12 @@ export interface components {
             /** Base Url */
             base_url: string;
             /**
+             * Concurrency
+             * @description Model requests a PDF extraction sends at once.
+             * @default 64
+             */
+            concurrency?: number;
+            /**
              * Max Tokens
              * @default 64000
              */
@@ -1928,6 +1953,8 @@ export interface components {
         ModelSettings: {
             /** Base Url */
             base_url: string;
+            /** Concurrency */
+            concurrency: number;
             /** Has Key */
             has_key: boolean;
             /** Max Tokens */
@@ -2477,6 +2504,10 @@ export interface components {
              * @enum {string}
              */
             bearing: "正前方" | "正后方" | "并排同车道" | "左前方" | "左后方" | "左并排" | "右前方" | "右后方" | "右并排" | "未知方位";
+            /** Evidence */
+            evidence?: {
+                [key: string]: components["schemas"]["FieldEvidence"];
+            };
             /**
              * Facing
              * @default 未知
@@ -2520,6 +2551,8 @@ export interface components {
             bearing: string[];
             /** Ego Actions */
             ego_actions: string[];
+            /** Ego Lane */
+            ego_lane: string[];
             /** Ego Turn */
             ego_turn: string[];
             /** Facing */
@@ -2551,11 +2584,21 @@ export interface components {
              */
             ego_actions: ("匀速行驶" | "变速" | "刹停" | "变道" | "定距跟车" | "倒车" | "被测系统控制" | "未知")[];
             /**
+             * Ego Lane
+             * @default 未知
+             * @enum {string}
+             */
+            ego_lane?: "最左侧车道" | "最右侧车道" | "中间车道" | "未知";
+            /**
              * Ego Turn
              * @default 未知
              * @enum {string}
              */
             ego_turn?: "直行" | "左转" | "右转" | "掉头" | "未知";
+            /** Evidence */
+            evidence?: {
+                [key: string]: components["schemas"]["FieldEvidence"];
+            };
             /**
              * Lane Marking
              * @default 未知
@@ -2588,6 +2631,11 @@ export interface components {
              * @default []
              */
             relations: components["schemas"]["SceneRelation"][];
+            /**
+             * Review Flags
+             * @default []
+             */
+            review_flags?: string[];
             /**
              * Road Class
              * @default 未知

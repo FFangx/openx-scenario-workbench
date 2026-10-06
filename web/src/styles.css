@@ -449,6 +449,8 @@ a { color: var(--link); }
 .fact-sheet th { background: var(--soft); color: var(--text-2); font-weight: 500; width: 42%; }
 .fact-sheet.actors th { width: auto; }
 .fact-unknown { color: var(--muted); font-style: italic; }
+.evidence-mark.ant-tag { margin-left: 2px; cursor: help; }
+.evidence-tip { display: grid; gap: 4px; }
 .facts-sub { margin-top: 4px; }
 .facts-alert { font-size: 12px; }
 .signoff-list { margin: 12px 0 0; padding-left: 20px; display: grid; gap: 14px; }

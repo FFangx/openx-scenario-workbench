@@ -21,6 +21,7 @@ const EN: Record<string, string> = {
   泊入: "Park in", 泊出: "Park out", 功能试验: "Functional test", 误作用试验: "False activation test", 激活边界试验: "Activation boundary test",
   驾驶员干预试验: "Driver intervention test", 左: "Left", 右: "Right", 单向: "One-way", 双向: "Two-way",
   直行: "Straight on", 左转: "Left turn", 右转: "Right turn", 掉头: "U-turn", 交通信号灯: "Traffic light", 限速标志: "Speed limit sign",
+  最左侧车道: "Leftmost lane", 最右侧车道: "Rightmost lane", 中间车道: "Middle lane",
 };
 const ZH: Record<string, string> = {
   rule_only: "规则分类", classified: "模型复核", manual_confirmed: "人工确认", failed: "失败", pending: "待分类",

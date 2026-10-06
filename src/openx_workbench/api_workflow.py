@@ -59,7 +59,7 @@ def scene_schema() -> dict[str, list[str]]:
               "ego_actions": schema.EgoAction, "semantic_triggers": schema.SemanticTrigger, "weather": schema.Weather,
               "time_of_day": schema.TimeOfDay, "participant_kind": schema.ParticipantKind, "bearing": schema.Bearing,
               "facing": schema.Facing, "participant_actions": schema.ParticipantAction, "age": schema.PedestrianAge,
-              "ego_turn": schema.EgoTurn, "traffic_controls": schema.TrafficControl}
+              "ego_turn": schema.EgoTurn, "traffic_controls": schema.TrafficControl, "ego_lane": schema.EgoLane}
     return {key: list(get_args(annotation)) for key, annotation in fields.items()}
 
 

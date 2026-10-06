@@ -53,6 +53,7 @@ TIER_BY_CATEGORY = {
 # of test, which an asset does not show, so it stays core.
 TIER_BY_REQUIREMENT = {
     "lateral_direction": TIER_ADJUSTABLE,
+    "ego_lane": TIER_ADJUSTABLE,  # the ego's start lane, moved while reusing like a placement
     "ego_action=lane_change": TIER_ADJUSTABLE,  # under system control the system changes lanes itself
     "ego_action=system_control": TIER_ADJUSTABLE,  # switched on while reusing, often not in the file
     "trigger": TIER_ADJUSTABLE,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,8 +17,11 @@ from .pdf_v2.section_tree import build_section_tree
 from .pdf_v2.scene_first import run_scene_first_extraction
 from .scene_package import EvidenceRef, ScenePackage, canonical_features, synchronize_structure
 
-ENGINE_VERSION = "openx-v2-scene-first-4"
-PROMPT_VERSION = "scene-first-prompt-v8"
+ENGINE_VERSION = "openx-v2-scene-first-5"
+PROMPT_VERSION = "scene-first-prompt-v9"
+# Calls one extraction may make beyond its cache: a guard against a runaway loop, not a budget
+# (each structure call is already limited to a few attempts; a long standard needs scenes x readings).
+CALL_LIMIT = 1000
 
 
 @dataclass
@@ -72,34 +76,43 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
     cache_root = Path(root or default_store_root()) / "model_cache"
     calls = 0
     requests = []
+    lock = threading.Lock()
 
-    def transport(body):
+    def transport(body, *, sample=0, timeout=None):
         nonlocal calls
-        actual = {**body, "model": client.config.model, "max_tokens": min(body.get("max_tokens", 64000), client.config.max_tokens)}
+        actual = {**body, "model": client.config.model, "max_tokens": client.config.max_tokens}
         identity = {"engine": ENGINE_VERSION, "endpoint": base_url(client.config.base_url),
                     "thinking": client.config.thinking, "request": actual}
         if client.config.thinking and client.config.reasoning_effort:
             identity["reasoning_effort"] = client.config.reasoning_effort
+        if sample:
+            # Another independent reading of the same request is another response.
+            identity["sample"] = sample
         checksum = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         cached = cache_root / (checksum + ".json")
-        if cached.exists():
-            requests.append({"sha256": checksum, "cached": True})
-            return json.loads(cached.read_text(encoding="utf-8"))
-        if calls >= 2:
-            raise ModelError("单文档模型调用达到上限 / Document model call limit reached.")
-        calls += 1
-        notify("模型正在识别、分类并提取场景 / Identifying and classifying scenes")
-        result = client.complete(actual)
+        with lock:
+            if cached.exists():
+                requests.append({"sha256": checksum, "cached": True})
+                return json.loads(cached.read_text(encoding="utf-8"))
+            if calls >= CALL_LIMIT:
+                raise ModelError("单文档模型调用达到上限 / Document model call limit reached.")
+            calls += 1
+            first = calls == 1
+        if first:
+            notify("模型正在识别场景 / Identifying scenes")
+        result = client.complete(actual, timeout=timeout)
         # Cache complete responses only. Interrupted/truncated requests remain retryable.
-        if result.get("choices", [{}])[0].get("finish_reason") == "stop":
-            cache_root.mkdir(parents=True, exist_ok=True)
-            _write_json(cached, result)
-        requests.append({"sha256": checksum, "cached": False})
+        with lock:
+            if result.get("choices", [{}])[0].get("finish_reason") == "stop":
+                cache_root.mkdir(parents=True, exist_ok=True)
+                _write_json(cached, result)
+            requests.append({"sha256": checksum, "cached": False})
         return result
 
     run = run_scene_first_extraction(tree, texts, standard=standard or "PDF", heading_decoder="chain",
                                      model=client.config.model, prompt_version=PROMPT_VERSION,
-                                     transport=transport, retry_enabled=True, flagged_node_ids=flagged_nodes)
+                                     transport=transport, retry_enabled=True, flagged_node_ids=flagged_nodes,
+                                     concurrency=client.config.concurrency, progress=notify)
     audit = {**_structure_audit(data, filename, document, quality),
              "nodes": [dict(node.model_dump(mode="json"), source_text=texts[node.node_id]) for node in tree.nodes],
              "run": run.model_dump(mode="json"), "requests": requests}

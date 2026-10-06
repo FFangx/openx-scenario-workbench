@@ -105,6 +105,9 @@ class RetrievalQuery:
     occlusions: frozenset[tuple[str, str]] = frozenset()
     # A driver-intervention test (driver inputs override the system); None: not stated.
     driver_intervention: bool | None = None
+    # The driver asks the system for a lane change or confirms one (scene_facts.driver_requests).
+    # Only an asset has it.
+    driver_request: bool = False
     parking_operation: str = ""  # park_in / park_out
     # Lanes the road must offer at least: "same_direction" (单向 N) or "total" (双向 N, or
     # a count whose direction is not stated). A lower bound: one more lane never hurts a test.
@@ -323,6 +326,9 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         lane_count = None
     if structure["test_intent"] not in {"未知", "驾驶员干预试验"}:
         unverified.append(f"test_intent={structure['test_intent']}")
+    # Which of its direction's lanes the ego drives in; an asset's start lane is not compared yet.
+    if structure.get("ego_lane", "未知") != "未知":
+        unverified.append(f"ego_lane={structure['ego_lane']}")
     for key in (
         "lateral_direction",
         "curve_radius_m",

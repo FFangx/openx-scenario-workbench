@@ -32,6 +32,8 @@ _ENABLE = re.compile(r"Enable(ACC|AEB|APA|NOA|LSS|LKA|LDW|LDP|ALCA|DOW|BSM|RCTA|
 _LANE_CHANGE_COMMANDS = ("laneoffset=", "lanechangecmd", "lanechangereq", "驾驶员触发换道指令", "alcamode=")
 # A request to engage the system under test.
 _ENGAGE_COMMANDS = ("sysengreq",)
+# The driver asking the system under test for a lane change or confirming one it proposes.
+_DRIVER_REQUEST_COMMANDS = ("lanechangereq", "lanechangeconfirm", "驾驶员触发换道指令")
 
 # Elements whose meaning the behavior reading below covers.
 _UNDERSTOOD = frozenset({
@@ -168,6 +170,15 @@ def driver_overrides(bundle: ParseBundle, actor: str = "ego") -> dict[str, str]:
         if action.phase == "story":
             result.update(action.overrides)
     return result
+
+
+def driver_requests(bundle: ParseBundle, actor: str = "ego") -> list[str]:
+    """The driver's commands to the system under test (a lane-change request or confirmation).
+
+    The library's convention, an accelerator: a driver input when present, never required.
+    """
+    return [command for command in commands(bundle, actor)
+            if any(marker in command.casefold().replace(" ", "") for marker in _DRIVER_REQUEST_COMMANDS)]
 
 
 def _reverse_gear(bundle: ParseBundle, actor: str) -> bool:

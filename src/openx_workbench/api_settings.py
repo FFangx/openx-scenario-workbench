@@ -18,7 +18,7 @@ from .api_schemas import (Job, ModelList, ModelProbe, ModelSettings, OpenedFolde
                           SchemaCheck, SchemaStatus, Settings, documented)
 from .asset_store import AssetStore
 from .esmini_preview import find_esmini
-from .llm_service import ModelClient, ModelConfig, draft_config, load_config, save_config
+from .llm_service import MAX_TOKENS_LIMIT, ModelClient, ModelConfig, draft_config, load_config, save_config
 from .local_folders import choose_folder, open_folder
 from .matching import ENCODERS, known_encoder
 from .preferences import read_preferences, save_preferences
@@ -36,8 +36,9 @@ class ModelDraft(BaseModel):
     api_key: str = Field("", description="Blank keeps the saved key when the endpoint is unchanged.")
     thinking: bool = True
     reasoning_effort: str = Field("", max_length=20, description="Blank keeps the service default.")
-    max_tokens: int = Field(64000, ge=256, le=131072)
+    max_tokens: int = Field(64000, ge=256, le=MAX_TOKENS_LIMIT)
     timeout: int = Field(900, ge=10, le=1800)
+    concurrency: int = Field(64, ge=1, le=256, description="Model requests a PDF extraction sends at once.")
 
 
 class PreferencesUpdate(BaseModel):
@@ -64,6 +65,7 @@ def _saved_model() -> tuple[ModelConfig, bool]:
 def _model_json(config: ModelConfig, readable: bool = True) -> dict[str, Any]:
     return {"base_url": config.base_url, "model": config.model, "thinking": config.thinking,
             "reasoning_effort": config.reasoning_effort, "max_tokens": config.max_tokens, "timeout": config.timeout,
+            "concurrency": config.concurrency,
             "has_key": bool(config.api_key), "readable": readable}
 
 
@@ -71,7 +73,7 @@ def _draft(request: ModelDraft) -> ModelConfig:
     saved, _ = _saved_model()
     return draft_config(saved, request.base_url, request.api_key, model=request.model.strip(),
                         thinking=request.thinking, reasoning_effort=request.reasoning_effort.strip(),
-                        max_tokens=request.max_tokens, timeout=request.timeout)
+                        max_tokens=request.max_tokens, timeout=request.timeout, concurrency=request.concurrency)
 
 
 def _preview_json() -> dict[str, Any]:

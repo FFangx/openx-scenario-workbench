@@ -177,6 +177,7 @@ class SceneSchema(Shape):
     participant_actions: list[str]
     age: list[str]
     ego_turn: list[str]
+    ego_lane: list[str]
     traffic_controls: list[str]
 
 
@@ -677,6 +678,7 @@ class ModelSettings(Shape):
     reasoning_effort: str
     max_tokens: int
     timeout: int
+    concurrency: int
     has_key: bool
     readable: bool
 

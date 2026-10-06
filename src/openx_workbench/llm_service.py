@@ -25,8 +25,13 @@ class ModelConfig:
     # Thinking effort sent as `reasoning_effort` while thinking is on; empty keeps the service
     # default. Levels come from the service's model list (DeepSeek: effort.supported_levels).
     reasoning_effort: str = ""
+    # Output limit of every call: the model's own maximum (the settings take it from the service's
+    # model list). Only generated tokens are billed, and thinking counts against it.
     max_tokens: int = 64000
     timeout: int = 900
+    # Model requests a PDF extraction sends at once (its structure calls). DeepSeek allows thousands
+    # per account; a service that rate-limits answers 429 and the call is retried after a pause.
+    concurrency: int = 64
 
 
 @dataclass(frozen=True)
@@ -42,7 +47,17 @@ EFFORT = re.compile(r"^[a-z][a-z0-9_-]{0,19}$")
 
 
 class ModelError(ValueError):
-    pass
+    # True when trying again may succeed: rate limits, server errors, timeouts.
+    retryable = False
+
+
+def _failure(message: str, *, retryable: bool = False) -> ModelError:
+    error = ModelError(message)
+    error.retryable = retryable
+    return error
+
+
+MAX_TOKENS_LIMIT = 1_048_576
 
 
 def base_url(value: str) -> str:
@@ -101,8 +116,9 @@ def load_config(root: Path | None = None) -> ModelConfig:
 
 def save_config(config: ModelConfig, root: Path | None = None) -> None:
     normalized = base_url(config.base_url)
-    if not config.model.strip() or not 256 <= config.max_tokens <= 131072 or not 10 <= config.timeout <= 1800:
-        raise ModelError("请检查模型名、输出上限和超时 / Check model, output limit and timeout.")
+    if (not config.model.strip() or not 256 <= config.max_tokens <= MAX_TOKENS_LIMIT or not 10 <= config.timeout <= 1800
+            or not 1 <= config.concurrency <= 256):
+        raise ModelError("请检查模型名、输出上限、超时和并发数 / Check model, output limit, timeout and concurrency.")
     if config.reasoning_effort and not EFFORT.match(config.reasoning_effort):
         raise ModelError("思考等级无效 / Invalid thinking effort.")
     target = (root or default_store_root()) / "model_settings.json"
@@ -141,9 +157,10 @@ class ModelClient:
             return result
         except HTTPError as error:
             hints = {401: "Key 无效", 403: "无访问权限", 404: "地址或模型不存在", 429: "额度不足或限流"}
-            raise ModelError(f"模型服务 HTTP {error.code}: {hints.get(error.code, '请检查地址、模型参数或服务状态')} / Model request failed.") from None
+            raise _failure(f"模型服务 HTTP {error.code}: {hints.get(error.code, '请检查地址、模型参数或服务状态')} / Model request failed.",
+                           retryable=error.code == 429 or error.code >= 500) from None
         except (URLError, OSError, TimeoutError):
-            raise ModelError("模型服务连接失败或超时 / Model connection failed or timed out.") from None
+            raise _failure("模型服务连接失败或超时 / Model connection failed or timed out.", retryable=True) from None
         except ModelError:
             raise
         except (ValueError, TypeError):
@@ -170,16 +187,16 @@ class ModelClient:
             raise ModelError("服务未提供模型清单，可手动输入模型名 / No model list; enter a model ID manually.")
         return [found[key] for key in sorted(found)]
 
-    def complete(self, body):
-        request = {**body, "model": self.config.model}
-        request["max_tokens"] = min(int(request.get("max_tokens", self.config.max_tokens)), self.config.max_tokens)
+    def complete(self, body, *, timeout=None):
+        # Every call may use the whole output limit: a smaller cap only truncates a long thought.
+        request = {**body, "model": self.config.model, "max_tokens": self.config.max_tokens}
         if urlsplit(base_url(self.config.base_url)).hostname == "api.deepseek.com":
             request["thinking"] = {"type": "enabled" if self.config.thinking else "disabled"}
         else:
             request.pop("thinking", None)
         if self.config.thinking and self.config.reasoning_effort:
             request["reasoning_effort"] = self.config.reasoning_effort
-        response = self.request("/chat/completions", request)
+        response = self.request("/chat/completions", request, timeout=min(timeout or self.config.timeout, self.config.timeout))
         choices = response.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             # Some compatible services return an error envelope with HTTP 200.
@@ -190,7 +207,7 @@ class ModelClient:
 
     def probe(self) -> str:
         response = self.complete({"messages": [{"role": "user", "content": 'Return only this JSON: {"ok":true}'}],
-                                  "response_format": {"type": "json_object"}, "max_tokens": 2048})
+                                  "response_format": {"type": "json_object"}})
         try:
             choice = response["choices"][0]
             if choice.get("finish_reason") != "stop" or json.loads(choice["message"]["content"]).get("ok") is not True:

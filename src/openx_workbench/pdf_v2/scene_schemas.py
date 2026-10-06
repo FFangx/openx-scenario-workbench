@@ -77,6 +77,13 @@ EgoTurn = Literal["直行", "左转", "右转", "掉头", "未知"]
 # Traffic control whose presence the test relies on (a traffic-light test, a speed-limit test).
 TrafficControl = Literal["交通信号灯", "限速标志"]
 
+# The ego's lane among the lanes of its own direction.
+EgoLane = Literal["最左侧车道", "最右侧车道", "中间车道", "未知"]
+
+# Where a spatial fact comes from: stated in the source, necessarily implied by it (with a
+# reason), or not determinable. Only a quote found in the scene's own text keeps a fact.
+EvidenceSource = Literal["原文", "推出", "未知"]
+
 TestedFunction = Literal[
 
     "NOA", "AEB", "ACC", "LSS", "APA", "FCW",
@@ -87,6 +94,27 @@ TestedFunction = Literal[
 ]
 
 _ACTION_TO_SIGNATURE: dict[str, tuple[str, ...]] = {"静止": ()}
+
+# Spatial fields that carry evidence, on a participant and on the scene.
+ParticipantEvidenceField = Literal["bearing", "facing", "alternative_group"]
+SceneEvidenceField = Literal["ego_turn", "ego_lane"]
+
+
+def _unset(value: object) -> bool:
+    return value is None
+
+
+class FieldEvidence(BaseModel):
+    """What a spatial fact rests on: the quoted source, the reasoning for an implied one, and
+    why a person should check it (an unfound quote, a contradiction, two readings that differ)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
+
+    source: EvidenceSource = "未知"
+    quote: str | None = Field(default=None, max_length=200, exclude_if=_unset)
+    reason: str | None = Field(default=None, max_length=200, exclude_if=_unset)
+    review: str | None = Field(default=None, max_length=300, exclude_if=_unset)
+
 
 class SceneParticipant(BaseModel):
 
@@ -105,6 +133,9 @@ class SceneParticipant(BaseModel):
     # tricycle or a pedestrian stands ahead"). Optional and left out when unset, like the speed.
     alternative_group: str | None = Field(default=None, min_length=1, max_length=16,
                                           exclude_if=lambda value: value is None)
+    # Evidence for the spatial fields (prompt v9 on); left out when empty, like the fields above.
+    evidence: dict[ParticipantEvidenceField, FieldEvidence] = Field(default_factory=dict,
+                                                                   exclude_if=lambda value: not value)
 
     def signature_actions(self) -> tuple[str, ...]:
 
@@ -165,7 +196,12 @@ class SceneStructure(BaseModel):
     # Left out of the stored structure at their defaults, so earlier revisions read back unchanged.
     ego_turn: EgoTurn = Field(default="未知", exclude_if=lambda value: value == "未知")
     traffic_controls: tuple[TrafficControl, ...] = Field(default=(), exclude_if=lambda value: not value)
+    ego_lane: EgoLane = Field(default="未知", exclude_if=lambda value: value == "未知")
     params: SceneParams = SceneParams()
+    # Evidence for the ego's turn and lane, and notes for a person that belong to no single field
+    # (two readings named different participants). Prompt v9 on; left out when empty.
+    evidence: dict[SceneEvidenceField, FieldEvidence] = Field(default_factory=dict, exclude_if=lambda value: not value)
+    review_flags: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
 
 class ProposedScene(BaseModel):
 
@@ -313,6 +349,28 @@ _LATERAL_DIR_VALUES = _literal_values(LateralDirection)
 _LANE_DIR_VALUES = _literal_values(LaneDirection)
 _EGO_TURN_VALUES = _literal_values(EgoTurn)
 _TRAFFIC_CONTROL_VALUES = _literal_values(TrafficControl)
+_EGO_LANE_VALUES = _literal_values(EgoLane)
+_EVIDENCE_SOURCES = _literal_values(EvidenceSource)
+_PARTICIPANT_EVIDENCE_FIELDS = _literal_values(ParticipantEvidenceField)
+_SCENE_EVIDENCE_FIELDS = _literal_values(SceneEvidenceField)
+
+
+def _parse_evidence(raw: object, fields: frozenset[str], dropped: set[str]) -> dict[str, FieldEvidence]:
+    """A model's evidence per field; an unknown source reads as 未知 and overlong text is cut."""
+    if not isinstance(raw, dict):
+        return {}
+    result = {}
+    for field, item in raw.items():
+        if field not in fields or not isinstance(item, dict):
+            continue
+        source = str(item.get("source") or "").strip()
+        if source not in _EVIDENCE_SOURCES:
+            if source:
+                dropped.add(f"evidence.source={source}")
+            source = "未知"
+        quote, reason = (str(item.get(key) or "").strip()[:200] or None for key in ("quote", "reason"))
+        result[field] = FieldEvidence(source=source, quote=quote, reason=reason)
+    return result
 
 def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | None:
 
@@ -378,6 +436,7 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
                 age=_pick(item.get("age"), _AGE_VALUES, "age", "未知"),
                 speed_kph=_speed(item.get("speed_kph")),
                 alternative_group=_group(item.get("alternative_group")),
+                evidence=_parse_evidence(item.get("evidence"), _PARTICIPANT_EVIDENCE_FIELDS, dropped),
             )
         )
 
@@ -442,7 +501,9 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
         test_intent=_pick(raw.get("test_intent"), _TEST_INTENT_VALUES, "test_intent", "未知"),
         ego_turn=_pick(raw.get("ego_turn"), _EGO_TURN_VALUES, "ego_turn", "未知"),
         traffic_controls=_pick_many(raw.get("traffic_controls"), _TRAFFIC_CONTROL_VALUES, "traffic_control"),
+        ego_lane=_pick(raw.get("ego_lane"), _EGO_LANE_VALUES, "ego_lane", "未知"),
         params=params,
+        evidence=_parse_evidence(raw.get("evidence"), _SCENE_EVIDENCE_FIELDS, dropped),
     )
 
 def parse_scene_proposal(

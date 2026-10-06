@@ -51,7 +51,7 @@ def classify_asset(store, version, *, client=None, use_model=False):
             if len(payload) > 60000:
                 raise ValueError("场景结构过大，需要人工分类 / Asset exceeds classification input limit.")
             response = client.complete({"messages": [{"role": "system", "content": system}, {"role": "user", "content": payload}],
-                                        "response_format": {"type": "json_object"}, "max_tokens": 8192})
+                                        "response_format": {"type": "json_object"}})
             choice = response["choices"][0]
             if choice.get("finish_reason") != "stop":
                 raise ValueError("分类响应未完成 / Incomplete classification response.")

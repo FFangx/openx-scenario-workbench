@@ -26,10 +26,34 @@ def authored_pdf():
         return document.tobytes()
 
 
+def structure_reply(body):
+    """A structure batch answered like the model: the stationary car is quoted from its text, the
+    pedestrian's side rests on a quote its text does not contain."""
+    text = body["messages"][1]["content"]
+    assert text.startswith("===== 全文档共用的试验条件 =====")
+    scenes = []
+    for scene_id in re.findall(r"scene_id: (\S+)", text):
+        car = scene_id.endswith("2.1")
+        participant = {"kind": "乘用车" if car else "行人", "bearing": "正前方" if car else "右前方",
+                       "facing": "未知" if car else "横向", "actions": ["静止"] if car else ["匀速行驶"],
+                       "evidence": {"bearing": {"source": "原文", "quote": "a stationary target car ahead" if car
+                                                else "from the right kerb"},
+                                    **({} if car else {"facing": {"source": "原文", "quote": "A pedestrian crosses the road"}})}}
+        scenes.append({"scene_id": scene_id, "structure": {"tested_function": "AEB", "road_class": "直道",
+                                                           "ego_actions": ["匀速行驶"], "participants": [participant]}})
+    return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps({"scenes": scenes})}}],
+            "usage": {"total_tokens": 100}}
+
+
 def fake_client(*, empty=False, hallucination=False):
+    """A model answering scene lists (counted in `calls`) and structure batches (client.structure_calls)."""
     calls = []
+    structure_calls = []
     def opener(request, timeout):
         body = json.loads(request.data)
+        if "本批场景清单" in body["messages"][1]["content"]:
+            structure_calls.append(body)
+            return io.BytesIO(json.dumps(structure_reply(body)).encode())
         calls.append(body)
         text = body["messages"][1]["content"]
         node_ids = re.findall(r"^\[([^\]]+)\]", text, flags=re.M)
@@ -45,7 +69,9 @@ def fake_client(*, empty=False, hallucination=False):
         payload = {"scenes": scenes, "shared_config_node_ids": [node_ids[0]]}
         return io.BytesIO(json.dumps({"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(payload)}}],
                                      "usage": {"total_tokens": 250}}).encode())
-    return ModelClient(ModelConfig(api_key="authored-test"), opener=opener), calls
+    client = ModelClient(ModelConfig(api_key="authored-test"), opener=opener)
+    client.structure_calls = structure_calls
+    return client, calls
 
 
 def test_v2_classification_evidence_cache_and_immutable_library(tmp_path):
@@ -64,12 +90,20 @@ def test_v2_classification_evidence_cache_and_immutable_library(tmp_path):
     assert any(item.page_start == 1 for item in scene.package.evidence)
     assert "invented-node" not in scene.package.extraction["node_ids"]
     assert any(issue["code"] == "hallucinated_node_id" for issue in scene.package.extraction["validation"]["issues"])
+    # Structure: each scene read three times; a fact kept only with a quote from its own scene's text.
+    assert len(client.structure_calls) == 6
+    car = scene.package.structure["participants"][0]
+    assert car["bearing"] == "正前方" and car["evidence"]["bearing"]["quote"] == "a stationary target car ahead"
+    pedestrian = store.scenes(project.project_id, record.document_id)[1].package.structure["participants"][0]
+    assert pedestrian["bearing"] == "未知方位" and "找不到" in pedestrian["evidence"]["bearing"]["review"]
+    assert pedestrian["facing"] == "横向"
+    assert [call["sample"] for call in store.extraction_audit(record)["run"]["structure_calls"]] == [0, 1, 2, 0, 1, 2]
     assert store.import_pdf(project.project_id, "authored.pdf", data, client=client) == record
     assert len(calls) == 1
     # Same bytes in another project reuse the content-addressed model response.
     other = ProjectStore(assets).create("Second project")
     store.import_pdf(other.project_id, "renamed.pdf", data, client=client)
-    assert len(calls) == 1
+    assert len(calls) == 1 and len(client.structure_calls) == 6
     published = store.publish_scene(scene)
     revised = store.revise_scene(project.project_id, record.document_id, scene.scene_id, {"title": "Reviewed target"})
     assert published["package"]["title"] != revised.package.title
@@ -170,10 +204,18 @@ def test_prompts_are_frozen_and_chain_parser_is_selected():
     assert "\"speed_kph\"" not in resolve_scene_prompt("scene-first-prompt-v6")
     assert '"speed_kph": null' in resolve_scene_prompt("scene-first-prompt-v7")
     assert "alternative_group" not in resolve_scene_prompt("scene-first-prompt-v7")
-    current = resolve_scene_prompt(PROMPT_VERSION)
-    assert PROMPT_VERSION == "scene-first-prompt-v8"
-    assert all(field in current for field in ('"alternative_group": null', '"ego_turn"', '"traffic_controls"',
-                                              '"speed_limits_kph"'))
+    v8 = resolve_scene_prompt("scene-first-prompt-v8")
+    assert all(field in v8 for field in ('"alternative_group": null', '"ego_turn"', '"traffic_controls"',
+                                         '"speed_limits_kph"'))
+    # v9 finds the scenes with the unchanged v1 text and reads their structure in a second step.
+    from openx_workbench.pdf_v2.scene_proposer import STRUCTURE_PROMPTS
+    assert PROMPT_VERSION == "scene-first-prompt-v9"
+    assert resolve_scene_prompt(PROMPT_VERSION) == resolve_scene_prompt("scene-first-prompt-v1")
+    structure = resolve_scene_prompt(STRUCTURE_PROMPTS[PROMPT_VERSION])
+    assert all(field in structure for field in ('"alternative_group": null', '"ego_turn"', '"ego_lane"',
+                                                '"evidence"', '"speed_limits_kph"', "参数表每行"))
+    # The bearing keeps only definitions that map from the wording itself.
+    assert "试验开始时" in v8 and "试验开始时" not in structure and "对向车道驶来的车" in structure
     assert _resolve_heading_decoder(None) == "chain"
 
 

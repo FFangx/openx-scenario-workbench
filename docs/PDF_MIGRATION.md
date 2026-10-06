@@ -43,7 +43,21 @@ details were removed; no private corpus, configuration, model responses or
 evaluation data was copied. No ScenarioManager installation is needed at runtime.
 
 OpenX owns orchestration, HTTP transport, persistence and UI. It uses the same
-default `chain` heading decoder and, since 2026-10-06, `scene-first-prompt-v8`
+default `chain` heading decoder and, since 2026-10-06, `scene-first-prompt-v9`: the scenes
+are found in one call with the unchanged v1 instructions, then their structure is read scene by
+scene (`scene-structure-prompt-v9`): one scene per call with the clauses its text refers to by
+number ("按照C.3.3.2.3.9的方法"), each scene read three times, all calls sent concurrently (64 by
+default; DeepSeek allows thousands per account). Four scenes per call paraphrased some quotes and
+two readings left four times the unknowns on the evaluation standards. The structure prompt keeps v8's fields, reads either-or targets also from
+parameter-table rows, keeps only bearing definitions that map from the wording itself, and adds
+the ego's lane and evidence for every spatial field (a participant's bearing, facing and either-or
+group, the ego's turn and lane): stated, implied with a reason, or unknown, with a verbatim quote.
+A fact whose quote is not in its own scene's text (page numbers and running headers inside a sentence
+are ignored), or on which most readings do not agree, reads as unknown and is marked for review; contradictions (standing participants quoting one sentence with
+different bearings, a near-side participant on the left, an occluder on the other side) are only
+marked (`pdf_v2/structure_evidence.py`). Each call may use the model's whole output limit; a batch is
+retried for a broken reply, missing scenes or a rate limit, and one extraction makes at most
+`CALL_LIMIT` uncached calls. Before v9, `scene-first-prompt-v8`
 (v7 plus either-or participants `alternative_group`, the ego's way through a junction
 `ego_turn`, the traffic control a test relies on `traffic_controls`, speed-limit sign
 values `speed_limits_kph`, and a bearing defined by the lane a participant is in when the
