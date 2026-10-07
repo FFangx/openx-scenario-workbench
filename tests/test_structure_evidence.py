@@ -268,3 +268,19 @@ def test_a_stated_ego_lane_is_kept_as_an_adjustable_check():
 def test_an_unknown_value_needs_no_evidence(field):
     raw = structure(participants=[{"kind": "乘用车", "evidence": {field: {"source": "原文", "quote": "不存在的话"}}}])
     assert ground_structure(raw, TEXT).participants[0].evidence == {}
+
+
+def test_a_clause_that_is_all_heading_brings_the_clause_and_figure_it_names():
+    from openx_workbench.pdf_v2.figures import Figure
+    from openx_workbench.pdf_v2.scene_first import _Document, scene_figures
+    tree, texts, extraction = _document(3, root="A")
+    nodes = [node.model_copy(update={"section_id": node.node_id}) for node in tree.nodes]
+    nodes[3] = nodes[3].model_copy(update={"title": "A.3 在夜间条件下，按照A.1的方法进行试验，位置如图A.2所示"})
+    tree = tree.model_copy(update={"nodes": tuple(nodes)})
+    texts["A.3"] = ""  # a one-sentence clause: its heading is all it says
+    figures = [Figure("图A.2", "图A.2 试验示意图", 1, (0, 0, 10, 10), b"\x89PNG", "A.2")]
+    night = extraction.scenes[2]
+    assert _Document(tree, texts, extraction, figures).referenced(night) == ("A.1",)
+    assert [figure.label for figure in scene_figures(tree, texts, extraction, figures)[night.scene_id]] == ["图A.2"]
+    # Its own number is no reference to itself or to anything else.
+    assert _Document(tree, texts, extraction, figures).referenced(extraction.scenes[0]) == ()

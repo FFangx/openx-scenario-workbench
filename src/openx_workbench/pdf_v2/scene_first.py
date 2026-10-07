@@ -208,11 +208,20 @@ class _Document:
         target looks like) stay out unless its own text names them."""
         own = [node_id for node_id in scene.node_ids
                if node_id not in self.context and node_id not in scene.declared_shared_node_ids]
-        found = [self.figure_named[label] for node_id in own for label in referenced_labels(self.text.get(node_id) or "")
+        found = [self.figure_named[label] for node_id in own for label in referenced_labels(self.clause(node_id))
                  if label in self.figure_named]
         found += [figure for node_id in own for figure in self.figures_in.get(node_id, ())]
         found += [figure for node_id in self.referenced(scene) for figure in self.figures_in.get(node_id, ())]
         return tuple({(figure.page_number, figure.clip): figure for figure in found}.values())[:MAX_FIGURES]
+
+    def clause(self, node_id: str) -> str:
+        """What a clause says: its heading line without its own number, then its body. A one-sentence
+        clause or a list item ("a) …按照图A.1要求静止放置…") is all heading."""
+        node = self.nodes.get(node_id)
+        title = node.title if node else ""
+        if node and node.section_id and title.startswith(node.section_id):
+            title = title[len(node.section_id):]
+        return "\n".join(part for part in (title.strip(), self.text.get(node_id) or "") if part)
 
     def view(self, node_ids) -> str:
         parts = []
@@ -244,7 +253,7 @@ class _Document:
         for node_id in scene.node_ids:
             if node_id in scene.declared_shared_node_ids:
                 continue
-            for match in _CLAUSE_REFERENCE.finditer(self.text.get(node_id) or ""):
+            for match in _CLAUSE_REFERENCE.finditer(self.clause(node_id)):
                 clause = match.group(1)
                 if clause in self.nodes and clause not in scene.node_ids and clause not in above and clause not in found:
                     found.append(clause)
