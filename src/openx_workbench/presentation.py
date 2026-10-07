@@ -62,7 +62,50 @@ LABELS = {
     "variant": "任选其一", "select or build the other alternatives": "其余任选项另选或另建素材",
     "ego_lane": "主车车道",
     "figure": "示意图", "check against the figure": "对照示意图核对", "not compared": "未比对",
+    # Whole sentences of the comparison: read word by word they came out half English ("verify 参与者 facts")
+    # or wrong ("same test" is no 同向 test).
+    "story": "故事", "participants or interaction": "参与者或交互", "not stated in the requirement": "需求未写明",
+    "decide by hand whether this is the same test": "人工判断是否同一测试",
+    "add participant": "添加参与者", "verify participant facts": "核对参与者事实",
+    "verify participant placement and facing": "核对参与者位置和朝向",
+    "remove additional participant behavior": "删除参与者多余的行为",
+    "switch the tested function and its scoring": "更换被测功能及其评分",
+    "not in the file": "文件中没有", "confirm the system under test drives": "核对由被测系统驾驶",
+    "build a driver-intervention test": "新建驾驶员干预试验", "build a parking test": "新建泊车试验",
+    "no driving lanes read": "未读出行车道", "verify lane count": "核对车道数", "select a road with more lanes": "选择车道更多的道路",
+    "no lane lines read": "未读出车道线", "verify lane lines": "核对车道线",
+    "select or modify OpenDRIVE lane lines": "选择或修改道路文件的车道线",
+    "select or modify OpenDRIVE curve": "选择或修改道路文件的弯道",
+    "distance": "距离", "headway": "车头时距",
+    "build a different scenario family": "新建其他场景类型", "verify candidate scenario family": "核对候选场景类型",
+    "add or replace entity": "添加或替换参与者", "adjust participant placement": "调整参与者位置",
 }
+MARKINGS = {"solid": "实线", "broken": "虚线"}
+
+
+def _key_value(match: re.Match) -> str | None:
+    """A fact as key=value: the key is the workbench's own, the value may quote the requirement, which
+    stays as written unless it is made of the workbench's own words."""
+    key, value = match[1], match[2]
+    if key not in LABELS:
+        return None
+    if value in LABELS:
+        value = LABELS[value]
+    elif re.fullmatch(r"[a-z_]+(?:[,+/][a-z_]+)*", value):
+        value = re.sub(r"[a-z][a-z_]+", lambda word: LABELS.get(word[0], word[0]), value)
+    return f"{LABELS[key]}={value}"
+
+
+# Phrases the comparison writes with values in them, as whole Chinese phrases.
+TEMPLATES = (
+    (re.compile(r"target speeds=(.*)", re.S), lambda match: f"目标速度={match[1]}"),
+    (re.compile(r"curve radius (\S+) m"), lambda match: f"弯道半径 {match[1]} m"),
+    (re.compile(r"lines: (.*)"), lambda match: "车道线：" + "、".join(
+        MARKINGS.get(item.strip(), item.strip()) for item in match[1].split(",") if item.strip())),
+    (re.compile(r"(solid|broken) lane line"), lambda match: MARKINGS[match[1]] + "车道线"),
+    (re.compile(r"participant age=(.*)", re.S), lambda match: f"参与者年龄={match[1]}"),
+    (re.compile(r"([a-z_]+)=(.*)", re.S), _key_value),
+)
 LABELS.update({f"ego_turn={value}": "主车" + label for label, value in STRUCTURE_TURNS.items()})
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):
     LABELS.update({value: key for key, value in vocabulary.items()})
@@ -83,6 +126,9 @@ def display(value, language="zh"):
         return text
     if text in LABELS:
         return LABELS[text]
+    for pattern, render in TEMPLATES:
+        if (match := pattern.fullmatch(text)) and (shown := render(match)) is not None:
+            return shown
     # Translate tokens in controlled signatures, never file paths or XML identifiers.
     return re.sub(r"[a-z][a-z_]+", lambda m: LABELS.get(m[0], m[0]), LANE_PHRASE.sub(_lanes, text))
 
