@@ -11,16 +11,15 @@
    `/models` reports `effort.supported_levels`, e.g. low/high/max); it is sent as
    `reasoning_effort` while thinking is on. Services that list no levels keep
    their default.
-2. Create/select a project and import PDFs from the PDF card's **⋯ → Import PDFs** in the workbench; extraction runs as a background job with live progress. Scanned pages require the optional local OCR runtime described below.
+2. Create/select a project and import PDFs from the start page or the PDF card's **⋯ → Import PDFs** in the workbench; extraction runs as a background job with live progress. Scanned pages require the optional local OCR runtime described below.
    Import sends document text to the configured model. It parses blocks and the
    chapter tree first, then performs scene-first extraction and classification.
-3. Select a scene and open **Requirement facts** to inspect its clauses, structure,
-   classification and review issues. **Edit facts** creates a revision; original
-   page evidence is immutable.
-4. **Confirm and publish** adds a snapshot to the machine-wide PDF
-   requirement library. Find it under **Asset management → PDF requirement library**,
-   download the scene package or return to the source document. These requirements
-   are distinct from runnable XOSC/XODR assets.
+3. Opening the PDF shows its clause reuse assessment. **Generate suggestions** asks
+   the model which assets each clause can reuse; adopt or change the conclusions.
+4. To inspect a clause's extracted facts, use **Search manually** on it and open
+   **Requirement facts**: clauses, structure, classification and review issues.
+   **Edit facts** creates a revision; original page evidence is immutable, and a
+   confirmed conclusion of that clause is marked for reconfirmation.
 5. Import `.sim`, `.xosc`/`.xodr`, or ZIP assets as before. Enable model
    classification on import, or classify a saved version later. Inspect the
    rule/model/final audit, correct the labels, and confirm them. Classification

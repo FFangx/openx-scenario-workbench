@@ -1,5 +1,6 @@
-// Records docs/images/demo-en.gif or demo-zh.gif: the workbench on the authored reuse benchmark
-// (examples/reuse-benchmark), stepping through requirements whose best verdicts differ.
+// Records docs/images/demo-en.gif or demo-zh.gif: manual search on the authored reuse benchmark
+// (examples/reuse-benchmark), stepping through requirements whose best rule verdicts differ. The demo calls
+// no model, so the clause reuse assessment has no suggestions; manual search shows the rule ranking.
 // Runs on a throwaway workspace (demo-server.mjs). Usage: npm run build && node scripts/demo-gif.mjs [en|zh]
 import { chromium } from "playwright";
 import { spawnSync } from "node:child_process";
@@ -17,7 +18,7 @@ const SCENES = {
   en: ["Stationary car ahead, 50 km/h", "Cut-in from the left", "Lead car brakes from 70 km/h", "Motorcyclist crossing from the left"],
   zh: ["静止前车，主车 50 km/h", "右侧车辆切入", "夜间行人横穿，主车 60 km/h", "前方静止三轮车"],
 }[LANGUAGE];
-const PDF = { en: ["demo-adas-protocol-en.pdf", 16], zh: ["demo-adas-protocol-zh.pdf", 19] }[LANGUAGE];
+const PDF = { en: ["demo-adas-protocol-en.pdf", 18], zh: ["demo-adas-protocol-zh.pdf", 20] }[LANGUAGE];
 
 fs.rmSync(FRAMES, { recursive: true, force: true });
 fs.mkdirSync(FRAMES, { recursive: true });
@@ -31,10 +32,12 @@ try {
     await page.waitForTimeout(400);
   };
   await page.goto(demo.base + "/", { waitUntil: "networkidle" });
-  // The workbench opens on the start page; hold it briefly, then enter the protocol's workflow.
+  // The workbench opens on the start page; hold it briefly, open the protocol, then search its first clause by hand.
   await page.locator(".start-doc").filter({ hasText: PDF[0] }).waitFor();
   await page.waitForTimeout(1200);
   await page.locator(".start-doc").filter({ hasText: PDF[0] }).click();
+  await page.locator(".bind-table tbody tr.ant-table-row").first().waitFor({ timeout: 120000 });
+  await page.locator(".bind-head .ant-btn").click();
   await page.locator(".cand-table tbody tr.ant-table-row").first().waitFor({ timeout: 120000 });
   if (!(await page.locator(".pdfcard").innerText()).includes(PDF[0])) {
     await page.locator(".pdfcard .doc-switch").click();

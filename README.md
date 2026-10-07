@@ -5,13 +5,13 @@
 
 English | [中文](README.zh-CN.md)
 
-Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets from files or ScenarioManager-compatible `.sim` archives, and ranks candidates using text, scenario structure, and road fit.
+Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario Workbench extracts numbered scene sections from **PDF**, builds paired **OpenSCENARIO (`.xosc`) + OpenDRIVE (`.xodr`)** assets from files or ScenarioManager-compatible `.sim` archives, and ranks candidates using text, scenario structure, and road fit. For every clause of a protocol PDF, a configured language model recommends the library asset to reuse — direct reuse, modify and reuse, not applicable or undetermined — and a person confirms the conclusion.
 
 **Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, run `openx-demo` after installing: it opens the workbench on an authored library of 26 assets and 38 reviewed requirements ([demo workspace](#demo-workspace)). Semantic search and simulation have separate dependencies below.
 
-![Workbench with a requirement queue, ranked assets and a reuse assessment](docs/images/workbench-en.jpg)
+![Search manually: a requirement, the library ranked by structural rules and the rule comparison of a candidate](docs/images/workbench-en.jpg)
 
-*The running workbench on the authored demo workspace: the requirement was reviewed and saved as revision 2, candidates are ranked, and the selected one needs a change. The authored parser fixtures do not pass the XSD checks, so the workbench keeps showing the pending standard check instead of claiming direct reuse.*
+*Search manually on the authored demo workspace: the requirement (reviewed, revision 2) with its source evidence, the library ranked by structural rules, and the rule-by-rule comparison of the selected candidate, which needs a change. The authored parser fixtures do not pass the XSD checks, so the comparison keeps showing the pending standard check instead of claiming direct reuse.*
 
 ![Asset management with a real esmini frame of the public cut-in example](docs/images/assets-en.jpg)
 
@@ -21,21 +21,23 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 
 | Page or action | What to do |
 | --- | --- |
-| **Workbench** | Opens on a start page: describe a scenario, import a PDF, or continue with one of the project's PDFs (the logo returns here). Create a project from the project menu and configure the language model in **Settings** before importing. In a PDF's workflow, pick a requirement: its source evidence, the ranked candidates and the reuse assessment appear side by side. Review and edit its typed facts under **Requirement facts**, publish the revision, then save the decision. |
-| **Free-text search** | Describe a scenario on the start page (or close the scene chip in a PDF's workflow). Similar assets appear as cards on their own page; open one for its details. Text search makes no reuse decision. |
-| **Play simulation** | Use **Play**, **Stop** or **Capture frame** in the candidate preview or the asset detail. An installed Windows esmini is detected automatically; choose a custom installation under **Settings → Local service**. |
-| **Match entire PDF** | From the PDF card's **⋯** menu, match all scenes of the document and download or save a version-pinned JSON/HTML summary. |
-| **Bind assets** | In the same dialog, let the configured model suggest for every scene the group of assets that build its test, then accept, change or mark "no asset" row by row. Confirmed bindings form one table shared by all projects; a newer asset version or edited scene facts mark a binding for a second look. |
-| **Overview** | Library statistics, recent imports, and saved decisions and summaries with their downloads; reopen a requirement to continue its review. Each PDF's binding coverage and the assets no clause uses. |
-| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a version to review its preview, classification, the requirement clauses bound to it, source files, standard export and history. The PDF requirement library lists published requirements. |
+| **Workbench** | Opens on a start page: describe a scenario, import a PDF, or continue with one of the project's PDFs (the logo returns here). Create a project from the project menu and configure the language model in **Settings** before importing. Opening a PDF shows its **clause reuse assessment**: one row per clause with its preferred asset, and beside it the clause's source text, the asset's frame and road drawing, and every candidate with the model's reasons. Several PDFs can be shown together. |
+| **Generate suggestions** | The configured model assesses every clause three times at its deepest thinking effort. Each suggestion takes one of four levels — direct reuse, modify and reuse, not applicable, undetermined — with the changes needed, and is marked *Consistent 3/3* when the three assessments agree or *Inconsistent* when they differ. |
+| **Confirm reuse** | Adopt every consistent direct-reuse suggestion at once, then review the rest clause by clause; change the level, the assets or the changes when you disagree. A confirmed conclusion carries a green check mark. Conclusions are shared by all projects and pin the asset versions they adopt; a newer asset version or edited clause facts mark one for reconfirmation. |
+| **Search manually** | From a clause, search the library yourself: the rule-based ranking, the requirement facts and a rule-by-rule comparison. **Adopt for this clause** stores the picked asset as the clause's conclusion. |
+| **Export the assessment** | One table for the PDFs shown, as CSV (opens in Excel) or as a web page. |
+| **Free-text search** | Describe a scenario on the start page (or close the scene chip in a manual search). Similar assets appear as cards on their own page; open one for its details. Text search makes no reuse decision. |
+| **Play simulation** | Use **Play**, **Stop** or **Capture frame** in the clause detail, the candidate preview or the asset detail. An installed Windows esmini is detected automatically; choose a custom installation under **Settings → Local service**. |
+| **Overview** | Each PDF's clause reuse coverage (reusable, not applicable, to confirm, to reconfirm), the assets no clause adopts, and the library in a few numbers. |
+| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a version to review its preview, the clauses that adopt it, its source files (with its classification and standard checks) and history. |
 
-Asset versions are shared across projects. PDF sources, scene revisions and decisions belong to the selected project.
+Asset versions and reuse conclusions are shared across projects. PDF sources and scene revisions belong to the selected project.
 
 ## Design
 
 ![OpenX Scenario Workbench architecture](docs/images/architecture-overview.svg)
 
-The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. For a reviewed requirement, every library asset is compared structurally and ranked by blocking differences, then change cost; text similarity only orders assets that need the same change, and drives free-text search. Source evidence and parsed candidate facts ground the final reuse decision. The React interface talks to a local FastAPI service; the parser, retrieval core and decision logic are plain Python shared with the command-line tools.
+The two input paths meet only through stable representations: a PDF-derived `ScenePackage` and a paired OpenX asset catalog. For a reviewed requirement, every library asset is compared structurally and ranked by blocking differences, then change cost; text similarity only orders assets that need the same change, and drives free-text search. A language model judges the best candidates of every clause from its source text and the candidates' stories and differences, and a person confirms the conclusion. The React interface talks to a local FastAPI service; the parser, retrieval core and decision logic are plain Python shared with the command-line tools.
 
 [Architecture](docs/ARCHITECTURE.md) · [Roadmap](DEVELOPMENT_PLAN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
@@ -55,7 +57,8 @@ Similarity over the structural facts finds most right assets, but cannot say whe
 
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
 - Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first path (prompt v10, structure read per scene with quoted evidence and, for a model that reads images, the scene's figures), preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
-- Publishes confirmed PDF scene revisions into a shared requirement library; simulation assets have optional model classification with rule/model/final audit history.
+- Recommends a reusable asset for every clause with a configured language model: about twenty candidates from the rule ranking, asset names, structure text and the clause title; three independent readings at the deepest thinking effort, the most recommended asset wins and disagreement is flagged; four levels a person confirms or changes.
+- Simulation assets have optional model classification with rule/model/final audit history.
 - Provides model URL/key settings, model discovery, manual model IDs and a selected-model JSON test.
 - Converts each PDF scene package into explicit scenario-family, participant, relative-position, action, trigger, road, and parameter constraints.
 - Summarizes road IDs and counts of lane elements, junctions, signals, and static objects.
@@ -64,14 +67,14 @@ Similarity over the structural facts finds most right assets, but cannot say whe
 - Imports ScenarioManager-compatible `.sim` ZIP archives, converts their embedded OpenSCENARIO JSON to the same parser input, and pairs cases with contained or separately uploaded `.xodr` roads.
 - Ranks every library asset for a reviewed requirement by blocking differences, then estimated change cost; BGE-M3 (or an explicitly selected offline hashing baseline) orders assets within the same change and serves free-text search.
 - Pairs requested and candidate participants for the fewest blocking differences and compares each participant's own initial speed when the requirement states it.
-- Gives one of five verdicts: direct reuse, modify, major modification (verified changes close to a new build), review, or build new. A decision that needs review is saved once the reviewer confirms each open item with a reason; the reasons stay in the trace and report.
+- In manual search, gives one of five rule verdicts: direct reuse, modify, major modification (verified changes close to a new build), review, or build new.
 - Builds participant interaction signatures from type, ego-relative bearing, facing direction, and actor-owned actions.
 - Reports grounded reuse differences such as a mismatched scenario family or participant interaction, or a missing relation, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.
-- Provides Workbench, Overview and Asset management pages in Chinese and English; the workbench shows evidence, candidates and the assessment of the selected requirement side by side, and long-running imports run as background jobs with live progress.
-- Exports a structured decision trace through the web UI; the inspection and search CLIs expose the same parser and retrieval core.
+- Provides Workbench, Overview and Asset management pages in Chinese and English; a PDF opens on its clause reuse assessment, manual search shows evidence, candidates and the rule comparison side by side, and long-running imports and suggestions run as background jobs with live progress.
+- Exports the clause reuse assessment as CSV or HTML; the inspection and search CLIs expose the same parser and retrieval core.
 - Loads a fixed revision of an upstream esmini example for a repeatable demo.
-- Stores immutable asset versions in a machine-local global library, keeps named projects and multiple PDFs, and exports version-pinned JSON and HTML decisions.
+- Stores immutable asset versions in a machine-local global library and keeps named projects and multiple PDFs; confirmed conclusions pin the asset versions they adopt.
 - Accepts a portable `.zip` containing XOSC, XODR, catalogs, models, and textures in their original relative layout.
 - Detects a working local esmini installation on Windows and displays real frames after the user clicks **Play simulation**, with stop/replay controls and retained failure details.
 - Offers on-demand evidence-linked explanations from the selected PDF text and versioned OpenX facts when a model key is configured.
@@ -130,9 +133,9 @@ After the quick start install, one command starts the workbench on an authored d
 openx-demo
 ```
 
-It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed. Pick a requirement to see its ranked candidates and verdict:
+It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed. Model suggestions need a configured language model, so the demo's assessment table starts without them; open a PDF and use **Search manually** on a clause to see its ranked candidates and rule verdict:
 
-![openx-demo stepping through four requirements: two direct matches, one needing parameter changes, one with no reusable asset](docs/images/demo-en.gif)
+![openx-demo searching manually through four requirements: two direct matches, one needing parameter changes, one with no reusable asset](docs/images/demo-en.gif)
 
 Nothing is downloaded, no model is called, search uses the hashing baseline (switch to BGE-M3 in **Settings** if installed), and the folder is removed when you stop it with Ctrl+C. Run it from the repository root; it serves on <http://127.0.0.1:8770> so it can run beside your normal workbench.
 
@@ -182,7 +185,7 @@ Place related `.xosc` and `.xodr` files under one directory. Pairing resolves ea
 openx-search examples/esmini "cut-in SpeedAction relative distance"
 ```
 
-Free-text search in the workbench uses the same retrieval core. For a requirement-based assessment, select an imported scene in the workbench and review its facts. Its text, structured constraints and source evidence become the retrieval query; the candidate and assessment columns explain matching evidence, blocking differences, required edits and traceability links.
+Free-text search in the workbench uses the same retrieval core. For a clause, its text, structured constraints and source evidence become the retrieval query: the model's suggestions judge the best candidates, and manual search explains matching evidence, blocking differences, required edits and traceability links.
 
 For semantic retrieval and a reusable on-disk index:
 
@@ -196,10 +199,7 @@ Semantic retrieval uses **BAAI/bge-m3** (BGE-M3), with no automatic fallback to 
 The name/label and name-free structural routes share one encoder. Typed PDF facts directly control reuse decisions; unsupported or unknown requirements require review. See [alignment, validation and measured limits](docs/REUSE_ALIGNMENT.md).
 
 The workbench defaults to BGE-M3; choose the hashing baseline under **Settings →
-Display & search**. **Match entire PDF** matches all current document scenes through
-the same retrieval engine. JSON/HTML summaries preserve
-source revisions, candidate versions and pending review states. Saved summaries
-reopen in Overview and pin all included asset versions.
+Advanced**. The same retrieval recalls the candidates the model judges for every clause.
 
 ## Development
 
