@@ -67,6 +67,15 @@ for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCT
     LABELS.update({value: key for key, value in vocabulary.items()})
 
 
+# Lane counts the road comparison writes out (reuse_structured.LANE_SCOPES); read word by word,
+# "total" would become a similarity score.
+LANE_PHRASE = re.compile(r"(at least )?(\d+) lanes in (total|one direction)")
+
+
+def _lanes(match: re.Match) -> str:
+    return f"{'至少 ' if match[1] else ''}{match[2]} 条车道（{'双向合计' if match[3] == 'total' else '单向'}）"
+
+
 def display(value, language="zh"):
     text = str(value if value is not None else "—")
     if language != "zh":
@@ -74,7 +83,7 @@ def display(value, language="zh"):
     if text in LABELS:
         return LABELS[text]
     # Translate tokens in controlled signatures, never file paths or XML identifiers.
-    return re.sub(r"[a-z][a-z_]+", lambda m: LABELS.get(m[0], m[0]), text)
+    return re.sub(r"[a-z][a-z_]+", lambda m: LABELS.get(m[0], m[0]), LANE_PHRASE.sub(_lanes, text))
 
 
 def difference_text(difference, language):
