@@ -51,7 +51,7 @@ export function BatchDialog({ open, projectId, doc, onClose }: Props) {
   };
 
   return (
-    <Modal title={t("整份 PDF 匹配与汇总", "Match entire PDF and summarize")} open={open} onCancel={onClose} width={860} footer={null}>
+    <Modal title={t("整份 PDF 匹配与汇总", "Match entire PDF and summarize")} open={open} onCancel={onClose} width={1040} footer={null}>
       <div className="settings-form">
         <p className="muted">
           {t(`匹配 ${doc.filename} 的全部 ${doc.scene_count} 个场景，使用当前检索后端和资产库。`, `Match all ${doc.scene_count} scenes of ${doc.filename} using the current retrieval backend and asset library.`)}

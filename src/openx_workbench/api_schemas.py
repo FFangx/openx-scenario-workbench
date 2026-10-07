@@ -424,6 +424,7 @@ class BatchAssessment(Open):
 
 class BatchCandidate(Open):
     candidate: TraceCandidate
+    reuse: BatchAssessment
 
 
 class BatchEntry(Open):

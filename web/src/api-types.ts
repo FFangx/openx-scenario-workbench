@@ -1254,6 +1254,7 @@ export interface components {
         /** BatchCandidate */
         BatchCandidate: {
             candidate: components["schemas"]["TraceCandidate"];
+            reuse: components["schemas"]["BatchAssessment"];
         } & {
             [key: string]: unknown;
         };

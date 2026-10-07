@@ -48,6 +48,16 @@ def test_batch_uses_one_encoding_call_and_matches_single_verdicts():
     assert old != batch_signature(doc, scenes, index.fingerprint, {}, encoder.encoder_id)
 
 
+def test_the_summary_lists_the_top_candidates_each_with_its_verdict():
+    assets = [authored_asset(), replace(authored_asset(target_y=-3.5), asset_id="right")]
+    doc = document()
+    batch = match_document(doc, [StoredScene(doc, "one", 1, requirement())], OpenXIndex(assets, HashingEncoder(32)), {})
+    assert [item["reuse"]["structural_level"] for item in batch["entries"][0]["candidates"]] == ["direct", "new_build"]
+    html = render_report(batch, language="zh")
+    # The direct one's files are not checked against the standard yet.
+    assert "1. opaque.xosc (文件标准待复核)<br>2. opaque.xosc (需要新建)" in html and "候选（前三）" in html
+
+
 def test_no_candidates_and_empty_document_do_not_become_new_build():
     doc = document()
     index = OpenXIndex([], HashingEncoder(32))
