@@ -726,6 +726,7 @@ class BindingSuggestion(Shape):
         description="Candidate ids the other readings preferred, most often first; null: no asset fits.")
     stable: bool | None = Field(description="Every reading (two at least) names the same preferred asset; "
                                             "null for a failed suggestion or one kept before readings were counted.")
+    recorded: bool = Field(description="Replayed from the recording shipped with the demo, not asked of a model here.")
 
 
 class BoundAssetRecord(Shape):

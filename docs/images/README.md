@@ -17,11 +17,12 @@ the public example under **Asset management**, play it, and capture both languag
 through the normal interface. Keep evidence and check states visible; never relabel a
 pending check as a successful reuse or preview.
 
-`demo-en.gif` / `demo-zh.gif` step through four requirements of the authored
-[reuse benchmark](../../examples/reuse-benchmark/) in the running workbench: two
-direct structural matches (standard checks pending, since no XSD registry was
-installed for the recording), one needing parameter changes and one with no
-reusable asset. Regenerate them with `node scripts/demo-gif.mjs en|zh` in `web/`
+`demo-en.gif` / `demo-zh.gif` open the authored
+[reuse benchmark](../../examples/reuse-benchmark/) in the running workbench: first the
+clause reuse assessment with the recorded model suggestions the demo replays, then
+manual search through four requirements: two direct structural matches (shown as
+undetermined, since no XSD registry was installed for the recording), one needing
+parameter changes and one with no reusable asset. Regenerate them with `node scripts/demo-gif.mjs en|zh` in `web/`
 after `npm run build`; the script seeds its own throwaway workspace.
 
 `architecture-overview.svg` is the editable architecture illustration. It includes

@@ -1,6 +1,6 @@
-// Records docs/images/demo-en.gif or demo-zh.gif: manual search on the authored reuse benchmark
-// (examples/reuse-benchmark), stepping through requirements whose best rule verdicts differ. The demo calls
-// no model, so the clause reuse assessment has no suggestions; manual search shows the rule ranking.
+// Records docs/images/demo-en.gif or demo-zh.gif on the authored reuse benchmark (examples/reuse-benchmark):
+// the clause reuse assessment with the recorded model suggestions the demo replays, then manual search
+// stepping through requirements whose best rule verdicts differ. No model is called.
 // Runs on a throwaway workspace (demo-server.mjs). Usage: npm run build && node scripts/demo-gif.mjs [en|zh]
 import { chromium } from "playwright";
 import { spawnSync } from "node:child_process";
@@ -37,6 +37,10 @@ try {
   await page.waitForTimeout(1200);
   await page.locator(".start-doc").filter({ hasText: PDF[0] }).click();
   await page.locator(".bind-table tbody tr.ant-table-row").first().waitFor({ timeout: 120000 });
+  await page.locator(".bind-recorded").waitFor();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: path.join(FRAMES, "frame-0.png") });
   await page.locator(".bind-head .ant-btn").click();
   await page.locator(".cand-table tbody tr.ant-table-row").first().waitFor({ timeout: 120000 });
   if (!(await page.locator(".pdfcard").innerText()).includes(PDF[0])) {
@@ -47,7 +51,7 @@ try {
   for (const [index, title] of SCENES.entries()) {
     await page.locator(".scene").filter({ has: page.locator(".t", { hasText: title }) }).first().click();
     await idle();
-    await page.screenshot({ path: path.join(FRAMES, `frame-${index}.png`) });
+    await page.screenshot({ path: path.join(FRAMES, `frame-${index + 1}.png`) });
   }
 } finally {
   await browser.close();

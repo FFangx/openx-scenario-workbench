@@ -7,8 +7,11 @@ Two datasets, both written for this repository (MIT) and read from the checkout:
 - ``fixtures``: the six parser fixtures in tests/fixtures/reuse and eight
   requirements. Small and stable; the browser checks in web/scripts use it.
 
-Nothing is downloaded and no model is called. A workspace only ever lives in
-the folder it was seeded into, never in the normal data folder.
+Nothing is downloaded and no model is called. The benchmark comes with the reuse
+suggestions of one real model run (examples/reuse-benchmark/suggestions.json,
+made with ``openx-demo --record-suggestions``), replayed and marked as recorded,
+so its assessment table is filled without a model. A workspace only ever lives
+in the folder it was seeded into, never in the normal data folder.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from .checkout import checkout_root
 REPO = checkout_root()
 FIXTURES = REPO / "tests" / "fixtures"
 BENCHMARK = REPO / "examples" / "reuse-benchmark"
+RECORDED = BENCHMARK / "suggestions.json"
 MARKER = "demo-workspace.json"
 ROAD_LABELS = {"straight": "直道", "curve": "弯道"}
 
@@ -111,8 +115,54 @@ def _seed_benchmark(store, pdf, projects) -> dict:
     return {"project_id": project.project_id, "assets": len(versions), "documents": documents}
 
 
-def seed(target: Path, dataset: str = "fixtures") -> dict:
-    """Fill an empty folder with a demo workspace and return what was created."""
+# What a recording keeps of a suggestion (binding_suggest.suggestion_record) besides its candidates, and of
+# each candidate besides the asset it names; asset and scene ids are this workspace's and found again on replay.
+SUGGESTION_KEPT = ("judge", "binding", "preferred", "note", "failure", "readings", "agree", "other_preferred")
+CANDIDATE_KEPT = ("rank", "routes", "level", "verdict", "reason", "changes")
+
+
+def _asset_name(version) -> str:
+    return Path(version.xosc_name).stem  # the benchmark's asset id
+
+
+def _requirements(pdf, project_id: str) -> dict[tuple[str, str, str], tuple]:
+    """(PDF file name, clause number, title) -> (scene, requirement key) of every scene in the project."""
+    from .binding_store import requirement_keys, section_of
+
+    found = {}
+    for document in pdf.documents(project_id):
+        scenes = pdf.scenes(project_id, document.document_id)
+        keys = requirement_keys(pdf, project_id, document.document_id, scenes)
+        for scene in scenes:
+            found[(document.filename, section_of(scene.package), scene.package.title)] = (scene, keys[scene.scene_id])
+    return found
+
+
+def replay_suggestions(store, pdf, project_id: str, recording: dict) -> int:
+    """Save the recorded suggestions as the workspace's own, marked as recorded; returns how many."""
+    from .binding_store import BindingStore, scene_digest
+
+    versions = {_asset_name(version): version for version in store.latest()}
+    requirements = _requirements(pdf, project_id)
+    bindings = BindingStore(store)
+    for item in recording["scenes"]:
+        scene, key = requirements[(item["document"], item["section_id"], item["title"])]
+        candidates = []
+        for candidate in item["candidates"]:
+            version = versions[candidate["asset"]]
+            candidates.append({"id": candidate["id"], "asset_id": version.asset_id, "version_id": version.version_id,
+                               "version_number": version.version_number, "title": version.title,
+                               **{name: candidate[name] for name in CANDIDATE_KEPT}})
+        bindings.save_suggestion(scene.document.sha256, key, {
+            "created_at": recording["recorded_at"], "model": recording["model"], "revision": scene.revision,
+            "scene_digest": scene_digest(scene.package), "candidates": candidates,
+            **{name: item[name] for name in SUGGESTION_KEPT}, "recorded": True})
+    return len(recording["scenes"])
+
+
+def seed(target: Path, dataset: str = "fixtures", recorded: bool = True) -> dict:
+    """Fill an empty folder with a demo workspace and return what was created; `recorded` replays the
+    benchmark's recorded suggestions."""
     if dataset not in {"fixtures", "benchmark"}:
         raise ValueError(f"Unknown demo dataset: {dataset}")
     if target.exists() and any(target.iterdir()):
@@ -125,10 +175,69 @@ def seed(target: Path, dataset: str = "fixtures") -> dict:
     from .project_store import ProjectStore
 
     store = AssetStore()
+    pdf = PdfStore(store)
     seeder = _seed_benchmark if dataset == "benchmark" else _seed_fixtures
-    result = {"data_dir": str(target), "dataset": dataset, **seeder(store, PdfStore(store), ProjectStore(store))}
+    result = {"data_dir": str(target), "dataset": dataset, **seeder(store, pdf, ProjectStore(store))}
+    if dataset == "benchmark" and recorded and RECORDED.is_file():
+        recording = json.loads(RECORDED.read_text(encoding="utf-8"))
+        result["recorded_suggestions"] = replay_suggestions(store, pdf, result["project_id"], recording)
     (target / MARKER).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
+
+
+def record_suggestions(out: Path = RECORDED, work: Path | None = None) -> dict:
+    """Ask the model of the normal settings for the suggestions of every benchmark scene and write them to
+    `out`. The benchmark is seeded in `work` (kept, so a second run reuses its cached replies) or in a
+    temporary folder. Calls the model: 38 scenes, three readings each."""
+    from .llm_service import ModelClient, load_config
+
+    config = load_config()  # the normal data folder's, read before the workspace takes its place
+    if not config.api_key:
+        raise SystemExit("Configure a model in the workbench settings first.")
+    temporary = work is None
+    target = Path(tempfile.mkdtemp(prefix="openx-record-")) if temporary else work.resolve()
+    try:
+        summary = (json.loads((target / MARKER).read_text(encoding="utf-8")) if (target / MARKER).is_file()
+                   else seed(target, "benchmark", recorded=False))
+        if summary["dataset"] != "benchmark":
+            raise SystemExit(f"{target} holds the {summary['dataset']} demo, not the benchmark.")
+        os.environ["OPENX_DATA_DIR"] = str(target)
+
+        from .api_common import _catalog, _index
+        from .asset_store import AssetStore
+        from .binding_store import scene_digest, section_of
+        from .binding_suggest import Judge, judge_efforts, suggest_scenes
+        from .pdf_store import PdfStore
+
+        store = AssetStore()
+        pdf = PdfStore(store)
+        scenes = [scene for scene, _ in _requirements(pdf, summary["project_id"]).values()]
+        client = ModelClient(config)
+        efforts = judge_efforts(client)
+        catalog, versions = _catalog()
+        judge = Judge(client, target / "model_cache", efforts=efforts)
+        records: dict[tuple[str, str], dict] = {}  # scene ids repeat across PDFs
+        failed = suggest_scenes(scenes, _index(catalog, "hashing"), versions, judge, config.concurrency, digest=scene_digest,
+                                save=lambda scene, record: records.__setitem__((scene.document.document_id, scene.scene_id), record))
+        if failed:
+            raise SystemExit(f"{failed} scenes got no usable reply; run again with --data-dir to keep the replies so far.")
+        names = {version.asset_id: _asset_name(version) for version in versions.values()}
+        recording = {
+            "about": "Reuse suggestions of one real model run on this benchmark, replayed by openx-demo "
+                     "without calling a model. Remake with: openx-demo --record-suggestions",
+            "model": config.model, "effort": efforts[0], "encoder": "hashing",
+            "recorded_at": max(record["created_at"] for record in records.values()),
+            "scenes": [{"document": scene.document.filename, "section_id": section_of(scene.package),
+                        "title": scene.package.title, **{name: record[name] for name in SUGGESTION_KEPT},
+                        "candidates": [{"id": item["id"], "asset": names[item["asset_id"]],
+                                        **{name: item[name] for name in CANDIDATE_KEPT}} for item in record["candidates"]]}
+                       for scene, record in ((scene, records[scene.document.document_id, scene.scene_id]) for scene in scenes)],
+        }
+        out.write_bytes((json.dumps(recording, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+        return {"scenes": len(scenes), "effort": efforts[0], "usage": dict(judge.spent)}
+    finally:
+        if temporary:
+            shutil.rmtree(target, ignore_errors=True)
 
 
 def _open_when_ready(url: str) -> None:
@@ -149,7 +258,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="keep the demo workspace in this folder (seeded on first use); default: a temporary folder removed on exit")
     parser.add_argument("--port", type=int, default=8770)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--record-suggestions", action="store_true",
+                        help="for maintainers: remake the benchmark's recorded suggestions with the model of your normal "
+                             "settings (calls it; --data-dir keeps the workspace and its cached replies)")
     args = parser.parse_args(argv)
+    if args.record_suggestions:
+        done = record_suggestions(work=args.data_dir)
+        print(f"Recorded {done['scenes']} suggestions (effort {done['effort']}, {done['usage']}) in {RECORDED}", flush=True)
+        return 0
 
     from .api import WEB_DIST
 

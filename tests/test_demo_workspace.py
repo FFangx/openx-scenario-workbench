@@ -47,6 +47,29 @@ def test_benchmark_demo_reaches_the_labelled_decisions(tmp_path, client_for):
     assert len(seen) == 38
 
 
+def test_benchmark_demo_replays_the_recorded_suggestions(tmp_path, client_for):
+    client, summary = client_for(tmp_path / "demo", "benchmark")
+    recording = json.loads(demo_workspace.RECORDED.read_text(encoding="utf-8"))
+    assert summary["recorded_suggestions"] == len(recording["scenes"]) == 38
+    project = summary["project_id"]
+    ids = [item["document_id"] for item in summary["documents"]]
+    view = client.get(f"/api/projects/{project}/bindings", params={"document_ids": ids}).json()
+    rows = view["scenes"]
+    assert len(rows) == 38
+    for row in rows:
+        suggestion = row["suggestion"]
+        assert suggestion["recorded"] and suggestion["model"] == recording["model"], row["title"]
+        assert suggestion["outdated"] == [] and not suggestion["failure"], row["title"]
+        assert suggestion["preferred"] in {item["id"] for item in suggestion["candidates"]} | {None}
+        assert row["binding"] is None  # nothing is confirmed for the visitor
+
+
+def test_a_seed_without_the_recording_has_no_suggestions(tmp_path, client_for, monkeypatch):
+    monkeypatch.setattr(demo_workspace, "RECORDED", tmp_path / "missing.json")
+    client, summary = client_for(tmp_path / "demo", "benchmark")
+    assert "recorded_suggestions" not in summary
+
+
 def test_fixture_demo_keeps_the_ui_check_workspace(tmp_path, client_for):
     client, summary = client_for(tmp_path / "demo", "fixtures")
     assert summary["assets"] == 6 and [item["scenes"] for item in summary["documents"]] == [4, 4]

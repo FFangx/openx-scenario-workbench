@@ -97,7 +97,7 @@ def _suggestion_json(suggestion: dict[str, Any], scene: StoredScene, latest: dic
     return {key: suggestion[key] for key in ("created_at", "model", "binding", "preferred", "note", "failure")} | {
         "candidates": candidates, "outdated": outdated, "readings": suggestion.get("readings"),
         "agree": suggestion.get("agree"), "other_preferred": suggestion.get("other_preferred", []),
-        "stable": _stable(suggestion)}
+        "stable": _stable(suggestion), "recorded": bool(suggestion.get("recorded"))}
 
 
 def _binding_json(entry: dict[str, Any], scene: StoredScene, latest: dict[str, Any]) -> dict[str, Any]:

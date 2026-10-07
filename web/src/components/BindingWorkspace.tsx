@@ -167,6 +167,7 @@ export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esm
   const stale = rows.filter((r) => r.binding?.stale.length).length;
   const suggested = rows.filter((r) => r.suggestion).length;
   const failed = rows.filter((r) => r.suggestion?.failure).length;
+  const recorded = rows.find((r) => r.suggestion?.recorded)?.suggestion;
   const step = !rows.length ? 0 : !suggested && !confirmed ? 1 : confirmed < rows.length ? 2 : 3;
   const single = shown.length === 1 ? shown[0] : null;
 
@@ -270,6 +271,11 @@ export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esm
             {t("模型对每个条款独立评估 3 次并推荐复用素材，经人工确认后生效；条款原文、需求事实和候选素材信息会发送至已配置的模型。",
               "The model assesses each clause 3 times; you confirm. Clause text, facts and candidate details go to your configured model.")}
           </p>
+          {recorded && (
+            <Alert type="info" showIcon className="bind-recorded" title={t(
+              `演示数据：以下复用建议为预先使用 ${recorded.model} 生成的录制结果，本次未调用模型；配置模型后可重新生成。`,
+              `Demo data: these suggestions were recorded from a real run of ${recorded.model}; no model is called here. Configure a model to regenerate them.`)} />
+          )}
           {error && <Alert type="error" showIcon closable title={error} onClose={() => setError(null)} />}
           {job && (running || job.status !== "completed") && <JobProgress job={job} onCancel={cancel} unit={["个场景", "scenes"]} />}
           {failed > 0 && !running && (

@@ -133,9 +133,9 @@ After the quick start install, one command starts the workbench on an authored d
 openx-demo
 ```
 
-It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed. Model suggestions need a configured language model, so the demo's assessment table starts without them; open a PDF and use **Search manually** on a clause to see its ranked candidates and rule verdict:
+It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed, plus the reuse suggestions of one recorded run of a real model (marked as recorded; regenerating them needs a configured model). Open a PDF to see each clause's suggested asset, or use **Search manually** on a clause to see its ranked candidates and rule verdict:
 
-![openx-demo searching manually through four requirements: two direct matches, one needing parameter changes, one with no reusable asset](docs/images/demo-en.gif)
+![openx-demo: the clause reuse assessment with recorded suggestions, then manual search through four requirements](docs/images/demo-en.gif)
 
 Nothing is downloaded, no model is called, search uses the hashing baseline (switch to BGE-M3 in **Settings** if installed), and the folder is removed when you stop it with Ctrl+C. Run it from the repository root; it serves on <http://127.0.0.1:8770> so it can run beside your normal workbench.
 

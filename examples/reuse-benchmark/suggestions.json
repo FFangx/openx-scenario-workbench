@@ -1,0 +1,7680 @@
+{
+ "about": "Reuse suggestions of one real model run on this benchmark, replayed by openx-demo without calling a model. Remake with: openx-demo --record-suggestions",
+ "model": "deepseek-flash",
+ "effort": "max",
+ "encoder": "hashing",
+ "recorded_at": "2026-10-07T17:20:18.451328+00:00",
+ "scenes": [
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.1",
+   "title": "静止前车，主车 50 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C3",
+    "C13"
+   ],
+   "preferred": "C1",
+   "note": "C1 完全匹配；C2、C3、C13 仅时段、主车速度、目标车型等数值差异，可改数值直接使用。C4~C9 需结构修改（删背景行人、改弯道、改目标为静止等），本次未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、白天干燥、主车 50 km/h 匀速、本车道正前方同向静止车辆，与需求完全一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "与 C1 同故事，仅时段为夜间，属只差数值（时段），改时段即可。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "与需求同故事，仅主车速度 30 km/h，属只差数值（速度），改速度即可。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "核心故事一致，但多了一个需求中没有的行人参与者，需改结构（删参与者）。",
+     "changes": "删除右前方静止的行人背景参与者，只保留本车道正前方静止乘用车。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者与主车行为一致，但道路含弯道，与需求的直道不符，需换道路。",
+     "changes": "去掉前方 R250 弯道，改为纯直道（需求为直道）。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "故事框架（主车 50 匀速驶向前车）相同，但目标运动方式不同，需改参与者动作。",
+     "changes": "把前车由 20 km/h 匀速行驶改为本车道正前方静止。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "主车与道路一致，但目标为运动后刹停且带触发事件，需改参与者动作和触发方式。",
+     "changes": "前车由 50 km/h 起步后刹停改为初始即静止，并删除 T1-stop 时间触发事件。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同 C7，另天气不符，需一并修改动作、触发方式和环境。",
+     "changes": "前车改为初始静止并删除刹停事件，同时把雨天改为晴天干燥。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "目标车位置与朝向未声明（素材侧读不出），无法确认是否本车道正前方；且目标为 20 km/h 匀速而非静止。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-60",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "素材为 ACC 跟随匀速前车（60 km/h），被测功能与测试故事均与 AEB 静止目标不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-follow-brake-60",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "素材为 ACC 前车制动到停场景，被测功能与目标运动方式均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 13,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "素材为 BSM 左后车超车场景，含额外参与者且被测功能不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-truck-static-50",
+     "rank": 14,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "除目标车型为卡车外，道路、环境、主车行为、目标位置/朝向/静止状态均与需求一致；车型差异属只差数值。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 18,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材为骑行者右前方横穿、主车 30 km/h，参与者类型、运动方式与位置均不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.2",
+   "title": "静止前车，主车 40 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C3",
+    "C17"
+   ],
+   "preferred": "C1",
+   "note": "C1/C2仅主车速度不同；C3另有时段差异；C17另有目标车型差异，均可通过参数调整。C4-C8需结构修改，未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "直道白天，主车接近正前方同车道同向静止乘用车，符合AEB静止前车场景；仅主车速度50 km/h与需求40 km/h不同，可改数值。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-30",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "直道白天，主车接近正前方同车道同向静止乘用车，符合AEB静止前车场景；仅主车速度约30 km/h与需求40 km/h不同，可改数值。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "核心场景为AEB接近静止前车，仅主车速度50 km/h和时段夜间与需求不同；速度、时段均属可调数值，改为40 km/h和日间即可。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "核心仍是AEB接近静止前车，但多了一个右前方行人；需删参与者后才能对应需求。",
+     "changes": "删除右前方静止行人背景参与者，并将主车速度改为40 km/h。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者与主车行为符合静止前车AEB，但道路含弯道，与需求直道不一致。",
+     "changes": "将含弯道R250的道路改为直道，并将主车速度改为40 km/h。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "故事仍是前车同车道AEB场景，但前车运动方式为匀速，不是需求中的静止。",
+     "changes": "将前车由20 km/h匀速改为静止，并将主车速度改为40 km/h。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车为制动目标而非静止目标，需改参与者动作后才能对应需求。",
+     "changes": "将前车由50 km/h后刹停改为从一开始静止，并将主车速度改为40 km/h。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车为制动目标且环境为雨天，需改参与者动作和天气后才能对应需求。",
+     "changes": "将前车由50 km/h后刹停改为静止，天气改为晴天，并将主车速度改为40 km/h。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "目标位置和朝向未声明，且为20 km/h匀速运动，无法确认是否为前方同车道静止车辆场景。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-60",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC跟车场景，前车60 km/h匀速行驶，不是AEB接近静止前车，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-follow-brake-60",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC前车制动停车场景，不是AEB接近静止前车，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 19,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人夜间右前方横穿，参与者类型和运动方式均与需求的正前方静止乘用车不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ped-near-40",
+     "rank": 15,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人右前方横穿，参与者类型和运动方式均与需求的正前方静止乘用车不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-ped-far-40",
+     "rank": 14,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人左前方横穿，参与者类型、位置和运动方式均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "aeb-ped-long-40",
+     "rank": 16,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人正前方同向行走，不是需求中的正前方同向静止乘用车。",
+     "changes": ""
+    },
+    {
+     "id": "C16",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "骑行者右前方横穿，参与者类型和运动方式均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C17",
+     "asset": "aeb-truck-static-50",
+     "rank": 17,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "正前方同车道同向静止车辆、直道白天，核心场景一致；仅目标车型为卡车、主车速度50 km/h与需求不同，按车型/尺寸参数调整并改40 km/h即可。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.3",
+   "title": "夜间静止前车",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C8",
+    "C15"
+   ],
+   "preferred": "C1",
+   "note": "C9素材未声明目标位置/朝向，名称与故事不一致，按拿不准处理；C15目标为卡车，按车型/时段数值差异处理。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道夜间，主车50 km/h，前车同车道同向静止，完全符合需求。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "与C1相同，仅时段为日间；时段属数值差异，改为夜间即可。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "同为静止前车AEB，仅主车速度30 km/h、日间，属速度和时段数值差异。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "核心是静止前车AEB，但多了一个右前方静止行人，需删除该参与者。",
+     "changes": "删除右前方静止行人背景参与者，将时段改为夜间。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为静止前车AEB，但道路含R250弯道，需求要求直道。",
+     "changes": "去掉R250弯道/改为直道，时段改为夜间。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为同车道前车AEB，但前车在匀速行驶，需求为静止前车。",
+     "changes": "将前车由20 km/h匀速改为静止，目标速度改为0，时段改为夜间。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为同车道前车AEB，但前车先行驶后刹停，需求为静止前车。",
+     "changes": "将前车由50 km/h刹停改为静止，去掉T1-stop事件，时段改为夜间。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同C7且为雨天，除改前车为静止外还需改天气和时段。",
+     "changes": "将前车由50 km/h刹停改为静止，去掉T1-stop事件；天气改晴天、时段改夜间。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "故事只写车辆位置/朝向未知且在20 km/h匀速，无法确认是否同车道正前方；与名称不符，信息不足。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-60",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "被测功能为ACC，前车60 km/h匀速，故事是ACC跟车，不是AEB静止前车。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-follow-brake-60",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "被测功能为ACC，前车从60 km/h刹停，故事是ACC跟车制动，不是AEB静止前车。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-far-40",
+     "rank": 19,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者是左前方横穿行人，不是同车道静止乘用车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 15,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者是右前方横穿行人，不是同车道静止乘用车；夜间相同但核心故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者是右前方横穿两轮车，不是同车道静止乘用车。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "aeb-truck-static-50",
+     "rank": 14,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "同车道同向静止目标AEB，仅目标为卡车且日间；按车型/时段数值差异可视为同一测试。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.4",
+   "title": "慢速前车 20 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C10名字暗示car-to-car rear，但素材未给出目标位置/朝向，按信息不足处理；其余AEB rear-end变体需改前车动作/道路等结构，故未列入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrm-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车50 km/h、前车同车道同向匀速20 km/h，AEB rear-end，故事与需求完全一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB car-to-car rear、直道、主车50 km/h，仅前车运动方式/目标速度不同，改前车动作即可。",
+     "changes": "将前车由静止改为匀速20 km/h。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同C2，核心AEB rear-end结构一致，仅前车静止且时段为夜间，前车需改为20 km/h匀速。",
+     "changes": "将前车由静止改为匀速20 km/h；夜间时段需求未限定，可保留或按需要调整。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrb-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB rear-end、直道、主车50 km/h，仅前车动作由制动改为低速匀速，需改参与者动作和速度。",
+     "changes": "将前车由50 km/h制动/刹停改为匀速20 km/h。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同C4，核心AEB rear-end结构一致，仅前车动作/速度及天气不同，前车需改为20 km/h匀速。",
+     "changes": "将前车由50 km/h制动/刹停改为匀速20 km/h；雨天为可调天气数值。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "主体仍是AEB car-to-car rear、直道、主车50 km/h，多一个背景行人且前车静止，删参与者并改前车动作即可。",
+     "changes": "删除右前方静止背景行人，并将前车由静止改为匀速20 km/h。"
+    },
+    {
+     "id": "C7",
+     "asset": "acc-follow-60",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "被测功能为ACC，主车/前车均60 km/h，与AEB慢速前车20 km/h的故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-30",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB car-to-car rear、直道，仅主车速度和前车运动方式不同，可调数值并改前车动作。",
+     "changes": "将主车速度改为50 km/h，前车由静止改为匀速20 km/h。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB car-to-car rear、主车50 km/h，但素材为弯道且前车静止，需换道路并改前车动作。",
+     "changes": "将道路改为直道，并将前车由静止改为匀速20 km/h。"
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "速度与AEB功能看似匹配，但素材只写车辆位置/朝向未知，无法核实是否正前方同向；名字线索不足以判定。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 17,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为自行车、主车30 km/h、目标15 km/h，与乘用车慢速前车20 km/h的故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "被测功能为BSM，且有左后方80 km/h超车车辆，故事与AEB慢速前车不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 18,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "自行车从右前方横穿、主车30 km/h，与乘用车同向慢速前车故事不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.5",
+   "title": "雨天前车紧急制动",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C1完全匹配；C2仅天气为晴天，属可改数值/环境差异，故一并绑定。C7等虽前车制动故事相近，但需改功能、目标动作、道路或参与者类型，未列入优先绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、雨天、主车50 km/h，正前方同向乘用车从50 km/h制动至停止，与需求完全一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrb-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "参与者、主车速度、道路和触发方式均一致，仅天气为晴天；天气属可改数值/环境差异。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrm-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB车尾场景，但前车运动方式是匀速而非紧急制动，需要改目标动作和速度。",
+     "changes": "将前车由20 km/h匀速改为50 km/h紧急制动至停止，主车改50 km/h，天气改雨天。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "AEB车尾场景，但目标为静止车辆，需求要求前车50 km/h制动至停止。",
+     "changes": "将前车由静止改为50 km/h同向行驶并紧急制动至停止，天气改雨天。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB车尾场景，但目标静止且为夜间晴天，需改目标动作和环境。",
+     "changes": "将前车由静止改为50 km/h紧急制动至停止，天气改雨天；时段需求未指定，可按需调整。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "多出背景行人且前车静止，需删参与者并改前车动作。",
+     "changes": "删除右前方行人，将前车由静止改为50 km/h紧急制动至停止，天气改雨天。"
+    },
+    {
+     "id": "C7",
+     "asset": "acc-follow-brake-60",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车制动至停止的故事相近，但素材为ACC且速度60 km/h，需改功能和速度。",
+     "changes": "将被测功能由ACC改为AEB，主车与前车速度由60 km/h改为50 km/h，天气改雨天。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-30",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "AEB车尾场景，但目标静止且主车速度30 km/h，需改目标和速度。",
+     "changes": "将前车由静止改为50 km/h紧急制动至停止，主车由30 km/h改为50 km/h，天气改雨天。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "素材含弯道且目标静止，需求为直道前车制动，需改道路和目标动作。",
+     "changes": "将道路改为直道并去掉R250弯道，前车由静止改为50 km/h紧急制动至停止，天气改雨天。"
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "目标车位置和朝向未声明，无法确认是否为正前方同车道；且当前为20 km/h匀速，信息不足，需补充后才能判断。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "素材是BSM左后方超车场景，主车60 km/h且前车为50 km/h匀速，不是前车紧急制动的AEB场景。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 17,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是行人横穿场景，参与者为行人而非正前方同向制动的前车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 14,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "除前车类型为摩托车外，位置、动作、速度和触发与需求相近，需换参与者类型。",
+     "changes": "将摩托车替换为乘用车目标，天气改雨天。"
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.6",
+   "title": "前方摩托车刹停",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C4",
+    "C5"
+   ],
+   "preferred": "C1",
+   "note": "C4/C5仅目标车型或天气不同，可作为同一测试数值变体；C6信息不足，C7-C11需结构性修改，未纳入首选绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车50 km/h、前方同车道同向摩托车先以50 km/h行驶后刹停，参与者、主车行为、道路、触发均与需求一致，仅事件时间等数值可调。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 2,
+     "routes": [
+      "full",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "这是BSM/左后方超车场景，前方为乘用车匀速且主车60 km/h，没有前方摩托车刹停的AEB故事。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-oncoming-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为左前方对向行驶乘用车，不在主车前方同一车道同向刹停，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrb-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "同为直道AEB，前车同车道同向先50 km/h后刹停；仅目标车型为乘用车而非摩托车，按车型数值差异可视为同一测试。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "与C4相同，仅天气为雨天；天气属数值差异，故事和结构一致。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "拿不准",
+     "reason": "目标位置和朝向均未声明，且为20 km/h匀速行驶，无法确认是否为主车前方同车道刹停目标。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrm-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "AEB后向场景、前车同车道同向，但当前是匀速移动目标，不是随后刹停，需改参与者动作。",
+     "changes": "将前车从20 km/h匀速改为先以50 km/h同向行驶后紧急刹停（目标可改为摩托车）。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-truck-static-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主车、道路、前车位置一致，但目标为静止卡车，缺少先行驶后刹停的触发动作。",
+     "changes": "将前方静止卡车改为先以50 km/h同向行驶后紧急刹停的摩托车（至少改运动方式为行驶后刹停）。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主车、道路、前车位置一致，但目标是静止乘用车，不是先行驶后刹停。",
+     "changes": "将前方静止乘用车改为先以50 km/h同向行驶后紧急刹停的摩托车（至少改运动方式为行驶后刹停）。"
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主车、道路、前车位置一致，但目标静止且为夜间，缺少先行驶后刹停动作；夜间属可调数值。",
+     "changes": "将前方静止乘用车改为先以50 km/h同向行驶后紧急刹停的摩托车；夜间条件可保留。"
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 11,
+     "routes": [
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "核心仍是前方同车道目标AEB，但多出右侧背景行人且目标静止，需删参与者并改动作。",
+     "changes": "删除右侧行人，并将前方静止乘用车改为先以50 km/h同向行驶后紧急刹停的摩托车。"
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从右侧横穿，参与者类型、相对位置、运动和触发方式均与前方摩托车同向刹停不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.7",
+   "title": "骑车人右侧横穿",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C4、C7虽可改造为右侧横穿场景，但需更换参与者类型和速度，未纳入首选绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车30 km/h直行、骑车人右前方横向匀速15 km/h，与需求结构和数值一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "骑车人在正前方同向骑行，不是从右侧横穿，核心故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为乘用车正前方同向静止，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 4,
+     "routes": [
+      "full",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "右前方横向横穿的结构一致，但参与者类型和速度需改。",
+     "changes": "将行人改为骑车人，目标速度改为15 km/h，主车速度改为30 km/h，时段按需改为白天。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为乘用车且位置未知、20 km/h，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ped-far-40",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从左前方横穿，与需求的骑车人右侧横穿方向相反且类型不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ped-near-40",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "右前方横向横穿结构一致，仅参与者类型和速度需改。",
+     "changes": "将行人改为骑车人，目标速度改为15 km/h，主车速度改为30 km/h。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrm-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车正前方同向行驶，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ped-long-40",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在主车道前方同向行走，不是右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车正前方同向静止，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "卡车正前方同向静止，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-static-20",
+     "rank": 14,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人主车道内静止，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ccrb-50",
+     "rank": 16,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车正前方同向刹停，不是骑车人右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为BSM且为乘用车超越/前车场景，不是AEB骑车人右侧横穿。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.8",
+   "title": "行人远端横穿",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "只有C1与需求完全一致；C2/C3虽为行人5 km/h、主车40 km/h横穿，但为近端/右侧横穿，属于不同场景，未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-far-40",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车40 km/h匀速、行人左前方横向5 km/h匀速，AEB场景，与需求远端横穿一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在右前方近端横穿，且为夜间，与需求左侧远端横穿故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ped-near-40",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在右前方近端横穿，与需求左侧远端横穿不同；时段可改数值但侧别不能只靠改数值解决。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-long-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在主车正前方同向步行，不是从左侧远端横向横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为两轮车右前方横穿，速度15/30 km/h，不是行人左前方5 km/h、主车40 km/h的远端横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 6,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车在主车正前方同向行驶，不是行人横向横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrm-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车正前方同向移动，不是行人横穿场景。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-truck-static-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "卡车正前方静止，不是行人横穿场景。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车正前方静止且夜间，不是行人远端横穿场景。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车位置未知、同向移动，不是行人横向横穿场景。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ped-static-20",
+     "rank": 13,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人位于主车正前方且静止，不是左前方横向匀速横穿；速度也不对。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrb-50",
+     "rank": 16,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "乘用车正前方同向刹停，不是行人横穿场景。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM超车场景，含两辆乘用车，与AEB行人远端横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-oncoming-50",
+     "rank": 12,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "对向乘用车在左前方行驶，不是行人横向横穿场景。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.9",
+   "title": "本车道静止行人",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C8",
+    "C11"
+   ],
+   "preferred": "C1",
+   "note": "C2–C5 与需求几何形态相同（本车道静止目标、主车匀速接近），但目标类型为车辆/卡车而非行人，按不同测试处理，未纳入绑定；C8/C11 需先按 changes 改为本车道静止行人再绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-static-20",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、行人静止站在主车本车道正前方、身体朝向横穿方向、主车20 km/h匀速接近，与需求完全一致；环境等未指定项只是数值差异。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-truck-static-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "冲突目标是静止卡车（车辆），不是行人，测试对象与故事不同，属车对车场景。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是本车道静止乘用车而非行人，属车对车AEB测试，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-30",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同上，目标为静止乘用车（速度差异只是数值），参与者类型与需求不符。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "夜间只是数值差异，关键是目标为本车道静止乘用车而非行人，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为两轮车且横向匀速横穿（右前方），与需求的行人在本车道静止站立不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车在本车道同向骑行移动，非静止行人，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 8,
+     "routes": [
+      "full",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "参与者是朝向横穿方向的行人，与本需求同类，但行人在右前方移动横穿而非静止站在本车道，需改结构。",
+     "changes": "把行人由匀速横穿改为静止站立，并移到主车本车道正前方；主车速度改为20 km/h。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是匀速行驶的车辆，非静止行人，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是匀速行驶的车辆且位置未声明，非本车道静止行人，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ped-far-40",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "行人与朝向横穿方向符合需求，但位于左前方且匀速移动，需改为本车道静止行人。",
+     "changes": "把行人由匀速横穿改为静止站立，并移到主车本车道正前方；主车速度改为20 km/h。"
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrb-50",
+     "rank": 16,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是制动停车的车辆且有事件触发，非静止行人，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM盲区监测场景（左后方超车+前车），被测功能与测试故事均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "bsm-rear-left-60",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM场景，左后方来车，与本车道静止行人AEB需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 18,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "冲突目标是本车道静止乘用车，行人只是右侧路边背景参与者、不在本车道，与需求故事不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.10",
+   "title": "对向来车",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "仅 C1 与需求一致。C2 素材未读出目标位置/朝向，但其名称与目标速度（20 km/h）均指向同车道追尾移动目标场景，且与其他追尾类候选同族，故判不是。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-oncoming-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车 50 km/h 匀速，参与者为左前方对向车辆、50 km/h 匀速行驶，与需求场景完全一致，仅环境等数值可调。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "素材为目标车同向 20 km/h 匀速（名称指向 car-to-car rear 追尾场景），与对向 50 km/h 来车故事不同；位置/朝向字段素材未读出。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 3,
+     "routes": [
+      "full",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM 场景：主车 60 km/h，前方同向 50 km/h 前车加左后方 80 km/h 超车车辆，无对向来车，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为同车道前方摩托车且刹停，非对向匀速乘用车来车。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrb-50",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前车 50 km/h 刹停的追尾场景，参与者朝向与动作均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "与 C5 相同的同向刹停追尾场景，仅天气为雨，故事仍不同于对向来车。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrm-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方同向车辆 20 km/h 匀速的追尾移动目标场景，非对向来车。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-truck-static-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方静止卡车，属静止目标追尾场景，与对向匀速来车不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方静止车辆的追尾场景，参与者运动方式与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道静止车辆、夜间环境，核心故事仍为追尾静止目标，非对向来车。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "静止前车加右前方路边行人的背景参与者，与对向来车故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "夜间行人横穿、主车 40 km/h，参与者类型、方位与运动方式均与需求不符。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.11",
+   "title": "ACC 前车制动停车",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "仅 C1 与需求完全一致；C2/C3/C4 虽可按同一外部场景改造，但需改前车动作或被测功能，未列入直接绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "acc-follow-brake-60",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车初速60 km/h、ACC，前车正前方同向由60 km/h制动至停车，触发为前车刹停，与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "acc-follow-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者和ACC场景相同且速度一致，但前车只是匀速巡航，缺少需求中的制动停车动作。",
+     "changes": "将前车动作由匀速60 km/h改为从60 km/h减速直至停车，主车保持ACC跟随。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrb-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "外部故事是前车正前方制动停车，与需求一致，但素材按AEB测试且速度是50 km/h，需改为ACC 60 km/h。",
+     "changes": "将测试功能由AEB改为ACC，并把主车/前车初速由50 km/h改为60 km/h。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车制动停车的外部故事一致，但功能为AEB且速度50 km/h，需改为ACC 60 km/h。",
+     "changes": "将测试功能由AEB改为ACC，并把主车/前车初速由50 km/h改为60 km/h；雨环境按需求未限定可保留。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 5,
+     "routes": [
+      "full"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "素材未声明目标起始位置/朝向，且目标为20 km/h匀速、AEB功能；无法确认其参与者关系是否为正前方同向，也需改动作和功能。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "目标车以20 km/h匀速行驶，不是从60 km/h减速至停车；且为AEB moving target场景，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "目标是静止车辆，没有前车从60 km/h制动停车的过程，属于AEB静止目标场景，与需求故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-30",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "目标静止且主车30 km/h，AEB场景，缺少前车制动停车过程，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "目标静止且夜间AEB，缺少前车从60 km/h减速至停车的过程，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "静止目标加右侧行人背景，AEB场景，没有前车制动停车过程，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-cutout-60",
+     "rank": 11,
+     "routes": [
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC cut-out场景，前车变道让出静止车，涉及变道/遮挡和多余静止目标，不是前车制动停车。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-left-80",
+     "rank": 15,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "左前方车辆切入且匀速60 km/h，不是正前方前车从60 km/h制动停车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-right-80",
+     "rank": 14,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "右前方车辆切入且匀速60 km/h，不是正前方前车从60 km/h制动停车。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.12",
+   "title": "右侧车辆切入",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C3与需求仅切入侧相反，需改到右侧后才能复用；已有精确匹配的C1，因此binding只取C1。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "acc-cutin-right-80",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道，主车ACC 80 km/h，右前方同向乘用车以60 km/h匀速并变道切入，与需求完全一致；仅有环境等未声明项不影响判定。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "该素材是AEB追尾场景，主车50 km/h、目标20 km/h且不切入，与需求ACC右侧切入不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "acc-cutin-left-80",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为ACC下60 km/h车辆切入且主车80 km/h，但切入侧为左侧，需求要求右侧。",
+     "changes": "将切入车辆从左侧相邻车道改为右侧相邻车道（front_left/left adjacent改为front_right/right adjacent）。"
+    },
+    {
+     "id": "C4",
+     "asset": "acc-follow-60",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是ACC跟随正前方车辆，参与者不处于右前方且无变道切入动作，与需求故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "acc-follow-brake-60",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是ACC跟随前车并刹停，参与者位置和动作均非右侧切入，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "bsm-rear-left-60",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是BSM左后方快车接近场景，被测功能、参与者位置和动作均与需求不符。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ped-far-40",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是AEB行人左前方横穿场景，参与者类型、位置、运动方式和被测功能均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 8,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是AEB行人右前方横穿场景，参与者类型、动作和被测功能均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是AEB骑行者右前方横穿场景，非乘用车切入，被测功能也不符。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是AEB骑行者正前方同向行驶，非右侧车辆切入，参与者类型和动作均不符。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 14,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是AEB静止卡车正前方场景，非右侧同向车辆切入，被测功能不符。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-static-20",
+     "rank": 17,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是AEB静止行人正前方场景，参与者类型、位置和动作均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 26,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "该素材是BSM左后方超车并带前车场景，参与者数量、位置、动作和被测功能均与需求不符。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.13",
+   "title": "盲区监测：左后方车辆超车",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C1与需求场景完全吻合，仅环境等未声明项可按需设定；C2核心超车故事一致，但需删除多余的前方前车后才能直接使用。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "bsm-rear-left-60",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道，主车60 km/h匀速，左后方同向乘用车以80 km/h匀速超越，与需求完全一致（天气/时段等数值差异可忽略）。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "核心故事与需求一致（左后方车80 km/h超越60 km/h主车），但多了一个正前方前车参与者。",
+     "changes": "删除正前方同车道的50 km/h前车，只保留左后方80 km/h超越的主车60 km/h场景。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "AEB后车追尾类场景，目标位置未知且20 km/h，与BSM左后方超车故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "acc-follow-60",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC跟随前车场景，参与者位置为正前方，与需求左后方超车无关。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "acc-follow-brake-60",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC前车刹停场景，参与者位置、动作均与需求不符。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "acc-cutin-right-80",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC右前方车辆切入场景，与需求左后方超车故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "acc-cutin-left-80",
+     "rank": 7,
+     "routes": [
+      "full",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "虽涉及左相邻车道，但为左前方车辆变道切入的ACC场景，非左后方车辆超车。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 8,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "夜间行人横穿AEB场景，参与者类型与运动方式均不符。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "右侧骑行者横穿AEB场景，与需求无关。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同向前方骑行者AEB场景，参与者类型和位置均不符。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 15,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "正前方静止卡车AEB场景，与需求不符。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-far-40",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "左前方行人横穿AEB场景，非左后方车辆超车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ped-static-20",
+     "rank": 18,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "正前方静止行人AEB场景，与需求不符。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-ccrm-50",
+     "rank": 13,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "正前方20 km/h移动车辆的AEB跟车场景，非BSM左后方超车。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.14",
+   "title": "慢速前车 30 km/h，主车 60 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C11名字为AEB车尾移动目标，但故事未声明目标位置/朝向，按拿不准处理；binding仅纳入可直接改数值使用的C1。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrm-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "AEB直道、正前方同车道乘用车同向匀速，仅主车50→60、前车20→30等数值不同，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "acc-follow-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "素材为ACC且前车60与主车同速，不构成AEB慢速前车接近；被测功能和运动关系不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB直道同车道前车场景，但目标为静止，需改目标动作和主车速度。",
+     "changes": "前车由静止改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB直道同车道前车场景，但目标为静止，需改目标动作和主车速度。",
+     "changes": "前车由静止改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB直道同车道前车场景，但目标为静止，需改目标动作和主车速度。",
+     "changes": "前车由静止改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrb-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB直道同车道前车场景，但目标为刹停，需改目标动作和速度。",
+     "changes": "前车由50 km/h刹停改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB直道同车道前车场景，但目标为刹停，需改目标动作和速度。",
+     "changes": "前车由50 km/h刹停改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "AEB直道同车道前车场景，但目标静止且多一个右前方行人背景参与者，需删参与者并改动作/速度。",
+     "changes": "删除右前方行人背景参与者；前车由静止改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "AEB同车道前车场景，但道路为R250弯道且目标静止，需换直道并改动作/速度。",
+     "changes": "道路改为直道（去掉R250弯道）；前车由静止改为30 km/h匀速；主车速度改为60 km/h。"
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-brake-60",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "素材为ACC且前车60 km/h刹停，目标运动方式和被测功能均不符AEB 30 km/h匀速前车；测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "素材为AEB移动目标，但故事未声明目标方位和朝向，无法确认是否正前方同向；信息不足。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 14,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为右前方横穿自行车，参与者类型、位置和运动方式均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 15,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为同车道前方两轮车而非乘用车，参与者类型不同，属AEB自行车场景。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 12,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "BSM左后方超车并含额外前车，参与者关系和被测功能不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "bsm-rear-left-60",
+     "rank": 24,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM左后方快速来车，参与者位置和被测功能不同。",
+     "changes": ""
+    },
+    {
+     "id": "C16",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 16,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在右前方横穿，参与者类型、位置和运动方式均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C17",
+     "asset": "aeb-ped-long-40",
+     "rank": 19,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为同车道前方行人而非乘用车，参与者类型不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.15",
+   "title": "夜间行人横穿，主车 60 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C1、C2 与需求只差主车速度（C2 还差夜间），改数值即可直接复用，其中 C1 夜间已满足、仅需把主车速度改为60km/h，故为首选。C5、C7 故事相近但需改变行人位置/参与者类型，改动较大，未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "直道、夜间、行人右前方横穿、目标5km/h匀速、主车匀速行驶，与需求一致；仅主车速度40与需求60不同，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-near-40",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "故事与C1相同（行人右前方横穿、5km/h、直道），仅主车速度40和日间与需求不同；时段和速度都属可调数值，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "素材行人为静止且只是路旁背景，另有静止前车作为主目标，是静止车辆追尾故事，与行人横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-long-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在主车所在车道正前方同向行走，不是从右侧横穿，运动方式和相对位置都不同。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-far-40",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "故事同为主车直行遇行人横穿（AEB），但行人横穿方向与需求相反，需改参与者的相对位置。",
+     "changes": "把行人从左侧（front_left）横穿改为从右侧（front_right）横穿，并把主车速度改为60km/h、时段改为夜间。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为同车道静止乘用车，属车对车追尾场景，没有横穿行人。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为右侧横穿的VRU触发AEB，故事结构一致，但参与者类型（两轮车）与速度不符，需要更换参与者并改参数。",
+     "changes": "把两轮车换成行人、速度由15km/h改为5km/h，主车速度改为60km/h，时段改为夜间。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 8,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车主车道前方同向行驶，属跟车场景，不是横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为同向行驶的乘用车，属车对车追尾，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为乘用车且位置未知，属车对车场景，与行人横穿无关。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 12,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为同车道静止卡车，属车对车静止目标场景，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-static-20",
+     "rank": 16,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人为静止且位于主车所在车道内，不是以5km/h从右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为BSM，参与者为前后乘用车，属变道超车场景，与AEB行人横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "bsm-rear-left-60",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为BSM，目标为左后方快速接近的乘用车，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "acc-follow-60",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为ACC，目标为同车道前车，属跟车场景，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C16",
+     "asset": "acc-cutin-left-80",
+     "rank": 24,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为ACC切入场景，参与者为左前方切入乘用车，与行人横穿无关。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.16",
+   "title": "ACC 跟车 80 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "仅C1与需求为同一测试，改速度为80即可；其余候选为AEB、BSM、刹停或切入等不同故事。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "acc-follow-60",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "直道、前车乘用车正前方同向匀速、主车跟随，与需求一致；仅速度60需改为80。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "acc-follow-brake-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "前车动作是刹停并带stop事件，测试故事为ACC前车制动停车，不是前车80匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrm-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "AEB追尾场景，前车20、主车50，故事不是ACC 80匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "AEB场景且目标位置/朝向未声明，不能视为ACC正前方匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标场景，前车静止而非匀速行驶。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-30",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标场景，前车静止，主车30，不是ACC 80匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标夜间场景，前车静止而非匀速行驶。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB制动目标场景，前车刹停而非80匀速行驶。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB制动目标雨天场景，前车刹停而非80匀速行驶。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB场景且含右侧行人背景，前车静止，不是ACC匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-cutin-left-80",
+     "rank": 15,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC切入场景，目标从左前方变道切入，不是正前方同向匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-right-80",
+     "rank": 14,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC切入场景，目标从右前方变道切入，不是正前方同向匀速跟车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 11,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "BSM超车场景，存在左后方来车，故事与ACC正前方跟车不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "bsm-rear-left-60",
+     "rank": 16,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM左后方快车接近场景，不是ACC正前方匀速跟车。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.17",
+   "title": "儿童右侧横穿",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C2",
+   "note": "C1/C2 为同一故事的白天/夜间数值变体，可一并覆盖；两者行人模型年龄无法从素材核实（需求为儿童），绑定时需确认/替换为儿童行人模型。C6 结构上接近横穿但参与者为两轮车，需改参与者后才能用，未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车40 km/h、行人位于右前方横向匀速横穿5 km/h，与需求结构一致；仅环境为夜间（时段属可改数值），儿童年龄素材未标注。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-near-40",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车40 km/h、行人右前方横向匀速横穿5 km/h，与需求一致；仅环境为白天干地（属数值/环境差异），儿童年龄素材未标注。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "故事是前方静止车辆+路侧静止行人，行人静止且多一辆车，主车50 km/h，与儿童动态横穿场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-far-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人位于左前方（远侧横穿），横穿方向与需求“右侧横穿”相反，属不同测试故事。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-long-40",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在自车道正前方同向行走，不是横向横穿，触发方式与故事均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "故事同为从右前方横向匀速横穿（AEB），但参与者类型是两轮车而非行人，需改参与者并同步改速度。",
+     "changes": "把两轮车替换为儿童行人，目标速度改为5 km/h，主车速度改为40 km/h。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 7,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车在自车道前方同向骑行，不是横向横穿，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrm-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前车同向行驶的car-to-car追尾场景，参与者与故事均与儿童横穿无关。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同上为car-to-car追尾场景，且目标位置未声明，与横穿行人场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-truck-static-50",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前方静止卡车场景，参与者类型与动作均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ped-static-20",
+     "rank": 13,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人静止于自车道正前方，主车20 km/h，非右前方动态横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM左后方超车场景，被测功能为BSM，参与者与故事完全不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.18",
+   "title": "前方静止三轮车",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C4",
+    "C6",
+    "C7",
+    "C15"
+   ],
+   "preferred": "C1",
+   "note": "C1/C4/C6/C7仅需调整数值（目标换三轮车、主车30 km/h）即可直接绑定；C15需删除背景行人。C11因目标位置/朝向未声明判为拿不准；C3/C12需把运动目标改为静止、C5需更换目标对象，改造较大，未列入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-30",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "直道、主车30 km/h、正前方同车道同向静止目标、AEB一致；仅目标为乘用车（车型/尺寸属数值类差异，换成三轮车即可）。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车从右前方以15 km/h横向穿行，属横穿冲突场景，与本车道静止目标的故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "位置、朝向、道路与主车行为一致，但目标为匀速行驶，需改为静止三轮车。",
+     "changes": "把15 km/h匀速骑行的两轮车改为本车道内静止停放的三轮车（速度设0、动作改为静止）。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-truck-static-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "同为直道本车道前方同向静止目标、主车匀速接近；仅主车速度（50→30）与目标车型（卡车→三轮车）为数值差异。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-static-20",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为直道本车道正前方静止目标、主车接近的AEB场景，需更换目标对象并改朝向。",
+     "changes": "把横向朝向的静止行人替换为本车道正前方同向静止的三轮车，主车速度改为30 km/h。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "同为直道本车道前方同向静止车辆目标；仅主车速度（50→30）与目标车型为数值差异。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "同为直道本车道前方同向静止车辆目标；仅主车速度、目标车型、时段（夜间）为数值差异。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 8,
+     "routes": [
+      "full",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人自右前方横向穿行（夜间），属横穿场景，与静止三轮车场景故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ped-far-40",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人自左前方横向穿行，属横穿场景，与静止三轮车场景故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ped-near-40",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人自右前方横向穿行，属横穿场景，与静止三轮车场景故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 13,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "拿不准",
+     "reason": "素材明确目标起始位置未声明、朝向未知，无法确认是否位于本车道正前方同向；若确认则需改为静止三轮车。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrm-50",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "位置、朝向、道路与主车行为一致，但目标为匀速行驶，需改为静止三轮车。",
+     "changes": "把20 km/h匀速行驶的目标车改为本车道正前方静止停放的三轮车（速度0、动作静止），主车速度改为30 km/h。"
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM超车场景（含左后方超车车辆，共2个目标），被测功能与故事均与AEB单静止目标场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "acc-follow-60",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC跟车场景，前车匀速行驶，被测功能与故事均与AEB静止目标场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 18,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "基本为静止车辆目标在本车道前方，但多出路边背景行人参与者，删除后即可用。",
+     "changes": "删除右侧路边站立的背景行人；目标换为静止三轮车，主车速度改为30 km/h。"
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.19",
+   "title": "倒车时后方静止行人",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C2"
+   ],
+   "preferred": "C2",
+   "note": "无完全匹配候选；C2与需求最接近，但需把主车动作改为倒车并将静止行人移到正后方后才能用于该场景。",
+   "failure": "",
+   "readings": 3,
+   "agree": 2,
+   "other_preferred": [
+    null
+   ],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-truck-static-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是正前方静止卡车，主车前行，与倒车时后方静止行人故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-static-20",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为AEB直道单一行人静止目标，参与者类型和运动方式一致，但主车动作与行人相对位置不符，需结构修改。",
+     "changes": "将主车由前行改为倒车，并把行人从正前方同车道移到正后方，保持静止和横向朝向。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为前方静止乘用车且主车前行，参与者类型、位置和主车动作均不符。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-30",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为前方静止乘用车且主车前行，不是倒车后方行人场景。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为前方静止乘用车且主车前行，仅环境为夜间，故事仍不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 6,
+     "routes": [
+      "full",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在右前方横穿且匀速运动，主车前行，与后方静止行人不符。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为横穿两轮车且运动，主车前行，不是倒车后方静止行人。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 8,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为同向前行两轮车且运动，主车前行，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为前方摩托车且随后刹停，主车前行，不是静止行人目标。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-oncoming-50",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为对向行驶乘用车且位于左前方，与后方静止行人不符。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ped-far-40",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在左前方横穿且匀速运动，主车前行，不是后方静止行人。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 17,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为未知位置匀速行驶乘用车，主车前行，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ccrm-50",
+     "rank": 14,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为前方同向匀速行驶乘用车，主车前行，不是静止行人。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-ccrb-50",
+     "rank": 13,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为前方同向乘用车且随后刹停，主车前行，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "bsm-rear-left-60",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为BSM，参与者为左后方快速接近乘用车，与AEB倒车后方行人不同。",
+     "changes": ""
+    },
+    {
+     "id": "C16",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为BSM且含前车和左后方车，与倒车后方静止行人场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C17",
+     "asset": "acc-follow-60",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为ACC且目标为前方同向行驶乘用车，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C18",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 18,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "主目标是前方静止乘用车，行人仅为右侧背景参与者，主车前行，与需求不符。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-zh.pdf",
+   "section_id": "5.20",
+   "title": "盲区监测：前方慢车时左后方车辆超车",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C1完整匹配需求；C2需补上本车道前方50 km/h慢车后才可用于该场景。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车60 km/h、本车道前方50 km/h匀速车、左后方80 km/h匀速超车均与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "bsm-rear-left-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "已有主车60 km/h和左后方80 km/h超车，但缺少需求中的前方50 km/h慢车。",
+     "changes": "需补一辆本车道正前方同向匀速50 km/h的乘用车，保留左后方80 km/h超车。"
+    },
+    {
+     "id": "C3",
+     "asset": "acc-follow-60",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是ACC跟随60 km/h前车，无左后方80 km/h超车，被测功能与参与者结构均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrm-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是AEB追尾场景，前车20 km/h、主车50 km/h，无左后方超车。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "acc-follow-brake-60",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是ACC前车刹停场景，无左后方超车，前车动作与需求匀速跟车不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "acc-cutout-60",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是ACC cut-out场景，前车变道且出现静止车，不是BSM左后方超车。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是AEB制动目标场景，无左后方80 km/h超车。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是AEB雨天制动目标场景，无左后方超车。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是AEB移动目标场景，目标方位未声明且无左后方超车。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是AEB静止车与行人场景，无左后方超车。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-cutin-left-80",
+     "rank": 16,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是ACC左前方车辆切入，主车80 km/h、目标60 km/h，不是左后方80 km/h超车。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-right-80",
+     "rank": 15,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是ACC右前方车辆切入，不是左后方超车。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.1",
+   "title": "Stationary car ahead, 50 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C8",
+    "C13"
+   ],
+   "preferred": "C1",
+   "note": "C9因目标位置/朝向在故事中未声明，按拿不准处理；C10-C12为ACC/BSM等不同测试，不绑定。C4-C8为同一测试但要改，已列入binding并注明修改点。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车50 km/h、正前方同车道同向静止乘用车，参与者与动作均与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "除环境为夜间外与C1一致；时段属可调数值，结构仍符合需求。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "除主车速度为30 km/h外，其他结构与需求一致；将速度改为50 km/h即可。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "核心是静止乘用车在前方，但多了一个右前方行人参与者，需移除后才与需求结构一致。",
+     "changes": "删除右前方静止行人背景参与者，只保留正前方同车道静止乘用车。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "目标与主车动作符合，但道路含弯道，需求要求直道。",
+     "changes": "去掉前方R250弯道，将道路改为纯直道。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "道路、主车和参与者位置/朝向一致，但目标为运动目标，需改为静止目标。",
+     "changes": "将正前方乘用车由20 km/h匀速行驶改为静止。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "属于AEB后向同场景，但目标运动方式为刹停而非静止，需改动作。",
+     "changes": "将正前方目标由50 km/h刹停改为全程静止，并移除刹停事件。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同C7，目标运动方式不符；雨天属可调环境数值，可按需求保留或调整。",
+     "changes": "将正前方目标由50 km/h刹停改为全程静止，并移除刹停事件。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "素材中目标相对位置和朝向为unknown，且为20 km/h匀速运动，无法确认是否能改成需求的正前方同向静止车。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-60",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC跟车场景，前车60 km/h匀速且主车60 km/h，没有接近静止目标，故事与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-follow-brake-60",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC前车刹停场景，故事为前车从60 km/h制动停止，不是前方车辆静止的AEB场景。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 13,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "BSM左后车超车场景，含左后方80 km/h车辆且前车50 km/h匀速，故事与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-truck-static-50",
+     "rank": 14,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "除目标车型为卡车外，直道、主车50 km/h、正前方同车道同向静止等均一致；车型可按参数改为乘用车。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.2",
+   "title": "Stationary car on a bend",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "只有 C1 是弯道且与需求差异为无；其余接近候选均需改道路或参与者/动作，故未加入 binding。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "弯道、日间干燥、主车50 km/h、前车同车道同向静止，参与者、主车行为、道路和触发均与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者、主车行为和环境与需求一致，但素材为直线道路，缺弯道。",
+     "changes": "将道路由直线改为弯道（如 R250 弯道），其余保持前车静止、主车50 km/h、日间干燥。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车静止、主车50 km/h，但素材为直线且夜间；道路需改。",
+     "changes": "将道路改为弯道；若严格匹配需求还需将夜间改为日间（或作为时段数值变体）。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-30",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车静止、日间干燥，但素材为直线且主车30 km/h；道路需改。",
+     "changes": "将道路改为弯道；主车速度按需求改为50 km/h（或作为30 km/h速度变体）。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "核心静止车AEB场景接近，但多出右前方静止行人且为直线道路。",
+     "changes": "删除右侧路边静止行人背景；将道路改为弯道。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车位置、朝向和主车50 km/h匹配，但前车在20 km/h匀速行驶且道路为直线。",
+     "changes": "将前车运动改为静止（目标速度0 km/h）；将道路改为弯道。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "AEB后向场景接近，但前车是制动停止而非静止车，且道路为直线。",
+     "changes": "将前车由50 km/h制动停车改为初始静止并删除刹停事件；将道路改为弯道。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "前车制动、直线且雨天，与静止车、弯道、晴天不符。",
+     "changes": "将前车改为初始静止并删除刹停事件；将道路改为弯道，天气改为干燥。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "素材目标位置/朝向未声明且为20 km/h匀速运动，无法确认能否改为正前方同车道静止车；信息不足。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-60",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC跟车场景，前车60 km/h匀速，非AEB接近静止车，且道路为直线。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-follow-brake-60",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC前车制动到停，不是AEB静止车场景。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 13,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "BSM超车场景，含左后车和前方匀速车，非本需求。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutout-60",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "ACC切出/遮挡揭示静止车，触发和参与者结构与本需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-truck-static-50",
+     "rank": 14,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "静止目标、主车50 km/h、日间干燥匹配，但目标是卡车且道路为直线。",
+     "changes": "将道路改为弯道；将目标卡车改为乘用车（若允许车型/尺寸变体可保留卡车）。"
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.3",
+   "title": "Lead car brakes to a stop",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C8"
+   ],
+   "preferred": "C1",
+   "note": "C8 名称标为 ACC、功能标注与需求不同，但素材故事与需求一致（直道干路、前车行驶后制停、主车跟随），仅车速为数值差异，按“以故事为准”判为同一测试并纳入绑定（执行时按 50 km/h、AEB 配置）。C12 的摩托车按参与者类型差异处理（需更换为目标车乘用车），而非仅数值车型差异。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrb-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道干路，前车同向前方以 50 km/h 行驶后制停，主车 50 km/h 跟随，参与者、主车行为、道路、触发方式均与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "与 C1 结构完全一致，仅天气为雨天，属数值参数差异（改为晴天/干路即可），按规则仍为同一测试。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同为 AEB 前车追尾场景，但目标车是静止而非 50 km/h 制停，需改目标车动作（触发方式随之变化）。",
+     "changes": "把前车由静止改为以 50 km/h 行驶并全力制动至停止。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrm-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者位置/朝向一致，但目标车匀速行驶而非刹停，需改其运动方式。",
+     "changes": "把前车由 20 km/h 匀速改为以 50 km/h 行驶并制停。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "目标车动作需改（静止→制停），夜间属数值差异，不能直接用。",
+     "changes": "前车由静止改为以 50 km/h 行驶后制停；时段改为白天。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "多了背景行人且目标车为静止，需删参与者并改目标车动作才能对应本场景。",
+     "changes": "删除右前方静止行人；前车由静止改为以 50 km/h 行驶后制停。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "目标车动作（静止→制停）和主车速度（30→50）都需调整。",
+     "changes": "前车由静止改为以 50 km/h 行驶后制停；主车速度改为 50 km/h。"
+    },
+    {
+     "id": "C8",
+     "asset": "acc-follow-brake-60",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "故事同为直道干路、前车行驶后制停、主车跟随，仅车速 60 vs 50 为数值差异；名称标 ACC 属功能配置标注，不改变场景结构。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "含弯道且目标车静止，需换道路并改目标车动作。",
+     "changes": "道路改为直道（去掉 R250 弯道）；前车由静止改为以 50 km/h 行驶后制停。"
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "素材未声明目标车的相对位置与朝向（读不出、未核实），且目标为 20 km/h 匀速行驶，无法确认是否为前方同向制停的同一场景。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "BSM 超车故事：左后车 80 km/h 超车、前车 50 km/h 匀速、主车 60 km/h，参与者与故事情节均与“前车制停”场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 15,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "参与者类型不同（摩托车 vs 乘用车），位置/朝向/动作一致，需更换目标车类型。",
+     "changes": "把目标摩托车替换为乘用车（同向前方，以 50 km/h 行驶后制停）。"
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.4",
+   "title": "Stationary truck ahead",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C3",
+    "C5",
+    "C12"
+   ],
+   "preferred": "C1",
+   "note": "素材名仅作线索，按故事判定；C2/C3/C5/C12 的乘用车目标与需求卡车按题型属车型数值差异，其中C12需删除背景行人后才可用。C8虽目标位置未知，但运动方式已明确为匀速行驶，故判不是。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-truck-static-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车50 km/h匀速、正前方同车道同向静止卡车，触发方式一致，与需求完全吻合，可直接使用。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "与需求仅差车型（乘用车代替卡车）和时段（夜间），均属题型允许的数值/环境差异，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "与需求仅差目标车型（乘用车代替卡车），按车型数值差异处理，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-static-20",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是横朝向的行人（VRU场景），主车20 km/h，与正前方同向静止卡车的故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-30",
+     "rank": 5,
+     "routes": [
+      "full",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "与需求仅差目标车型（乘用车）和主车速度（30 vs 50 km/h），均为数值差异。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-oncoming-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者是左前方对向50 km/h行驶的车辆，不是正前方同向静止卡车，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrm-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是前方同车道20 km/h匀速行驶的车辆，属移动目标场景，非静止目标。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标明确为20 km/h匀速行驶（位置、朝向未知），运动方式已不是静止，故不符。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是摩托车且先以50 km/h行驶再刹停，非正前方静止卡车。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrb-50",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前车先以50 km/h行驶后刹停（制动目标场景），与静止目标的故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同C10，前车先行驶后刹停，且为雨天，非静止目标场景。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 12,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主体同为前方同车道静止车辆、主车50 km/h，但多了一个右前方静止行人参与者，删除后才与需求参与者一致。",
+     "changes": "删除右前方的静止行人背景参与者；主目标保留静止车辆（车型按数值差异改为卡车）。"
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ped-long-40",
+     "rank": 13,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是沿车道同向行走的行人（5 km/h），非静止车辆目标，故事不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.5",
+   "title": "Cyclist riding ahead",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "仅C1完全匹配、可直接绑定；C4、C10与本需求故事骨架相同（前方同车道同向慢速目标），但目标分别为行人/乘用车，需替换为骑行目标并改速度后才能使用，故未列入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车30 km/h、前方本车道同向匀速骑行15 km/h，参与者类型/位置/运动方式、主车行为、道路与需求完全一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "骑行者位于右前方并横向横穿，冲突形式（横穿 vs 前方同向骑行）与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标为前方同车道静止乘用车（静止目标追尾场景），与需求中同向匀速骑行的故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-long-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为本车道前方同向慢速目标、主车接近的故事，仅参与者类型和数值不同，需换参与者并改数值。",
+     "changes": "把行人替换为两轮车（骑行者），目标速度改为15 km/h，主车速度改为30 km/h。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-static-20",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "静止行人且朝向横穿，属静止/横穿目标场景，与需求骑行前进不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-oncoming-50",
+     "rank": 6,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "对向行驶车辆，冲突方向与需求同向前方目标不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 7,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从近侧横穿（夜间），冲突形式与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ped-far-40",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从远侧横穿，冲突形式与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ped-near-40",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从近侧横穿，冲突形式与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "前方同车道同向匀速目标、主车更快接近的故事与需求一致，仅目标类型和数值不同。",
+     "changes": "把乘用车替换为两轮车（骑行者），目标速度改为15 km/h，主车速度改为30 km/h。"
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "静止卡车，属静止障碍物追尾场景，与需求的匀速骑行目标故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 14,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "拿不准",
+     "reason": "素材未声明目标位置与朝向（unknown），无法确认是否为正前方同车道同向，信息不足。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ccrb-50",
+     "rank": 15,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前车会刹停，目标动作/触发方式与需求的匀速骑行不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "acc-cutin-left-80",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "左前相邻车道乘用车切入且为ACC场景，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "acc-cutin-right-80",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "右前相邻车道乘用车切入且为ACC场景，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C16",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM场景，含左后方超车车辆和前方前车，参与者结构与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C17",
+     "asset": "acc-follow-60",
+     "rank": 23,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC跟车且前车与主车同速（无接近），与需求主车接近骑行者的AEB场景不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.6",
+   "title": "Pedestrian crossing from the nearside",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C1完全匹配，优先绑定；C2仅需把夜间改为日间，可作为日间数值变体。C4、C7需结构修改，未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-near-40",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、日间，主车40 km/h匀速；行人右前方横向匀速5 km/h，与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "仅时段为夜间，需改为日间；其余道路、主车速度、行人右前方横穿5 km/h均与需求一致，属只差数值的变体。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "素材是前方静止车辆加路侧静止行人，不是行人从近侧横穿；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-far-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "除行人横穿侧别为远侧而非近侧外，道路、日间、车速和横穿动作均一致。",
+     "changes": "将行人从远侧左前方改为近侧右前方横穿。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-long-40",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人沿主车车道同向行走，不是从近侧横向穿越道路；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ped-static-20",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "素材是主车前方静止行人且主车20 km/h，不是5 km/h横穿；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为右侧横穿且直道日间，但参与者类型是两轮车、速度不同，需改参与者并调速度。",
+     "changes": "将两轮车改为行人，目标速度改为5 km/h，主车速度改为40 km/h。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 8,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车沿主车车道同向骑行，不是横向穿越；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-oncoming-50",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "对向车辆场景，不是行人从近侧横穿；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前车同向行驶的追尾场景，不是行人横穿；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 14,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前方静止卡车场景，不是行人横穿；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前车同向行驶且位置未知，不是行人从近侧横穿；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-left-80",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "左侧车辆ACC切入场景，被测功能与参与者均不同；故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "acc-cutin-right-80",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "右侧车辆ACC切入场景，被测功能与参与者均不同；故事不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.7",
+   "title": "Pedestrian crossing at night",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C1为完全匹配；C2仅日间/夜间差异，按数值变体纳入绑定。C4虽为行人横穿但需改左侧为右侧，未纳入绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "夜间直道，行人右前方横穿、5 km/h，主车40 km/h，与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-near-40",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "除时段为日间外，其余与需求一致；时段差异按数值差异处理为同一测试。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "场景为前方静止车辆加右路侧站立行人，不是行人从右侧横穿，且主车50 km/h。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-far-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为行人横穿、5 km/h、主车40 km/h直道，但横穿方向为左前方且为日间，需改参与者位置和时段。",
+     "changes": "将行人从左侧（front_left/farside）改为右侧（front_right/nearside）横穿，并将时段改为夜间。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-long-40",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人沿主车车道同向行走，不是从右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标是前方同向静止乘用车，属于车对车场景，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者是两轮车而非行人，属于不同VRU测试场景。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ped-static-20",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人静止在主车车道内，不是从右侧横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "两轮车同向行驶，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "车对车移动目标追尾场景，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 15,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前方静止卡车场景，不是行人横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 12,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "车对车移动目标且参与者位置未知，不是行人横穿。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.8",
+   "title": "Pedestrian walking along the lane",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "仅C1与5.8需求场景一致；其余候选在参与者类型、位置/朝向、运动方式、被测功能或触发方式上属于不同测试故事。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ped-long-40",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、AEB、主车40 km/h匀速，行人位于正前方同车道、同向、5 km/h匀速行走，与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从右前方横穿且为夜间，不是沿本车道同向行走。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ped-far-40",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从左前方横穿，位置、朝向和运动方式均与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ped-near-40",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从右前方横穿，不是沿本车道同向行走。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ped-static-20",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人在本车道正前方但静止且面向横穿，主车20 km/h，属于静止目标场景，不是5 km/h同向行走。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为两轮车且从右前方横穿，不是行人沿本车道同向行走。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-oncoming-50",
+     "rank": 7,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为对向行驶的乘用车，不是行人同向行走。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 8,
+     "routes": [
+      "full",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为同车道同向骑行的两轮车，不是行人步行沿车道。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrm-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为同车道同向行驶的乘用车，不是行人步行沿车道。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为静止乘用车，不是以5 km/h同向行走的行人。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 12,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为静止卡车，不是同向行走的行人。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为位置和朝向未知的乘用车，不是正前方同向行走的行人。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ccrb-50",
+     "rank": 16,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为同向乘用车但会刹停，不是5 km/h匀速行走的行人。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "acc-cutin-left-80",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为ACC且目标车从左侧变道切入，与AEB行人沿车道场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "acc-cutin-right-80",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为ACC且目标车从右侧变道切入，与AEB行人沿车道场景不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.9",
+   "title": "ACC following at 60 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "只有C1与需求一致；C2虽为ACC且自车60 km/h，但目标车动作是刹停，属于不同测试。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "acc-follow-60",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、自车60 km/h、正前方同车道同向目标车以60 km/h匀速行驶，ACC跟随，与需求一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "acc-follow-brake-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "虽为ACC且自车60 km/h，但目标车在3 s后刹停，测试的是前车制动/停车，不是匀速跟随60 km/h。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrm-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "不是",
+     "reason": "AEB car-to-car rear场景，自车50 km/h、目标20 km/h，功能与速度均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "AEB场景，目标位置未知且速度不同，不是ACC跟随60 km/h匀速前车。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标场景，非ACC跟随匀速前车。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-30",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标场景，自车30 km/h，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标且夜间场景，与ACC跟随60 km/h不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB制动目标场景，目标刹停而非匀速60 km/h行驶。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB制动目标且雨天场景，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "AEB静止目标并含行人背景参与者，不是ACC跟随。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 11,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "BSM左侧超车场景，含额外左后方80 km/h车辆，非ACC跟随60 km/h。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-left-80",
+     "rank": 15,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标从左前方切入、自车80 km/h，不是正前方匀速跟随。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-right-80",
+     "rank": 14,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标从右前方切入、自车80 km/h，不是正前方匀速跟随。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "acc-cutout-60",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "切入切出并暴露静止车，含额外目标，非ACC匀速跟随60 km/h。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.10",
+   "title": "Cut-in from the left",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C1与需求完全匹配；C3为右侧切入镜像，需改方向后才可用，故未优先绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "acc-cutin-left-80",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "完全一致：直道、ACC主车80 km/h，左前方同向乘用车60 km/h匀速并切入本车道，触发为变道。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "不是",
+     "reason": "AEB后向追尾场景，目标位置/朝向未声明且速度20 km/h，非左车道车辆切入ACC。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "acc-cutin-right-80",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为ACC下相邻车道车辆60 km/h切入、主车80 km/h，但切入方向为右侧，需求要求左侧。",
+     "changes": "将切入车辆从右前方/右相邻车道改为左前方/左相邻车道（其余可保留）。"
+    },
+    {
+     "id": "C4",
+     "asset": "acc-follow-brake-60",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前车刹停，非左相邻车道车辆切入；且主车60 km/h。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "acc-follow-60",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道ACC跟随前车，非左车道切入场景。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "bsm-rear-left-60",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM左后方快车接近，目标在后方且不变道，非左前车切入本车道。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ped-static-20",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB静止行人位于本车道，非车辆切入。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-oncoming-50",
+     "rank": 8,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "对向左前方来车，非同向车辆从左侧切入。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道骑行者，非乘用车左车道切入。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "骑行者右前横穿，非乘用车左车道切入。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-truck-static-50",
+     "rank": 21,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道静止卡车，非左车道切入。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-far-40",
+     "rank": 12,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人左前横穿，非乘用车左车道切入。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 26,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM场景含同车道前车和左后方超车，无左车道车辆切入。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.11",
+   "title": "Cut-out revealing a stationary car",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "acc-cutout-60",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "素材为直道 ACC 场景，前车 60 km/h 匀速后变道离开自车道，露出正前方静止车辆，主车 60 km/h，与需求一致；差异列表也为空。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "acc-follow-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "仅有前车 60 km/h 匀速跟车，没有 cut-out 变道动作，也没有被露出的静止车辆，与需求故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "acc-follow-brake-60",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前车为刹停而非变道离开并露出静止车，缺少 cut-out 和静止目标，测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "被测功能为 AEB，且为静止车加行人场景，缺少 lead car 变道 cut-out，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB 静止目标场景，只有静止车辆，缺少前车变道 cut-out，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-30",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB 静止目标、主车 30 km/h，缺少前车变道 cut-out，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB 静止目标夜间场景，缺少前车变道 cut-out，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB 静止目标弯道场景，缺少前车变道 cut-out，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM 后车超车场景，前车匀速且无 cut-out，无被露出的静止车，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB 移动目标场景，缺少被露出的静止车和 cut-out，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-cutin-left-80",
+     "rank": 15,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC 相邻车道切入场景，只有变道切入车辆，无 cut-out 露出的静止车，与需求不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-right-80",
+     "rank": 14,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC 相邻车道切入场景，只有变道切入车辆，无 cut-out 露出的静止车，与需求不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.12",
+   "title": "Stationary car with a roadside pedestrian",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C2-C8虽与AEB静止车/前车场景相近，但均缺少右路边等待行人或还需改动作/道路，不如C1可直接绑定。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "review",
+     "verdict": "同一测试",
+     "reason": "直道、主车50 km/h、前方同车道静止乘用车、右前方横向静止行人等待，与需求参与者和触发方式完全一致。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主车50 km/h、直道、前方同车道静止车一致，但缺少需求中的右路边静止行人，需加参与者。",
+     "changes": "在右侧路边补充一个静止等待的行人（右前方、横向、静止）；夜间可保留或改为白天。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "除缺少行人外，直道、主车50 km/h、前方同车道静止车均与需求一致。",
+     "changes": "补充右前方路边静止等待的行人。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-30",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "前方同车道静止车和直道一致，但缺少行人，且主车速度需由30改为50。",
+     "changes": "补充右前方路边静止等待的行人，并将主车初速度改为50 km/h。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "前方同车道静止车和主车50 km/h一致，但道路为弯道且缺少行人，需换道路并加参与者。",
+     "changes": "改为直道并补充右前方路边静止等待的行人。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrm-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道、主车50 km/h一致，但前车运动方式为匀速而非静止，且缺少行人。",
+     "changes": "将前方车辆由20 km/h匀速改为静止，并补充右前方路边静止等待的行人。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道、主车50 km/h一致，但前车行为为刹停而非原地静止，且缺少行人。",
+     "changes": "将前方车辆由50 km/h刹停改为初始即静止，并补充右前方路边静止等待的行人。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道、主车50 km/h一致，但前车行为为刹停而非静止，且缺少行人；雨属可改环境数值。",
+     "changes": "将前方车辆由50 km/h刹停改为初始即静止，补充右前方路边静止等待的行人；雨天可保留或改为干燥。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事是行人横穿马路的AEB测试，没有正前方静止车辆，行人也在运动而非路边等待。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ped-near-40",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同为行人横穿测试，缺少正前方静止车，行人运动而非右路边等待。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-cutout-60",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事是ACC下前车变道后露出静止车的cut-out测试，无路边等待行人，测试意图不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 13,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事是BSM左后方超车测试，无正前方静止车与右路边等待行人，功能和场景均不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ped-static-20",
+     "rank": 17,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事是静止行人位于本车道内的AEB行人测试，不是本车道静止车加右路边等待行人。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.13",
+   "title": "Lead car brakes from 70 km/h",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2"
+   ],
+   "preferred": "C1",
+   "note": "C3 场景与需求一致但素材标为 ACC，未纳入绑定；C4-C9 需改参与者动作/道路，C10 信息不足，C11-C13 故事不同。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrb-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "直道、主车跟随、前车同车道同向刹停，与需求故事一致；仅主车/前车速度50 vs 70，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "与C1同，仅速度为50且天气为雨；天气属可改数值/条件，故事一致。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "acc-follow-brake-60",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "故事为前车同车道同向从60 km/h刹停、主车跟随，与需求一致；仅速度60 vs 70，素材标ACC但场景本身可作AEB测试，改速度即可。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrm-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者类型/位置/道路/主车跟随一致，但前车为匀速而非刹停，需改前车动作和速度。",
+     "changes": "将前车动作由20 km/h匀速改为从70 km/h刹停；主车速度改为70 km/h。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "参与者类型/位置/道路/主车跟随一致，但前车静止而非刹停，需改前车动作和速度；夜间仅为条件差异。",
+     "changes": "将前车由静止改为从70 km/h刹停；主车速度改为70 km/h。"
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同C5，前车静止而非刹停，需改前车动作和主车速度。",
+     "changes": "将前车由静止改为从70 km/h刹停；主车速度改为70 km/h。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-30",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "同C5，前车静止且主车30 km/h，需改前车动作和主车速度。",
+     "changes": "将前车由静止改为从70 km/h刹停；主车速度由30 km/h改为70 km/h。"
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "基础AEB后车场景相近，但多一个右前方背景行人且前车静止，需删行人并改前车为刹停。",
+     "changes": "删除右前方背景行人；将前车由静止改为从70 km/h刹停；主车速度改为70 km/h。"
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-curve",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "基础场景相近，但道路含R250弯道且前车静止，需改直道并改前车为刹停。",
+     "changes": "将道路改为直道（去除R250弯道）；将前车由静止改为从70 km/h刹停；主车速度改为70 km/h。"
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "review",
+     "verdict": "拿不准",
+     "reason": "目标位置和朝向未声明，无法确认是否正前方同车道；且目标为匀速，信息不足。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 12,
+     "routes": [
+      "name"
+     ],
+     "level": "major_modify",
+     "verdict": "不是",
+     "reason": "故事为BSM左后车超车，含额外左后方车辆且前车匀速，与需求的前车刹停不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-left-80",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事为左前方车辆切入，参与者位置、动作和触发方式与需求的前车同车道刹停不同。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-right-80",
+     "rank": 24,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事为右前方车辆切入，与需求的前车同车道刹停不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.14",
+   "title": "Cyclist crossing in rain",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "只有 C1 与需求仅差数值（主车 30→50 km/h、晴→雨），可直接改数值使用；其余骑行者/行人横穿候选需改参与者结构，追赶/对向/切入类场景故事不同。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "骑行者从右前方横向穿越、15 km/h 匀速，主车直道匀速，故事与需求一致；仅主车速度（30→50）和天气（晴→雨）为数值差异，改数值即可。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方乘用车刹停的追尾场景，参与者类型、位置、运动方式均与骑行者横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-cyclist-long-30",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "参与者是骑行者且目标速度同为 15 km/h，但骑行方向/位置是同向而非横穿，需改参与者动作后才是该场景。",
+     "changes": "把骑行者由本车道同向骑行改为从右前方横向穿越；主车速度 30→50 km/h，天气改为雨天。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-oncoming-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "对向车道乘用车场景，与骑行者从右侧横穿的测试故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrm-50",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方乘用车匀速 20 km/h 的追尾场景，与骑行者横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrs-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方静止乘用车的追尾静止目标场景，与横穿场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 7,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方静止乘用车、夜间，属追尾静止目标场景，与骑行者横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为位置未声明的同向乘用车，故事是追尾匀速前车，与骑行者横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrb-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前车刹停的追尾场景，参与者与运动方式均不符。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-truck-static-50",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道静止卡车的追尾静止目标场景，非骑行者横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "摩托车同车道同向刹停的追尾场景，运动方式与横穿不同。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-right-80",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC 右车道切入（变道）场景，参与者动作与被测功能均与骑行者横穿不符。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-left-80",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC 左车道切入场景，方向、参与者动作与被测功能均不符。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM 超车场景，含两辆乘用车，故事与骑行者横穿完全不同。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 14,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "从右前方横向穿越的几何与触发方式同需求，但参与者类型是行人而非骑行者，需换参与者并调数值。",
+     "changes": "把行人替换为骑行者（两轮车），目标速度 5→15 km/h；主车 40→50 km/h，天气改为雨天。"
+    },
+    {
+     "id": "C16",
+     "asset": "aeb-ped-near-40",
+     "rank": 16,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "横穿位置/方式与需求一致，但参与者为行人，需更换为骑行者并调整速度与天气。",
+     "changes": "把行人替换为骑行者（两轮车），目标速度 5→15 km/h；主车 40→50 km/h，天气改为雨天。"
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.15",
+   "title": "Truck ahead brakes to a stop",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C7",
+    "C8"
+   ],
+   "preferred": "C7",
+   "note": "C7与C8是唯一直接匹配AEB同车道前车刹停的候选；C8仅天气为数值差异，一并绑定。C7最接近需求，只需将乘用车调为卡车、初速50调为40。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-truck-static-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试但要改",
+     "reason": "道路、主车50 km/h、卡车正前方同车道均一致，但需求触发是前车刹停，素材是静止目标，需改目标动作。",
+     "changes": "将卡车由静止改为40 km/h行驶并刹停。"
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrm-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同车道前车与AEB rear-end场景一致，但目标是乘用车匀速而非卡车刹停，需改车型、速度和动作。",
+     "changes": "将目标车改为卡车、初速改为40 km/h，并由匀速20 km/h改为刹停。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道、主车50 km/h、前车同车道一致，但目标为静止乘用车，需改车型和触发动作。",
+     "changes": "将目标车改为卡车，由静止改为40 km/h行驶并刹停。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主体与C3相同，仅多夜间条件；核心差异仍是静止乘用车，需改车型和动作。",
+     "changes": "将目标车改为卡车，由静止改为40 km/h行驶并刹停；夜间可作为数值条件保留。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "拿不准",
+     "reason": "素材只写车辆位置和朝向未知、20 km/h匀速，无法判断是否为同车道前车刹停。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-oncoming-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "目标在左前方对向车道且匀速行驶，不是同车道前车刹停的AEB场景。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "同车道前车刹停、直道、主车50 km/h和AEB触发一致；仅目标车型/初速为数值差异（乘用车50 vs 卡车40）。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试",
+     "reason": "与C7同为前车刹停场景，仅雨天和车型/初速为数值差异，可作天气变体。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "前车刹停动作、同车道位置和主车50 km/h一致，但目标类型为摩托车，需更换参与者类型。",
+     "changes": "将摩托车改为卡车，初速改为40 km/h。"
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "主目标仍是同车道前车但静止，且多一个背景行人；需删参与者并改目标动作/车型。",
+     "changes": "删除右前方静止行人，将前车改为卡车并由静止改为40 km/h行驶并刹停。"
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ped-long-40",
+     "rank": 11,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者为行人、在本车道匀速行走，主车40 km/h，故事不是卡车前车刹停。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM超车场景，含左后方快车和前方慢车，非AEB前车刹停。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-left-80",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC左前车切入场景，非AEB同车道前车刹停。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.16",
+   "title": "Motorcyclist crossing from the left",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C16"
+   ],
+   "preferred": "C16",
+   "note": "无完全一致的摩托车左横穿素材；C16方向一致，可改造为需求场景。",
+   "failure": "",
+   "readings": 3,
+   "agree": 2,
+   "other_preferred": [
+    "C14"
+   ],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-oncoming-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "对向乘用车在左前方对向行驶，不是摩托车从左横向横穿，故事不同。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrm-50",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方移动乘用车追尾场景，不是左横穿摩托车。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方静止乘用车，不是摩托车从左横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "夜间同车道前方静止乘用车，仍为前车静止场景，不是左横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "拿不准",
+     "reason": "素材未声明目标位置和朝向，无法判断是否为左横穿；仅名字提示后车追尾。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrb-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方乘用车制动/刹停，属于追尾场景，不是横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "同车道前方制动乘用车，雨天，仍为追尾场景，不是横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-truck-static-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前方同车道静止卡车，不是摩托车从左横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ptw-brake-50",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "参与者虽为摩托车，但在同车道前方同向制动，不是从左横向横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "前方静止乘用车且右路旁有行人，不是摩托车左横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "acc-cutin-left-80",
+     "rank": 20,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "左前同向乘用车变道切入，ACC场景，不是AEB摩托车横向横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "acc-cutin-right-80",
+     "rank": 21,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "右前同向乘用车变道切入，ACC场景，不是左横穿摩托车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 25,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "BSM超越场景，含前车和左后方快车，不是AEB左横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C14",
+     "asset": "aeb-cyclist-cross-30",
+     "rank": 11,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "骑行者从右前方横穿，方向和参与者类型均与摩托车从左横穿不符。",
+     "changes": ""
+    },
+    {
+     "id": "C15",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 12,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从右前方横穿（夜间），不是摩托车从左横穿。",
+     "changes": ""
+    },
+    {
+     "id": "C16",
+     "asset": "aeb-ped-far-40",
+     "rank": 13,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "横穿方向为左前方且为AEB横穿场景，但参与者是行人且速度不同，需改参与者类型和速度。",
+     "changes": "将行人替换为摩托车，目标速度改为30 km/h，主车速度改为50 km/h；保留左前方横穿和AEB设定。"
+    },
+    {
+     "id": "C17",
+     "asset": "aeb-ped-near-40",
+     "rank": 14,
+     "routes": [
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "行人从右前方横穿，不是摩托车从左横穿。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.17",
+   "title": "Slower car ahead with a pedestrian beside the ego",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C6",
+    "C7",
+    "C9"
+   ],
+   "preferred": "C1",
+   "note": "没有候选同时具备‘前方同车道 20 km/h 匀速前车 + 左侧与主车齐平的静止行人’；C1 运动学与需求一致（仅缺行人），作为首选。C2 含两类参与者但前车静止、行人在右侧；C3/C4/C6/C7/C9 需把前车改为 20 km/h 匀速并补加行人后可用。C5 因目标车相对位置未声明、无法判定，未纳入绑定；C8/C10-C13 为不同功能或 VRU 场景。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "aeb-ccrm-50",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道、主车 50 km/h 接近前方同车道 20 km/h 匀速前车与需求一致，仅缺‘左侧与主车齐平的静止行人’，补加后即符合。",
+     "changes": "增加一名行人参与者：位于主车左侧路缘、与主车齐平，面向横向（横穿方向），保持静止。"
+    },
+    {
+     "id": "C2",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同为直道 AEB‘前车+路边静止行人’场景，但前车运动状态（静止 vs 20 km/h）和行人所在侧（右前方 vs 左并排）与需求不符，需改动作和位置。",
+     "changes": "前车由静止改为 20 km/h 匀速行驶；行人从右前方路缘移到主车左侧路缘、与主车齐平（保持静止）。"
+    },
+    {
+     "id": "C3",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道、主车 50 km/h 接近同车道前车的框架一致，但前车静止且缺行人，需改前车动作并补加行人。",
+     "changes": "前车由静止改为 20 km/h 匀速行驶；增加位于主车左侧路缘、与主车齐平的静止行人（夜间相对白天仅为数值差异）。"
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrs-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "与需求同为直道、主车 50 km/h 接近同车道前车，但前车静止且缺行人，需改前车动作并补加行人。",
+     "changes": "前车由静止改为 20 km/h 匀速行驶；增加位于主车左侧路缘、与主车齐平的静止行人。"
+    },
+    {
+     "id": "C5",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "拿不准",
+     "reason": "素材未声明目标车相对主车的位置与朝向，无法确认是否为‘正前方同车道接近’（名字虽称 car-to-car rear，但不能只凭名字判断）；若确认位置正确则属‘要改’（补加左并排静止行人）。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "aeb-ccrb-50",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "同属直道 AEB 车-车后方接近场景，但前车为 50 km/h 同速后刹停，与需求的 20 km/h 慢车不同，需改前车动作/触发方式并补加行人。",
+     "changes": "去掉前车 2 s 后的刹停事件，改为 20 km/h 匀速行驶；增加位于主车左侧路缘、与主车齐平的静止行人。"
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrb-50-rain",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "与 C6 同属直道 AEB 车-车接近，但前车同速后刹停且无行人，需改前车动作并补加行人。",
+     "changes": "去掉前车刹停事件，改为 20 km/h 匀速行驶；增加位于主车左侧路缘、与主车齐平的静止行人（降雨仅为数值差异）。"
+    },
+    {
+     "id": "C8",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules",
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事为 BSM：主车 60 km/h、前车 50 km/h、左后方 80 km/h 车辆超车，被测功能与场景均与需求的 AEB 慢车+行人不同。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-30",
+     "rank": 9,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "同一测试但要改",
+     "reason": "直道同车道前车接近的框架一致，但主车 30 km/h、前车静止且缺行人，需改速度、前车动作并补加行人。",
+     "changes": "主车速度改为 50 km/h；前车由静止改为 20 km/h 匀速行驶；增加位于主车左侧路缘、与主车齐平的静止行人。"
+    },
+    {
+     "id": "C10",
+     "asset": "acc-follow-60",
+     "rank": 10,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC 跟随场景（主车与前车均 60 km/h 匀速，无接近过程，也无行人），与需求场景不同。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ped-long-40",
+     "rank": 17,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事为主车接近本车道内以 5 km/h 行走的行人（行人为主目标），并非‘慢车在前+左并排静止行人’，且无前车。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ped-static-20",
+     "rank": 18,
+     "routes": [
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事为主车接近本车道内静止行人（行人为主目标），行人不在左侧与主车齐平的位置，且无前车。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "aeb-ped-near-40-night",
+     "rank": 19,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "故事为行人从右侧横穿（夜间、5 km/h）的 VRU 场景，与需求的前车+左侧静止行人不同。",
+     "changes": ""
+    }
+   ]
+  },
+  {
+   "document": "demo-adas-protocol-en.pdf",
+   "section_id": "5.18",
+   "title": "Blind spot: slower car behind on the left, faster lead car",
+   "judge": "binding-judge-1",
+   "binding": [
+    "C1"
+   ],
+   "preferred": "C1",
+   "note": "C1结构与5.18一致，仅需将正前方/左后方两车速度按需求对调为80/50 km/h。",
+   "failure": "",
+   "readings": 3,
+   "agree": 3,
+   "other_preferred": [],
+   "candidates": [
+    {
+     "id": "C1",
+     "asset": "bsm-rear-left-60-lead",
+     "rank": 1,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "modify",
+     "verdict": "同一测试",
+     "reason": "直道、主车60匀速、两参与者分别为正前方同向匀速和左后方同向匀速，结构与需求完全一致；仅两车速度与需求相反（前车50/左后80 vs 需求80/50），按数值调整即可。",
+     "changes": ""
+    },
+    {
+     "id": "C2",
+     "asset": "bsm-rear-left-60",
+     "rank": 2,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "只有左后方一辆80 km/h更快车接近，缺少需求中的正前方80 km/h前车，且左后车应为50 km/h慢车，故事是更快车接近而非慢车落后。",
+     "changes": ""
+    },
+    {
+     "id": "C3",
+     "asset": "acc-follow-60",
+     "rank": 3,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC跟车场景，只有正前方60 km/h前车，缺少左后方慢车，被测功能也不同。",
+     "changes": ""
+    },
+    {
+     "id": "C4",
+     "asset": "aeb-ccrm-50",
+     "rank": 4,
+     "routes": [
+      "full",
+      "rules",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB移动目标场景，只有正前方20 km/h目标车，主车50，缺少左后方车，非BSM盲区场景。",
+     "changes": ""
+    },
+    {
+     "id": "C5",
+     "asset": "acc-cutout-60",
+     "rank": 5,
+     "routes": [
+      "full",
+      "rules",
+      "name",
+      "structure"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC cut-out场景，前车变道且前方静止车，缺少左后方慢车，故事和触发不同。",
+     "changes": ""
+    },
+    {
+     "id": "C6",
+     "asset": "acc-follow-brake-60",
+     "rank": 6,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC前车刹停场景，只有前车刹停，缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C7",
+     "asset": "aeb-ccrs-50-roadside-ped",
+     "rank": 7,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB行人加静止车场景，缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C8",
+     "asset": "aeb-ccrs-50",
+     "rank": 8,
+     "routes": [
+      "full",
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB静止目标场景，主车50，只有静止前车，缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C9",
+     "asset": "aeb-ccrs-50-night",
+     "rank": 9,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB静止目标夜间场景，同样缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C10",
+     "asset": "aeb-ccrs-30",
+     "rank": 10,
+     "routes": [
+      "full"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB静止目标30 km/h，只有静止前车，缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C11",
+     "asset": "aeb-ccrm-50-unplaced",
+     "rank": 11,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB移动目标，目标位置朝向未声明，缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C12",
+     "asset": "aeb-ccrb-50",
+     "rank": 12,
+     "routes": [
+      "rules"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "AEB制动目标场景，前车刹停，缺少左后方慢车，非需求。",
+     "changes": ""
+    },
+    {
+     "id": "C13",
+     "asset": "acc-cutin-left-80",
+     "rank": 15,
+     "routes": [
+      "name"
+     ],
+     "level": "new_build",
+     "verdict": "不是",
+     "reason": "ACC左前车切入场景，主车80，只有左前变道车，缺少正前方前车和左后方慢车，非需求。",
+     "changes": ""
+    }
+   ]
+  }
+ ]
+}

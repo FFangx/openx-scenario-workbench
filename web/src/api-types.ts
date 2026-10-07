@@ -1637,6 +1637,11 @@ export interface components {
              */
             readings: number | null;
             /**
+             * Recorded
+             * @description Replayed from the recording shipped with the demo, not asked of a model here.
+             */
+            recorded: boolean;
+            /**
              * Stable
              * @description Every reading (two at least) names the same preferred asset; null for a failed suggestion or one kept before readings were counted.
              */
