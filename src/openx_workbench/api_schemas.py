@@ -334,6 +334,7 @@ class Candidate(Shape):
     display_title: str
     xosc: str
     xodr: str
+    map_name: str = Field(description="The road's name: the authoring tool's map name, the OpenDRIVE header's, or the file's.")
     description: str
     classification: dict[str, str | list[str]]
     scores: Scores
@@ -852,6 +853,7 @@ class Preferences(Shape):
     language: Literal["zh", "en"]
     appearance: Literal["light", "dark", "system"]
     encoder: Literal["bge", "hashing"]
+    show_file_names: bool = Field(description="Candidates are named by their files instead of the scenario and map names.")
 
 
 class Settings(Shape):

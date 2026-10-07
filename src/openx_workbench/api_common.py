@@ -13,7 +13,7 @@ from . import matching
 from .asset_store import AssetStore, AssetVersion
 from .catalog import OpenXAsset
 from .pdf_store import PdfStore, StoredScene
-from .presentation import asset_display_title, difference_text, display
+from .presentation import asset_display_title, asset_map_name, difference_text, display
 from .preview_frames import read_frame
 from .retrieval import OpenXIndex, RetrievalResult, catalog_fingerprint
 from .reuse_trace import review_items
@@ -157,7 +157,7 @@ def _candidate_json(result: RetrievalResult, version: AssetVersion | None, lang:
         "source_name": version.source_name if version else "",
         "compatibility": version.compatibility if version else "not_tested",
         "title": asset.title, "display_title": asset_display_title(asset, lang),
-        "xosc": asset.xosc_name, "xodr": asset.xodr_name,
+        "xosc": asset.xosc_name, "xodr": asset.xodr_name, "map_name": asset_map_name(asset),
         "description": scenario.description or "",
         "classification": asset.classification,
         "scores": {"combined": result.score, "semantic": result.vector_score,

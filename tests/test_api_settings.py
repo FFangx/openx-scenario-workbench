@@ -30,7 +30,7 @@ def test_settings_report_defaults_and_data_folder(client, tmp_path):
     settings = client.get("/api/settings").json()
     assert settings["data_dir"] == str(tmp_path)
     assert settings["model"]["has_key"] is False and settings["model"]["readable"] is True
-    assert settings["preferences"] == {"language": "zh", "appearance": "system", "encoder": "bge"}
+    assert settings["preferences"] == {"language": "zh", "appearance": "system", "encoder": "bge", "show_file_names": False}
 
 
 def test_saved_key_is_never_returned_and_only_follows_the_same_endpoint(client, tmp_path):
@@ -83,11 +83,13 @@ def test_model_list_and_probe_use_the_draft_with_the_saved_key(client, monkeypat
 
 def test_preferences_keep_the_desktop_file_format(client, tmp_path):
     updated = client.put("/api/settings/preferences", json={"language": "en", "appearance": "dark", "encoder": "hashing"})
-    assert updated.json() == {"language": "en", "appearance": "dark", "encoder": "hashing"}
+    assert updated.json() == {"language": "en", "appearance": "dark", "encoder": "hashing", "show_file_names": False}
     stored = json.loads((tmp_path / "preferences.json").read_text(encoding="utf-8"))
     assert stored == {"language": "English", "appearance": "dark", "encoder": "hashing"}
     assert client.put("/api/settings/preferences", json={"appearance": "sepia"}).status_code == 422
     assert client.put("/api/settings/preferences", json={"encoder": "unknown"}).status_code == 400
+    assert client.put("/api/settings/preferences", json={"show_file_names": True}).json()["show_file_names"] is True
+    assert json.loads((tmp_path / "preferences.json").read_text(encoding="utf-8"))["language"] == "English"
 
 
 def _esmini(folder):

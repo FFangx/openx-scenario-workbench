@@ -59,10 +59,10 @@ try {
 
   // row -> right panel + preview
   await rows().nth(2).click();
-  const rowTitle = await rows().nth(2).locator(".desc").getAttribute("title");
+  const rowTitle = await rows().nth(2).locator(".pair a").first().getAttribute("title");
   await p.waitForTimeout(150);
   check("row click updates selected item", (await p.locator(".sel-item .name").getAttribute("title")) === rowTitle, rowTitle);
-  check("row click updates preview", (await p.locator(".pv-link a").first().getAttribute("title")) === (await rows().nth(2).locator(".pair a").first().getAttribute("title")));
+  check("row click updates preview", (await p.locator(".pv-link a").first().innerText()) === (await rows().nth(2).locator(".pair .fn").first().innerText()));
 
   // filters through the Filters tab, then chip removal
   await p.locator(".mid-tabs .ant-tabs-tab").filter({ hasText: "Filters" }).click();
@@ -366,6 +366,13 @@ try {
   await p.locator(".ant-radio-button-wrapper").filter({ hasText: "Dark" }).click();
   await p.waitForTimeout(300);
   check("appearance switches to dark", (await p.evaluate(() => document.documentElement.dataset.theme)) === "dark");
+  await p.locator(".ant-radio-button-wrapper").filter({ hasText: "File names" }).click();
+  await p.waitForTimeout(300);
+  const fileNamed = await rows().first().locator(".pair .fn").first().innerText();
+  await p.locator(".ant-radio-button-wrapper").filter({ hasText: "Scenario and map names" }).click();
+  await p.waitForTimeout(300);
+  const named = await rows().first().locator(".pair .fn").first().innerText();
+  check("candidates are named by scenario and map, or by file on request", fileNamed.endsWith(".xosc") && !named.endsWith(".xosc"), `${named} / ${fileNamed}`);
   await closeModal();
   await p.mouse.move(800, 5);
   await p.waitForTimeout(400);

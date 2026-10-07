@@ -17,6 +17,7 @@ import {
 } from "@ant-design/icons";
 import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang, type ReviewItem } from "../api";
 import { useT } from "../i18n";
+import { useNames } from "../names";
 import { valueLabel } from "../vocab";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
@@ -72,6 +73,7 @@ interface Props {
 export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReviewFacts, onSaved, onNext }: Props) {
   const { message } = App.useApp();
   const { t } = useT();
+  const names = useNames();
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<"files" | "checks" | "explain" | "signoff" | null>(null);
   const [explanationId, setExplanationId] = useState<string | undefined>();
@@ -327,14 +329,14 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
             </>
           )}
           <span>{t("场景", "Scenario")}</span>
-          <span className="ell" title={cand.xosc}>{basename(cand.xosc)}</span>
+          <span className="ell" title={cand.xosc}>{names.scenario(cand)}</span>
           <span><a href={urls.file(cand, "scenario")} target="_blank" rel="noreferrer">{t("打开", "Open")} <ArrowUpRight /></a></span>
           <span>{t("道路", "Road")}</span>
           {cand.road.file_missing ? (
             <><span className="ell muted">{t("道路文件缺失", "Road file missing")}</span><span /></>
           ) : (
             <>
-              <span className="ell" title={cand.xodr}>{basename(cand.xodr)}</span>
+              <span className="ell" title={cand.xodr}>{names.road(cand)}</span>
               <span><a href={urls.file(cand, "road")} target="_blank" rel="noreferrer">{t("打开", "Open")} <ArrowUpRight /></a></span>
             </>
           )}

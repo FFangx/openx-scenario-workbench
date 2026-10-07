@@ -3,6 +3,7 @@ import { Alert, Button, Drawer, Empty, Input, Select, Skeleton, Tag } from "antd
 import { ArrowLeftOutlined, FileSearchOutlined, PictureOutlined, SearchOutlined } from "@ant-design/icons";
 import { facetLabel, urls, type Candidate, type Library } from "../api";
 import { useT } from "../i18n";
+import { useNames } from "../names";
 import type { useMatching } from "../useMatching";
 import { valueLabel } from "../vocab";
 import { AssetDetail } from "./AssetDetail";
@@ -23,6 +24,7 @@ export const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
 /** Free-text search: similar assets only, never a reuse decision. */
 export function SearchPage({ search, library, from, esmini, onBack, onSettings, onLibraryChanged }: Props) {
   const { t, lang } = useT();
+  const names = useNames();
   const bar = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState<Candidate | null>(null);
 
@@ -82,7 +84,7 @@ export function SearchPage({ search, library, from, esmini, onBack, onSettings, 
                 </div>
               )}
               <b className="title" title={c.title}>{c.display_title}</b>
-              <span className="muted file" title={c.xosc}>{c.xosc.split(/[\\/]/).pop()}</span>
+              <span className="muted file" title={names.files ? c.xosc : c.xodr}>{names.files ? names.scenario(c) : names.road(c) || "—"}</span>
               <span className="tags">
                 {[c.classification.function_type, c.classification.label_road_type, ...[c.classification.label_target_type].flat()]
                   .filter((v): v is string => !!v && v !== "未知").map((v) => <Tag key={v}>{valueLabel(v, lang)}</Tag>)}

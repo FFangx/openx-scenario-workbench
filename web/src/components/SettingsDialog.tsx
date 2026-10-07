@@ -260,6 +260,11 @@ function DisplayTab({ preferences, onChange }: { preferences: Preferences; onCha
         <Radio.Group optionType="button" value={preferences.language} onChange={(e) => onChange({ language: e.target.value as Lang })}
           options={[{ value: "zh", label: "中文" }, { value: "en", label: "English" }]} />
       </Form.Item>
+      <Form.Item label={t("候选素材的名字", "Candidate names")}
+        extra={t("仿真软件导出的场景和道路文件常以编号命名；默认显示场景名和地图名。", "Scenario and road files exported by a simulator are often named by an id; by default the scenario and map names are shown.")}>
+        <Radio.Group optionType="button" value={preferences.show_file_names} onChange={(e) => onChange({ show_file_names: e.target.value as boolean })}
+          options={[{ value: false, label: t("场景名和地图名", "Scenario and map names") }, { value: true, label: t("文件名", "File names") }]} />
+      </Form.Item>
       <Form.Item label={t("文本检索后端", "Text retrieval backend")} extra={t("更改后会重新检索当前场景。", "Changing it re-runs the current search.")}>
         <Radio.Group value={preferences.encoder} onChange={(e) => onChange({ encoder: e.target.value as Encoder })}>
           <Space orientation="vertical">

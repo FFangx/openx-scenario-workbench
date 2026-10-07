@@ -1,5 +1,6 @@
 """Translate controlled business vocabulary, preserving source identifiers."""
 import re
+from pathlib import PurePosixPath
 from .scene_package import STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS, STRUCTURE_TURNS
 
 LABELS = {
@@ -93,6 +94,14 @@ def difference_text(difference, language):
     if language == "zh" and action == difference.action:
         action = "核对原文与候选结构" if not difference.verified else "调整候选场景"
     return f"{category}：{requested} → {action}"
+
+
+def asset_map_name(asset) -> str:
+    """The road's name a person knows: the authoring tool's map name, else the OpenDRIVE header's, else the
+    road file's stem. Tools that export cases often name the files by an id."""
+    bundle = asset.bundle
+    name = str((bundle.source_case or {}).get("map_name") or "").strip() or (bundle.road.name or "").strip()
+    return name or (PurePosixPath(asset.xodr_name.replace("\\", "/")).stem if asset.xodr_name else "")
 
 
 def asset_display_title(asset, language="zh"):

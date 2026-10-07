@@ -4,6 +4,7 @@ import { CheckCircleFilled, CloseCircleFilled, CloseOutlined, FileOutlined, File
 import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Lang, type Library, type Scene, type SearchResponse } from "../api";
 import { roadFeatureLabel, valueLabel } from "../vocab";
 import { dateTime, useT } from "../i18n";
+import { useNames } from "../names";
 import { ArrowUpRight } from "./ArrowUpRight";
 import { PreviewPlayer } from "./PreviewPlayer";
 
@@ -38,6 +39,7 @@ const metres = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Ma
 
 export function SearchPanel(p: Props) {
   const { t, lang } = useT();
+  const names = useNames();
   const [show, setShow] = useState<Show>("all");
   const [tab, setTab] = useState("search");
 
@@ -47,45 +49,46 @@ export function SearchPanel(p: Props) {
     { title: "#", dataIndex: "idx", width: 30, align: "center" },
     Table.SELECTION_COLUMN,
     {
-      title: (
+      title: names.files ? (
         <>
           {t("场景组合", "Scenario pair")}
           <br />
           (XOSC / XODR)
         </>
-      ),
+      ) : t("场景 / 地图", "Scenario / map"),
       key: "pair",
-      width: 135,
+      width: names.files ? 135 : 255,
       render: (_, c) => (
         <div className="pair">
-          <a href={urls.file(c, "scenario")} target="_blank" rel="noreferrer" title={c.xosc} onClick={(e) => e.stopPropagation()}>
+          <a href={urls.file(c, "scenario")} target="_blank" rel="noreferrer" title={names.files ? c.xosc : c.title} onClick={(e) => e.stopPropagation()}>
             <FileOutlined />
-            <span className="fn">{basename(c.xosc)}</span>
+            <span className="fn">{names.scenario(c)}</span>
           </a>
           {c.road.file_missing ? (
             <span className="muted" title={t("道路文件缺失", "Road file missing")}>
               <FileTextOutlined />
-              <span className="fn">+ {t("道路缺失", "No road")}</span>
+              <span className="fn">+ {names.files || !c.map_name ? t("道路缺失", "No road") : t(`${c.map_name}（缺失）`, `${c.map_name} (missing)`)}</span>
             </span>
           ) : (
             <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr} onClick={(e) => e.stopPropagation()}>
               <FileTextOutlined />
-              <span className="fn">+ {basename(c.xodr)}</span>
+              <span className="fn">+ {names.road(c)}</span>
             </a>
           )}
         </div>
       ),
     },
-    {
+    // The names column already says what the description column would.
+    ...(names.files ? [{
       title: t("描述", "Description"),
       key: "desc",
       width: 120,
-      render: (_, c) => (
+      render: (_: unknown, c: Candidate) => (
         <span className="desc clamp2" title={c.title}>
           {c.display_title}
         </span>
       ),
-    },
+    }] : []),
     ...(["semantic", "scenario", "road"] as const).map((k) => ({
       title: (
         <>
@@ -294,10 +297,10 @@ export function SearchPanel(p: Props) {
           <div className="grid">
             <div className="pv-main">
               <div className="pv-link">
-                <a href={urls.file(c, "scenario")} target="_blank" rel="noreferrer" title={c.xosc}>{basename(c.xosc)}</a>
+                <a href={urls.file(c, "scenario")} target="_blank" rel="noreferrer" title={c.xosc}>{names.scenario(c)}</a>
                 <span className="plus">+</span>
                 {c.road.file_missing ? <span className="muted">{t("道路文件缺失", "Road file missing")}</span>
-                  : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{basename(c.xodr)}</a>}
+                  : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{names.road(c)}</a>}
               </div>
               <Tabs
                 size="small"
@@ -308,12 +311,14 @@ export function SearchPanel(p: Props) {
                     label: t("道路（XODR）", "Road (XODR)"),
                     children: c.road.file_missing ? (
                       <div className="kv">
+                        {c.map_name && <><span>{t("地图", "Map")}</span><span>{c.map_name}</span></>}
                         <span>{t("文件", "File")}</span><span>{t("缺失（仿真软件内置道路）", "Missing (simulator built-in road)")}</span>
                         <span>{t("道路类型", "Road type")}</span>
                         <span>{c.road.inferred_features.map((f) => roadFeatureLabel(f, lang)).join(", ") || t("未知", "Unknown")}{t("（由地图名推断）", " (from the map name)")}</span>
                       </div>
                     ) : (
                       <div className="kv">
+                        {c.map_name && <><span>{t("地图", "Map")}</span><span>{c.map_name}</span></>}
                         <span>{t("文件", "File")}</span><span title={c.xodr}>{basename(c.xodr)}</span>
                         <span>{t("长度", "Length")}</span><span>{metres(c.road.total_length_m)}</span>
                         <span>{t("道路数", "Roads")}</span><span>{c.road.road_count}</span>
@@ -343,7 +348,7 @@ export function SearchPanel(p: Props) {
             <div className="pv-road">
               <div className="hd">
                 {t("关联道路：", "Associated road: ")}{c.road.file_missing ? t("缺失", "missing")
-                  : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{basename(c.xodr)}</a>}
+                  : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{names.road(c)}</a>}
               </div>
               <div className="img-empty road">
                 <b>{metres(c.road.total_length_m)}</b>

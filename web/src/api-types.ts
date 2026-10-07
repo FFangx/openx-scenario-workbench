@@ -1634,6 +1634,11 @@ export interface components {
              * @enum {string}
              */
             level: "direct" | "modify" | "major_modify" | "review" | "new_build";
+            /**
+             * Map Name
+             * @description The road's name: the authoring tool's map name, the OpenDRIVE header's, or the file's.
+             */
+            map_name: string;
             /** Reasons */
             reasons: components["schemas"]["Reason"][];
             /**
@@ -2444,6 +2449,11 @@ export interface components {
              * @enum {string}
              */
             language: "zh" | "en";
+            /**
+             * Show File Names
+             * @description Candidates are named by their files instead of the scenario and map names.
+             */
+            show_file_names: boolean;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -2453,6 +2463,8 @@ export interface components {
             encoder?: string | null;
             /** Language */
             language?: ("zh" | "en") | null;
+            /** Show File Names */
+            show_file_names?: boolean | null;
         };
         /** PreviewRequest */
         PreviewRequest: {

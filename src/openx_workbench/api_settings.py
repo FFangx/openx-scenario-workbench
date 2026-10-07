@@ -46,6 +46,7 @@ class PreferencesUpdate(BaseModel):
     language: Literal["zh", "en"] | None = None
     appearance: Literal["light", "dark", "system"] | None = None
     encoder: str | None = None
+    show_file_names: bool | None = None
 
 
 class FolderRequest(BaseModel):
@@ -90,7 +91,7 @@ def _preferences_json() -> dict[str, Any]:
     appearance = prefs.get("appearance", "system")
     return {"language": "en" if prefs.get("language") == "English" else "zh",
             "appearance": appearance if appearance in {"light", "dark", "system"} else "system",
-            "encoder": known_encoder(prefs.get("encoder"))}
+            "encoder": known_encoder(prefs.get("encoder")), "show_file_names": prefs.get("show_file_names") is True}
 
 
 @router.get("", **documented(Settings))
@@ -110,6 +111,8 @@ def update_preferences(request: PreferencesUpdate) -> dict[str, Any]:
         if request.encoder not in ENCODERS:
             raise ValueError("Unknown encoder.")
         values["encoder"] = request.encoder
+    if request.show_file_names is not None:
+        values["show_file_names"] = request.show_file_names
     if values:
         save_preferences(**values)
     return _preferences_json()

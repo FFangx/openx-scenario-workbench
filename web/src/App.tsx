@@ -7,6 +7,7 @@ import { api, type Library, type PdfDocument, type Preferences, type Project, ty
 import { sceneKey, useRequirements, type Scope } from "./useRequirements";
 import { useMatching } from "./useMatching";
 import { LangContext, useT } from "./i18n";
+import { FileNamesContext } from "./names";
 import { StepBar, TopBar, type Page } from "./components/TopBar";
 import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -31,7 +32,7 @@ function useSystemDark() {
 }
 
 const CACHE = "openx.preferences";
-const DEFAULTS: Preferences = { language: "zh", appearance: "system", encoder: "bge" };
+const DEFAULTS: Preferences = { language: "zh", appearance: "system", encoder: "bge", show_file_names: false };
 
 /** The server owns preferences; a local copy only avoids a flash of the wrong theme and language on load. */
 function cachedPreferences(): Preferences {
@@ -67,9 +68,11 @@ export default function Root() {
   return (
     <ConfigProvider theme={themeConfig} locale={prefs.language === "zh" ? zhCN : enUS} button={{ autoInsertSpace: false }}>
       <LangContext.Provider value={prefs.language}>
-        <AntApp>
-          <Workbench prefs={prefs} onPrefs={changePrefs} />
-        </AntApp>
+        <FileNamesContext.Provider value={prefs.show_file_names}>
+          <AntApp>
+            <Workbench prefs={prefs} onPrefs={changePrefs} />
+          </AntApp>
+        </FileNamesContext.Provider>
       </LangContext.Provider>
     </ConfigProvider>
   );
