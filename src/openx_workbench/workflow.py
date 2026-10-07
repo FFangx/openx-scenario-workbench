@@ -19,7 +19,7 @@ class InputValidationError(ValueError):
         self.code = code
 
 
-def inspect_pair(xosc: InputFile, xodr: InputFile) -> ParseBundle:
+def inspect_pair(xosc: InputFile, xodr: InputFile, source_case: dict | None = None) -> ParseBundle:
     """Validate filenames and parse one OpenSCENARIO/OpenDRIVE pair."""
 
     if PurePath(xosc.name).suffix.casefold() != ".xosc":
@@ -30,4 +30,4 @@ def inspect_pair(xosc: InputFile, xodr: InputFile) -> ParseBundle:
         raise InputValidationError("empty_xosc")
     if not xodr.data:
         raise InputValidationError("empty_xodr")
-    return parse_bundle(xosc.data, xodr.data, xodr.name)
+    return parse_bundle(xosc.data, xodr.data, xodr.name, source_case)

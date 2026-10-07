@@ -92,6 +92,8 @@ components:
 
 # Design System: OpenX Scenario Workbench
 
+> **Current implementation (2026-10-07).** The workbench is the React interface in `web/`. Its tokens live in `web/src/theme.ts` and `web/src/styles.css`. A PDF opens on its clause reuse assessment: a table of clauses with their preferred asset beside a detail pane (source evidence, the asset's frame and road drawing, every candidate with the model's reasons). The model's suggestions and a person's conclusions share four levels — direct reuse, modify and reuse, not applicable, undetermined; a person's confirmation is a green check mark on the asset, and the model's agreement across three readings a "Consistent 3/3" / red "Inconsistent 2/3" tag, explained by a legend above the table. The approved three-column comp (requirements and evidence, asset search and candidates, rule comparison) remains as **Search manually**. The Streamlit app this record was first derived from has been retired; its principles below still apply, while its file references and measurements are historical.
+
 ## Overview
 
 ### Current design instructions (2026-10-03)
@@ -127,7 +129,7 @@ This is a source-grounded merge of the incumbent direction, approved through `.i
 - Native, labeled controls and coordinated light, dark and system appearance.
 - Real PDF imagery and esmini frames; explicit unavailable and unresolved states.
 
-This record derives from `app.py`, `shell.css`, `appearance.py`, `workflow.css` and `preview_frames.py`; later production overrides take precedence over earlier base styles. It records implementation, not a claim of browser or accessibility acceptance. `PRODUCT.md` supplies durable traceability and engineering-honesty principles; its older capability exclusions are not used to deny implemented playback or PDF extraction paths.
+This record derives from the retired Streamlit sources (`app.py`, `shell.css`, `appearance.py`, `workflow.css`) and `preview_frames.py`; later production overrides take precedence over earlier base styles. It records implementation, not a claim of browser or accessibility acceptance. `PRODUCT.md` supplies durable traceability and engineering-honesty principles; its older capability exclusions are not used to deny implemented playback or PDF extraction paths.
 
 ## Colors
 
@@ -172,7 +174,7 @@ Source pages and saved fact tables sit together at wide desktop widths in a 1.12
 
 Task panels use 12px padding and 14px at 650px and below. The desktop brand/utility header is at least 54px high, with 44px navigation controls beneath. Navigation condenses at 1000px; at 650px it wraps into four destinations followed by project controls, and header utilities wrap beneath the brand.
 
-Asset management preserves its list-first operation surface. Search, filters, sort and version scope accompany a compact table; latest versions are the default. Selection reveals detail tabs for overview, classification, source files and history. The PDF requirement library stays a separate tab. Import and technical records are disclosures, with ongoing import progress and stopping controls still visible outside the closed import region.
+Asset management preserves its list-first operation surface. Search, filters, sort and version scope accompany a compact table; latest versions are the default. Selection reveals detail tabs for overview and preview, the clauses that adopt the version, source (with classification and standard checks as disclosures) and history. Import and technical records are disclosures, with ongoing import progress and stopping controls still visible outside the closed import region.
 
 ## Elevation & Depth
 
@@ -190,7 +192,7 @@ Use 6px task-panel corners, 4px fact-table and queue-row corners, and compact co
 
 Native controls retain keyboard behavior and accessible labels. Primary actions use the accent and white text; secondary controls use coordinated control/ink/border colors. Buttons have an explicit two-pixel accent focus outline with a two-pixel offset. Disabled actions use muted text and subdued surfaces without dropping opacity. Header focus uses a lighter blue against navy. Material Symbols remain outline/rounded font icons in the application; do not apply a global SVG fill override.
 
-Fact editing uses labeled fields and units. Narrative text does not silently set numeric parameters. Advanced JSON remains an explicit override. Saving facts creates a revision; confirmation publishes that exact project/document/scene/revision. Original PDFs and stored XOSC/XODR files are read-only, with exact-version downloads. Save edits before navigating away; this is workflow guidance, not a claim of a global unsaved-change guard.
+Fact editing uses labeled fields and units. Narrative text does not silently set numeric parameters. Advanced JSON remains an explicit override. Saving facts creates a revision; a confirmed reuse conclusion of that clause is then marked for reconfirmation. Original PDFs and stored XOSC/XODR files are read-only, with exact-version downloads. Save edits before navigating away; this is workflow guidance, not a claim of a global unsaved-change guard.
 
 ### Queue and task navigation
 
@@ -210,11 +212,11 @@ Capture frame and playback are explicit actions. Playback is bound to the select
 
 ### Assessment and continuity
 
-Unresolved review uses warning treatment and actionable guidance, without a success checkmark. Saving an eligible decision pins its candidate version and source revision; unresolved review disables that save action while retaining assessment snapshot export. After saving the current revision, Review next requirement advances through the filtered queue when another item exists. Saved reports can reopen the latest source revision while preserving their original snapshot.
+A suggestion carries no check mark; only a person's confirmation does. Confirming a conclusion pins the adopted asset versions; a newer version or edited clause facts mark it for reconfirmation rather than changing it. Adopt-all takes consistent direct-reuse suggestions only; inconsistent ones stay for a person. Manual search adopts the selected candidate for the clause and returns to the table at that row.
 
 ### Workspace controls
 
-The overview uses a divided metrics band and two adjacent preview coverage indicators. Progress tracks follow the control-border color in every appearance mode. Recent imports use a theme-aware HTML table with client-side column sorting, search and fullscreen reading, plus a CSV export of the displayed recent-import dataset. Long original asset names remain accessible through cell tooltips. Status text accompanies the small colored marker. This replaces the fixed-light native dataframe on the overview; remaining native dataframe surfaces still require theme integration.
+The overview leads with each PDF's clause reuse coverage (progress, then reusable / not applicable / to confirm / to reconfirm) and the assets no clause adopts, followed by a metrics band of the library. Progress tracks follow the control-border color in every appearance mode. Imports and per-asset previews live in Asset management.
 
 Project selection, creation, history, file inspection, help and settings remain real controls. Language, appearance and esmini location persist locally. Appearance offers Light, Dark and System; System follows CSS color-scheme without polling. Local workspace status does not imply an account or mandatory sign-in. Data/install paths have explicit Open folder actions; setup discovers common installations and permits native folder selection.
 

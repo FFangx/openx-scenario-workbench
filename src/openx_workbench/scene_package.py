@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +13,15 @@ class EvidenceRef:
     page_start: int
     page_end: int
     source_text: str
+
+
+def clause_text(title: str, body: str) -> str:
+    """A clause as a person reads it: its heading line, then its body. A one-sentence clause, a list
+    item or a clause made only of sub-clauses is all heading."""
+    title, body = (title or "").strip(), (body or "").strip()
+    if not title or title in body:
+        return body
+    return f"{title}\n{body}" if body else title
 
 
 @dataclass(slots=True)
@@ -35,10 +44,59 @@ class ScenePackage:
 
 
 @dataclass(frozen=True, slots=True)
+class ParticipantSignature:
+    """One non-ego participant as matching sees it: kind, ego-relative bearing and facing, behaviors.
+
+    `actor` names the asset entity it was read from (empty for a requirement). Neither it nor the
+    speed is part of the signature's identity. Any component may be "unknown".
+    """
+
+    kind: str
+    bearing: str
+    facing: str
+    actions: tuple[str, ...]
+    actor: str = field(default="", compare=False)
+    # Initial speed of this participant, compared after pairing; None when not stated or not read.
+    speed_kph: float | None = field(default=None, compare=False)
+    # Takes no part in the test (scene_facts.background_participants): an asset's parked cars or
+    # bystanders. Left over, it costs little; it can still stand for a requested participant.
+    background: bool = field(default=False, compare=False)
+    # What an asset's 3D model shows beyond its category (scene_facts.model_traits): a child, a
+    # tricycle authored as a car. Evidence that confirms a requirement, never a conflict.
+    traits: tuple[str, ...] = field(default=(), compare=False)
+    # Which way it faces relative to the ego once the ego's routing has turned it (an asset whose
+    # ego turns at a junction; empty otherwise). A requirement may describe either moment: people
+    # crossing the road the ego turns into walk the ego's starting way.
+    turned_facing: str = field(default="", compare=False)
+    # A requirement's alternatives share a label: one of them takes part in a run (a car, a tricycle
+    # or a pedestrian stands ahead). Empty: always there. Only a requirement has it.
+    alternative: str = field(default="", compare=False)
+    # A requirement's stated pedestrian age (儿童 / 成人), kept among `unverified` until an asset
+    # shows it; carried here so an alternative left out takes its age along.
+    age: str = field(default="", compare=False)
+    # Which of "bearing" and "facing" a requirement read from a figure rather than its text: an
+    # aid to ranking, never a conflict (reuse_policy.TIER_FIGURE). Only a requirement has it.
+    from_figure: tuple[str, ...] = field(default=(), compare=False)
+
+    def __post_init__(self) -> None:
+        if not self.actions:
+            # A participant without recorded actions stands still.
+            object.__setattr__(self, "actions", ("static",))
+
+    def key(self) -> str:
+        """Canonical text form, e.g. ``vehicle@front_same_lane:same:cruise``; part of the index vectors."""
+        return f"{self.kind}@{self.bearing}:{self.facing}:{'+'.join(self.actions)}"
+
+    @property
+    def has_unknown(self) -> bool:
+        return "unknown" in (self.kind, self.bearing, self.facing, *self.actions)
+
+
+@dataclass(frozen=True, slots=True)
 class RetrievalQuery:
     text: str
     scenario_families: frozenset[str] = frozenset()
-    participant_signatures: tuple[str, ...] = ()
+    participant_signatures: tuple[ParticipantSignature, ...] = ()
     participant_relations: frozenset[str] = frozenset()
     entity_kinds: frozenset[str] = frozenset()
     action_kinds: frozenset[str] = frozenset()
@@ -52,6 +110,43 @@ class RetrievalQuery:
     target_speeds_kph: tuple[float, ...] = ()
     environment: tuple[tuple[str, str], ...] = ()
     unverified: tuple[str, ...] = ()
+    # Scenery props (cones, barriers) grouped by position: they can stand for a
+    # requested obstacle but are not participants. Only an asset has them.
+    scenery_signatures: tuple[ParticipantSignature, ...] = ()
+    # (occluder kind, occluded kind) pairs, e.g. ("vehicle", "pedestrian").
+    occlusions: frozenset[tuple[str, str]] = frozenset()
+    # A driver-intervention test (driver inputs override the system); None: not stated.
+    driver_intervention: bool | None = None
+    # The driver asks the system for a lane change or confirms one (scene_facts.driver_requests).
+    # Only an asset has it.
+    driver_request: bool = False
+    parking_operation: str = ""  # park_in / park_out
+    # Lanes the road must offer at least: "same_direction" (单向 N) or "total" (双向 N, or
+    # a count whose direction is not stated). A lower bound: one more lane never hurts a test.
+    lane_count: int | None = None
+    lane_count_scope: str = ""
+    lane_marking: str = ""  # "solid" / "broken": the road must have such a line
+    # The kind of test an asset's named checks show (an accelerator, see scene_facts.condition_facts);
+    # a requirement keeps its declared intent among `unverified` until an asset confirms it.
+    test_intent: str = ""
+    # Which way an asset's ego moves sideways (scene_facts.lateral_direction), likewise confirming.
+    lateral_direction: str = ""
+    # Radius of the curve: a requirement's stated one (also kept among `unverified` until an
+    # asset's road states its own), an asset's first curve ahead of the ego.
+    curve_radius_m: float | None = None
+    # Where an asset's ego drives beyond the road shape (scene_facts.in_tunnel), likewise confirming.
+    venue_features: frozenset[str] = frozenset()
+    # Which way the ego leaves the junction or roundabout: "straight" / "left" / "right" / "u_turn";
+    # empty when not stated (requirement) or not readable (asset, scene_facts.ego_turn).
+    ego_turn: str = ""
+    # Traffic control a requirement's test relies on ("traffic_light" / "speed_limit") and the
+    # speed-limit values it sets up (several: alternatives). The asset side is its road file.
+    traffic_controls: frozenset[str] = frozenset()
+    speed_limits_kph: tuple[float, ...] = ()
+    # Which of its direction's lanes a requirement's ego drives in (最左侧车道 / 最右侧车道 / 中间车道).
+    ego_lane: str = ""
+    # The requirement's scene facts ("ego_turn", "ego_lane") read from a figure rather than its text.
+    figure_facts: frozenset[str] = frozenset()
 
 
 STRUCTURE_KINDS = {
@@ -118,6 +213,14 @@ STRUCTURE_ROADS = {
     "交叉口": "junction",
     "高速路": "motorway",
 }
+STRUCTURE_LANE_MARKINGS = {"实线": "solid", "虚线": "broken"}
+STRUCTURE_PARKING = {"泊入": "park_in", "泊出": "park_out"}
+STRUCTURE_INTENTS = {"激活边界试验": "activation_boundary"}
+STRUCTURE_AGES = {"儿童": "child"}
+STRUCTURE_LATERAL = {"左": "left", "右": "right"}
+STRUCTURE_VENUES = {"隧道": "tunnel"}
+STRUCTURE_TURNS = {"直行": "straight", "左转": "left", "右转": "right", "掉头": "u_turn"}
+STRUCTURE_TRAFFIC_CONTROLS = {"交通信号灯": "traffic_light", "限速标志": "speed_limit"}
 STRUCTURE_TRIGGERS = {
     "TTC": "ttc",
     "相对距离": "distance",
@@ -128,20 +231,30 @@ STRUCTURE_TRIGGERS = {
 
 def query_structure_text(query: RetrievalQuery) -> str:
     """Name-free canonical text shared by requirement and asset recall routes."""
-    return json.dumps(
-        {
-            "function": query.tested_function,
-            "participants": sorted(query.participant_signatures),
-            "ego_actions": sorted(query.ego_actions),
-            "road": sorted(query.road_features),
-            "triggers": sorted(query.trigger_kinds),
-            "params": query.parameters,
-            "target_speeds": query.target_speeds_kph,
-            "environment": query.environment,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
+    content = {
+        "function": query.tested_function,
+        # Scenery reads as the obstacles a requirement names.
+        "participants": sorted(item.key() for item in (*query.participant_signatures, *query.scenery_signatures)),
+        "ego_actions": sorted(query.ego_actions),
+        "road": sorted(query.road_features),
+        "triggers": sorted(query.trigger_kinds),
+        "params": query.parameters,
+        "target_speeds": query.target_speeds_kph,
+        "environment": query.environment,
+    }
+    if query.occlusions:
+        content["occlusions"] = sorted(f"{blocker}>{target}" for blocker, target in query.occlusions)
+    if query.driver_intervention:
+        content["driver_intervention"] = True
+    if query.parking_operation:
+        content["parking"] = query.parking_operation
+    return json.dumps(content, ensure_ascii=False, sort_keys=True)
+
+
+def _from_figure(item: dict, fields: tuple[str, ...]) -> tuple[str, ...]:
+    """The fields the extraction read from a figure; a person's edit of a field drops its evidence."""
+    evidence = item.get("evidence") or {}
+    return tuple(name for name in fields if (evidence.get(name) or {}).get("source") == "图")
 
 
 def _structured_query(package: ScenePackage) -> RetrievalQuery:
@@ -158,12 +271,23 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         ):
             raise ValueError(f"{key} must contain finite nonnegative values.")
     participants = structure["participants"]
+    speeds = [participant.get("speed_kph") for participant in participants]
     signatures = []
     unverified = []
-    for participant in participants:
-        actions = sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"])
+    for participant, speed in zip(participants, speeds):
         signatures.append(
-            f"{STRUCTURE_KINDS[participant['kind']]}@{STRUCTURE_BEARINGS[participant['bearing']]}:{STRUCTURE_FACING[participant['facing']]}:{'+'.join(actions) or 'unknown'}"
+            ParticipantSignature(
+                kind=STRUCTURE_KINDS[participant["kind"]],
+                bearing=STRUCTURE_BEARINGS[participant["bearing"]],
+                facing=STRUCTURE_FACING[participant["facing"]],
+                # A requirement that names no behavior leaves it open, unlike an asset.
+                actions=tuple(sorted(STRUCTURE_ACTIONS[item] for item in participant["actions"]))
+                or ("unknown",),
+                speed_kph=float(speed) if speed is not None else None,
+                alternative=participant.get("alternative_group") or "",
+                age=participant["age"] if participant["age"] != "未知" else "",
+                from_figure=_from_figure(participant, ("bearing", "facing")),
+            )
         )
         if participant["age"] != "未知":
             unverified.append("participant age=" + participant["age"])
@@ -193,22 +317,47 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         )
         if params[key] in mapping
     )
+    occlusions = frozenset(
+        (STRUCTURE_KINDS[item["subject"]], STRUCTURE_KINDS[item["object"]])
+        for item in structure["relations"] if item["relation"] == "遮挡"
+    )
+    # A driver-intervention test is read from the asset's driver-input overrides;
+    # the other intents (functional, false activation, boundary) are not.
+    intervention = structure["test_intent"] == "驾驶员干预试验"
     # Keep unsupported declared requirements visible in the verdict. They must
     # never disappear just because the XML reader does not yet understand them.
-    for key in (
-        "relations",
-        "venue_features",
-        "lane_marking",
-        "parking_operation",
-        "test_intent",
-    ):
-        if structure[key] and structure[key] != "未知":
-            unverified.append(f"{key}={structure[key]}")
+    venues = structure["venue_features"]
+    if venues and venues != "未知":
+        # One item per venue, so an asset can confirm each (a tunnel by its lighting).
+        unverified.extend(f"venue_features={item}" for item in ([venues] if isinstance(venues, str) else venues))
+    lane_marking = STRUCTURE_LANE_MARKINGS.get(structure["lane_marking"] or "", "")
+    if structure["lane_marking"] and structure["lane_marking"] != "未知" and not lane_marking:
+        unverified.append(f"lane_marking={structure['lane_marking']}")
+    lane_count = params["lane_count"]
+    # 单向 N counts one direction; 双向 N both (SM's reading: an odd 双向 N, as in 双向单车道,
+    # means N each way). The lane direction alone is no requirement: it only scopes the count.
+    lane_scope = ""
+    if isinstance(lane_count, (int, float)) and lane_count >= 1:
+        lane_count = int(lane_count)
+        if params["lane_direction"] == "单向":
+            lane_scope = "same_direction"
+        elif params["lane_direction"] == "双向" and lane_count % 2:
+            lane_scope = "same_direction"
+        else:
+            lane_scope = "total"
+    else:
+        lane_count = None
+    if structure["test_intent"] not in {"未知", "驾驶员干预试验"}:
+        unverified.append(f"test_intent={structure['test_intent']}")
+    # Which of its direction's lanes the ego drives in; an asset's start lane is not compared yet.
+    # Read from a figure, it is checked against the figure instead (reuse_structured).
+    figure_facts = frozenset(_from_figure(structure, ("ego_turn", "ego_lane")))
+    ego_lane = structure.get("ego_lane", "未知")
+    if ego_lane != "未知" and "ego_lane" not in figure_facts:
+        unverified.append(f"ego_lane={ego_lane}")
     for key in (
         "lateral_direction",
         "curve_radius_m",
-        "lane_count",
-        "lane_direction",
         "end_condition",
     ):
         if params[key] is not None and params[key] != "未知":
@@ -222,7 +371,7 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     query = RetrievalQuery(
         text=" ".join((package.title, package.preferred_text)),
         structured=True,
-        participant_signatures=tuple(sorted(signatures)),
+        participant_signatures=tuple(sorted(signatures, key=ParticipantSignature.key)),
         road_features=frozenset([STRUCTURE_ROADS[road]])
         if road in STRUCTURE_ROADS
         else frozenset(),
@@ -241,9 +390,24 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             for item in structure["ego_actions"]
             if item != "未知"
         ),
-        target_speeds_kph=tuple(sorted(set(params["target_speeds_kph"]))),
+        # Speeds bound to participants replace the unbound list; either way duplicates count.
+        target_speeds_kph=tuple(sorted(float(speed) for speed in speeds if speed is not None))
+        if any(speed is not None for speed in speeds)
+        else tuple(sorted(params["target_speeds_kph"])),
         environment=environment,
         unverified=tuple(unverified),
+        occlusions=occlusions,
+        driver_intervention=True if intervention else (False if structure["test_intent"] != "未知" else None),
+        parking_operation=STRUCTURE_PARKING.get(structure["parking_operation"], ""),
+        lane_count=lane_count,
+        lane_count_scope=lane_scope,
+        lane_marking=lane_marking,
+        curve_radius_m=params["curve_radius_m"],
+        ego_turn=STRUCTURE_TURNS.get(structure.get("ego_turn", ""), ""),
+        traffic_controls=frozenset(STRUCTURE_TRAFFIC_CONTROLS[item] for item in structure.get("traffic_controls", ())),
+        speed_limits_kph=tuple(params.get("speed_limits_kph", ())),
+        ego_lane=ego_lane if ego_lane != "未知" else "",
+        figure_facts=figure_facts,
     )
     if not any(
         (
@@ -256,10 +420,16 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
             query.environment,
             query.trigger_kinds,
             query.unverified,
+            query.occlusions,
+            query.driver_intervention,
+            query.parking_operation,
+            query.lane_count,
+            query.lane_marking,
+            query.ego_turn,
+            query.traffic_controls,
+            query.speed_limits_kph,
         )
     ):
-        from dataclasses import replace
-
         query = replace(query, unverified=("no extracted structural requirements",))
     return query
 
@@ -348,16 +518,10 @@ def synchronize_structure(package: ScenePackage) -> ScenePackage:
     if not package.structure:
         return package
     query = _structured_query(package)
-    package.entities = sorted(
-        {signature.split("@", 1)[0] for signature in query.participant_signatures}
-    )
+    package.entities = sorted({signature.kind for signature in query.participant_signatures})
     package.actions = sorted(
         query.ego_actions
-        | {
-            action
-            for signature in query.participant_signatures
-            for action in signature.split(":", 2)[2].split("+")
-        }
+        | {action for signature in query.participant_signatures for action in signature.actions}
     )
     package.triggers = sorted(query.trigger_kinds)
     package.road_types = sorted(query.road_features)

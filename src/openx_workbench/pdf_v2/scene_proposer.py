@@ -1,10 +1,12 @@
 """Adapted ScenarioManager V2 core; see docs/PDF_MIGRATION.md."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
-from typing import Any
+from typing import Any, Sequence
 
+from .figures import Figure
 from .models import SectionTree
 from .shared_containers import SharedContainerCandidate
 
@@ -419,6 +421,298 @@ _PROMPT_SCENE_FIRST_V6 = (
     .replace(_V5_EXAMPLE_PARAMS_TAIL, _V6_EXAMPLE_PARAMS_TAIL)
 )
 
+_V6_AGE_LINES = """    - 非行人参与者一律填「未知」
+"""
+
+_V7_AGE_AND_SPEED_LINES = """    - 非行人参与者一律填「未知」
+  speed_kph（这个参与者自己的初始速度，数字，km/h；文档没写留 null）
+    - 「目标车以 20 km/h 行驶」→ 这辆目标车填 20；文档写明静止的目标填 0
+    - 多个目标速度不同时，逐个填在对应的参与者上；
+      分不清哪个速度属于哪个参与者就留 null，只写进 params.target_speeds_kph
+"""
+
+_V7_EXAMPLE_PARTICIPANT = (
+    '          {"kind": "乘用车", "bearing": "正前方", "facing": "同向",'
+    ' "actions": ["静止"], "age": "未知", "speed_kph": null}\n'
+)
+
+_PROMPT_SCENE_FIRST_V7 = (
+    _PROMPT_SCENE_FIRST_V6
+    .replace(_V6_AGE_LINES, _V7_AGE_AND_SPEED_LINES)
+    .replace(_V5_EXAMPLE_PARTICIPANT, _V7_EXAMPLE_PARTICIPANT)
+)
+
+_V7_BEARING_LINES = """  bearing（相对主车的方位，单选）：
+    正前方 / 正后方 / 并排同车道 / 左前方 / 左后方 / 左并排 / 右前方 / 右后方 / 右并排 / 未知方位
+"""
+
+_V8_BEARING_LINES = """  bearing（相对主车的方位，单选）：
+    正前方 / 正后方 / 并排同车道 / 左前方 / 左后方 / 左并排 / 右前方 / 右后方 / 右并排 / 未知方位
+    - 指**试验开始时**（主车驶近之前）目标所在的位置，不是相遇、碰撞那一刻的位置
+    - 前后看纵向位置，左右看**所在车道**：在主车本车道 = 正前方 / 正后方；
+      在左侧车道（含对向车道）= 左前方 / 左后方 / 左并排；右侧同理
+    - 主车将要驶过的静止目标都在前方：路两侧停放的车 = 左前方 / 右前方，不是并排
+    - 对向车道驶来的车（靠右行驶）= 左前方 + facing「对向」
+"""
+
+_V7_SPEED_TAIL = """      分不清哪个速度属于哪个参与者就留 null，只写进 params.target_speeds_kph
+"""
+
+_V8_SPEED_TAIL_AND_GROUP = """      分不清哪个速度属于哪个参与者就留 null，只写进 params.target_speeds_kph
+  alternative_group（任选组，字符串，可为 null）
+    - 文档写明几种目标**任选其一**、每次试验只出现其中一种时（「乘用车/快递三轮车/行人
+      任选其一」「乘用车（或快递三轮车）」「成人或儿童行人」），每种各列一个参与者，
+      并给它们填**同一个**组名（如 "A"；另有一组任选就写 "B"）
+    - 同时出现的参与者（行人群里的每个人、两侧停放的每辆车）一律填 null
+"""
+
+_V8_TURN_AND_CONTROLS = """ego_turn（主车在路口 / 环岛的走向，单选）：直行 / 左转 / 右转 / 掉头 / 未知
+  - 只在文档写明时填：「主车左转通过路口」→ 左转；「确保车辆在交叉口直行」→ 直行
+  - 不经过路口、环岛的场景，或文档没说主车怎么走，填「未知」
+
+traffic_controls（试验要用到的交通控制设施，可多选，可为空）：交通信号灯 / 限速标志
+  - 只填试验靠它进行的：信号灯识别与响应、限速标志识别这类试验
+  - 只作位置参照提到的（「距停止线 21m 处」），或写明「无信号灯 / 信号灯熄灭」的，不要填
+
+test_intent（这个试验考核什么，单选）：
+"""
+
+_V8_SPEED_LIMIT_LINES = """  fog_visibility_m：雾天能见度（数字，米）——「能见度不大于 200m」→ 200；
+    文档只说「雾天」没给数值就留 null
+  speed_limits_kph：限速标志的数值（数字数组，km/h）——「设置限速 60 km/h 标志」→ [60]；
+    按条件任选其一的几个值都列上（「按设定车速选取 100/80/60/40 km/h 标志」→ [100, 80, 60, 40]）；
+    试验没有限速标志就留空数组
+"""
+
+_V7_EXAMPLE_INTENT = """        "test_intent": "功能试验",
+"""
+
+_V8_EXAMPLE_INTENT = """        "test_intent": "功能试验",
+        "ego_turn": "未知",
+        "traffic_controls": [],
+"""
+
+_V8_EXAMPLE_PARTICIPANT = (
+    '          {"kind": "乘用车", "bearing": "正前方", "facing": "同向",'
+    ' "actions": ["静止"], "age": "未知", "speed_kph": null, "alternative_group": null}\n'
+)
+
+_V8_EXAMPLE_PARAMS_TAIL = """          "fog_visibility_m": null,
+          "speed_limits_kph": [],
+          "end_condition": null
+"""
+
+_PROMPT_SCENE_FIRST_V8 = (
+    _PROMPT_SCENE_FIRST_V7
+    .replace(_V7_BEARING_LINES, _V8_BEARING_LINES)
+    .replace(_V7_SPEED_TAIL, _V8_SPEED_TAIL_AND_GROUP)
+    .replace("test_intent（这个试验考核什么，单选）：\n", _V8_TURN_AND_CONTROLS)
+    .replace(_V6_END_CONDITION_LINES.split("  end_condition")[0], _V8_SPEED_LIMIT_LINES)
+    .replace(_V7_EXAMPLE_INTENT, _V8_EXAMPLE_INTENT)
+    .replace(_V7_EXAMPLE_PARTICIPANT, _V8_EXAMPLE_PARTICIPANT)
+    .replace('          "fog_visibility_m": null,\n          "end_condition": null\n', _V8_EXAMPLE_PARAMS_TAIL)
+)
+
+# ---------- v9: find the scenes once, then read each batch's structure with evidence ----------
+# Scene finding keeps the v1 instructions unchanged (v2-v8 only added the structure to them). The
+# structure prompt keeps v8's field definitions with three changes: either-or targets also come
+# from parameter-table rows; the bearing keeps only definitions that map from the wording itself
+# (v8's "at test start / by lane" lines made the model infer an unstated ego lane); and every
+# spatial field names its source with a verbatim quote, checked in code (structure_evidence).
+
+_V8_STRUCTURE_START = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n场景结构（structure）"
+_V8_STRUCTURE_END = "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n严格输出"
+
+
+def _v8_structure_section() -> str:
+    start = _PROMPT_SCENE_FIRST_V8.index(_V8_STRUCTURE_START)
+    return _PROMPT_SCENE_FIRST_V8[start:_PROMPT_SCENE_FIRST_V8.index(_V8_STRUCTURE_END, start)]
+
+
+_STRUCTURE_V9_HEAD = """你是汽车测试标准的场景结构化专家。用户会给你一份测试规程里若干个试验场景的原文：
+先是全文档共用的试验条件，再是本批场景用到的章节（每节带 node_id、层级和正文），
+最后是本批场景清单（scene_id、场景名、所在章节、属于它的 node_id）。
+
+你的任务：为清单里的**每个**场景，把原文描述的场景结构翻译成规定的结构化字段，
+并为空间字段写明依据。只根据给出的原文，不要用常识补全原文没写的东西。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+通用术语（适用于各类标准）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 我国道路靠右行驶：对向车道在主车左侧。
+- 主车 = 试验车辆 = 被试车辆 = SV（subject vehicle）；TV = 目标车辆（TV1、TV2 是不同的目标车）；
+  TO = 目标物（target object）；VRU = 弱势交通参与者（行人、骑行者等）。
+- 本车道 = 主车所在的车道；相邻车道 = 紧挨本车道的同向车道（在左还是在右，看原文）；
+  对向车道 = 迎面方向的车道。
+- 近端 = 从主车右侧（靠近主车的路边）出发；远端 = 从主车左侧（道路另一侧）出发。
+- 参数表（<table>）里每一行是一个独立的试验工况。
+
+"""
+
+_V8_GROUP_LINES = """    - 同时出现的参与者（行人群里的每个人、两侧停放的每辆车）一律填 null
+"""
+
+_V9_GROUP_LINES = """    - 参数表每行一个工况：各行的目标物类型（或目标组合）不同时，这些目标也是任选，
+      每种各列一个参与者、填同一个组名；「分别用 X、Y 各做一次试验」同理
+    - 同时出现的参与者（行人群里的每个人、两侧停放的每辆车）一律填 null
+"""
+
+_V9_BEARING_LINES = """  bearing（相对主车的方位，单选）：
+    正前方 / 正后方 / 并排同车道 / 左前方 / 左后方 / 左并排 / 右前方 / 右后方 / 右并排 / 未知方位
+    - 对向车道驶来的车（靠右行驶）= 左前方 + facing「对向」
+    - 原文没写清目标在主车哪一侧、或要看主车在哪条车道才能定而原文没写主车车道时，
+      填「未知方位」，不要猜（由原文必然推出的除外，见下面的「依据」）；
+      只画在图里、文字没写的位置（「如图 X 所示」）也填未知
+"""
+
+_V8_TURN_HEAD = "ego_turn（主车在路口 / 环岛的走向，单选）"
+
+_V9_EGO_LANE = """ego_lane（主车在本方向车道中的位置，单选）：最左侧车道 / 最右侧车道 / 中间车道 / 未知
+  - 只在原文写明或能必然推出时填（见下面的「依据」）；没写就填「未知」
+
+"""
+
+_STRUCTURE_V9_EVIDENCE = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+空间字段的依据（evidence）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+下面这些字段只要填了非未知的值，就必须写依据：每个参与者的 bearing、facing、
+alternative_group（填了组名时），以及场景的 ego_turn、ego_lane。每条依据：
+  {"source": "原文" 或 "推出" 或 "未知", "quote": "原文引句", "reason": "推理（仅推出时写）"}
+- 原文：原文直接写了。quote 照抄原文里连续的一段（不超过 60 字，不改字、不加省略号；
+  表格只抄单元格里的字）。
+- 推出：原文没直接写，但由原文的几句话**必然**得出（不这样就与原文矛盾）。quote 抄出所依据的
+  原文，reason 用一句话写推理。例：原文「试验道路为单向两车道，主车沿右侧车道行驶，目标车在
+  相邻车道」→ 相邻车道只能在主车左侧，目标车 bearing 填左前方（或左并排、左后方，看前后），source=推出。
+- 未知：原文和推理都定不了。值填「未知 / 未知方位」，不必写依据。
+  「一般 / 通常 / 大概」不算推出。
+- quote 必须来自上面给出的原文章节（不能抄场景清单里的场景名），且只能抄**这个场景自己**的章节或共用章节。
+  程序会逐条核对：原文里找不到的引句，该字段会被改成未知并标记待复核。
+"""
+
+_STRUCTURE_V9_OUTPUT = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+严格输出以下 JSON，不要任何额外文字：
+{
+  "scenes": [
+    {
+      "scene_id": "（场景清单里的 scene_id，原样照抄）",
+      "structure": {
+        "road_class": "直道",
+        "tested_function": "AEB",
+        "tested_function_raw": null,
+        "ego_actions": ["匀速行驶"],
+        "participants": [
+          {"kind": "乘用车", "bearing": "正前方", "facing": "未知", "actions": ["静止"], "age": "未知",
+           "speed_kph": null, "alternative_group": null,
+           "evidence": {"bearing": {"source": "原文", "quote": "前方同车道有静止车辆目标", "reason": null}}}
+        ],
+        "relations": [],
+        "semantic_triggers": ["TTC"],
+        "venue_features": [],
+        "lane_marking": "未知",
+        "parking_operation": "未知",
+        "test_intent": "功能试验",
+        "ego_turn": "未知",
+        "ego_lane": "未知",
+        "traffic_controls": [],
+        "evidence": {},
+        "params": {
+          "ego_speed_kph": null,
+          "target_speeds_kph": [],
+          "weather": "未知",
+          "time_of_day": "未知",
+          "ttc_value": null,
+          "lateral_direction": "未知",
+          "curve_radius_m": null,
+          "lane_count": null,
+          "lane_direction": "未知",
+          "fog_visibility_m": null,
+          "speed_limits_kph": [],
+          "end_condition": null
+        }
+      }
+    }
+  ]
+}
+
+要求：
+- 场景清单里的每个场景都输出一项，scene_id 原样照抄，不要漏、不要合并、不要新增
+- structure 的每个字段只能用上面列出的取值
+- 每个非未知的空间字段都有依据，引句是给出原文里连续的原句
+"""
+
+_PROMPT_SCENE_STRUCTURE_V9 = (
+    _STRUCTURE_V9_HEAD
+    + _v8_structure_section()
+    .replace(_V8_BEARING_LINES, _V9_BEARING_LINES)
+    .replace(_V8_GROUP_LINES, _V9_GROUP_LINES)
+    .replace(_V8_TURN_HEAD, _V9_EGO_LANE + _V8_TURN_HEAD)
+    + _STRUCTURE_V9_EVIDENCE
+    + _STRUCTURE_V9_OUTPUT
+)
+
+# ---------- v10: the scene's figures come with its text ----------
+# A model that reads images gets each scene's figures (pdf_v2.figures). A position the text leaves
+# to a figure ("如图C.10所示") is read from it, with the figure's number as the quote and what it
+# shows as the reason; the text still wins over a figure. A crossing target's bearing is the side
+# it starts from (v9 left the moment open, and readings named where it meets the ego).
+
+_V9_HEAD_SCENE_LIST = "最后是本批场景清单（scene_id、场景名、所在章节、属于它的 node_id）。\n"
+
+_V10_HEAD_SCENE_LIST = """最后是本批场景清单（scene_id、场景名、所在章节、属于它的 node_id、它的示意图）。
+场景章节里有示意图时，图片附在最后，每张前面写着图号和图题。
+"""
+
+_V9_BEARING_FIGURE_LINE = "      只画在图里、文字没写的位置（「如图 X 所示」）也填未知\n"
+
+_V10_BEARING_FIGURE_LINES = """      文字没写、只画在示意图里的位置（「如图 X 所示」）：附了这张图就按图读（依据来源填「图」，
+      见下面的「读示意图」），没附图就填未知
+    - 横穿的目标（行人、骑行者、横穿的车）按它**出发的一侧**定方位：从主车右侧出发 = 右前方，
+      从左侧出发 = 左前方；不是相遇、碰撞那一刻它在哪
+"""
+
+_V9_EVIDENCE_SOURCES = '  {"source": "原文" 或 "推出" 或 "未知", "quote": "原文引句", "reason": "推理（仅推出时写）"}\n'
+
+_V10_EVIDENCE_SOURCES = """  {"source": "原文" 或 "推出" 或 "图" 或 "未知", "quote": "原文引句（看图时写图号）",
+   "reason": "推理（推出时写）或图里看到的（看图时写）"}
+"""
+
+_V9_EVIDENCE_UNKNOWN = "- 未知：原文和推理都定不了。"
+
+_V10_EVIDENCE_FIGURE = """- 图：原文没写、附给这个场景的示意图里画清楚了。quote 只写图号（如「图C.10」），reason 用一句话写
+  图里看到的（如「图中儿童从主车右侧路边出发，被右前方停放的车挡住」）。原文写了的一律按原文。
+- 未知：原文、推理和附图都定不了。"""
+
+_V10_FIGURE_SECTION = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+读示意图（附了图时）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 示意图多是俯视图。先找主车（试验车辆 / 被试车辆 / SV / VUT / 主车）和它的行驶方向（车头朝向、箭头）。
+- 左右、前后都按**主车行驶方向**换算，不是图片的左右：主车朝图片右边开时，图片上方是主车左侧、
+  下方是主车右侧；主车朝图片上方开时，图片左边是主车左侧。
+- 参与者以原文为准：图只用来定原文提到的参与者的方位、朝向和主车车道、主车走向；不要因为图里
+  多画了东西就新增参与者，也不要用图改掉原文写明的事实。
+- 一个场景附了几张图（如不同目标物各一张）时，每个参与者按画它的那张图读。
+- 图里看不清、或几张图画得互相矛盾时，填未知。
+"""
+
+_V9_OUTPUT_REQUIREMENT = "- 每个非未知的空间字段都有依据，引句是给出原文里连续的原句\n"
+
+_V10_OUTPUT_REQUIREMENT = """- 每个非未知的空间字段都有依据，引句是给出原文里连续的原句；看图的依据只写附给这个场景的图号
+"""
+
+_PROMPT_SCENE_STRUCTURE_V10 = (
+    _PROMPT_SCENE_STRUCTURE_V9
+    .replace(_V9_HEAD_SCENE_LIST, _V10_HEAD_SCENE_LIST)
+    .replace(_V9_BEARING_FIGURE_LINE, _V10_BEARING_FIGURE_LINES)
+    .replace(_V9_EVIDENCE_SOURCES, _V10_EVIDENCE_SOURCES)
+    .replace(_V9_EVIDENCE_UNKNOWN, _V10_EVIDENCE_FIGURE)
+    .replace(_STRUCTURE_V9_OUTPUT, _V10_FIGURE_SECTION + _STRUCTURE_V9_OUTPUT)
+    .replace(_V9_OUTPUT_REQUIREMENT, _V10_OUTPUT_REQUIREMENT)
+)
+
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
     "scene-first-prompt-v2": _PROMPT_SCENE_FIRST_V2,
@@ -426,7 +720,18 @@ _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v4": _PROMPT_SCENE_FIRST_V4,
     "scene-first-prompt-v5": _PROMPT_SCENE_FIRST_V5,
     "scene-first-prompt-v6": _PROMPT_SCENE_FIRST_V6,
+    "scene-first-prompt-v7": _PROMPT_SCENE_FIRST_V7,
+    "scene-first-prompt-v8": _PROMPT_SCENE_FIRST_V8,
+    # Finds the scenes only; their structure comes from STRUCTURE_PROMPTS below.
+    "scene-first-prompt-v9": _PROMPT_SCENE_FIRST_V1,
+    "scene-structure-prompt-v9": _PROMPT_SCENE_STRUCTURE_V9,
+    "scene-first-prompt-v10": _PROMPT_SCENE_FIRST_V1,
+    "scene-structure-prompt-v10": _PROMPT_SCENE_STRUCTURE_V10,
 }
+
+# Scene prompts whose structure is read in a second step, per batch of scenes.
+STRUCTURE_PROMPTS: dict[str, str] = {"scene-first-prompt-v9": "scene-structure-prompt-v9",
+                                     "scene-first-prompt-v10": "scene-structure-prompt-v10"}
 
 _FROZEN_PROMPT_SHA256: dict[str, str] = {
     "scene-first-prompt-v1": (
@@ -451,6 +756,30 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
 
     "scene-first-prompt-v6": (
         "3f54e06e035a3891191c39437bdd4966e4902d4288ca59f564f4213c93436f5d"
+    ),
+
+    "scene-first-prompt-v7": (
+        "dc279fa0d19751439643ec4a670918a4aadecfb2430fe97765494825baa5fcac"
+    ),
+
+    "scene-first-prompt-v8": (
+        "de57b2c17c038fe88f3fd0a924797d9521acbd042e54907c709010f56bcc208a"
+    ),
+    # The v1 scene-finding text, unchanged.
+    "scene-first-prompt-v9": (
+        "3c9b020cf9a664a8a2174b57692dbdb02f4dc6e527c0514d15144fa70659fd22"
+    ),
+
+    "scene-structure-prompt-v9": (
+        "77af239241bf7b3a1606af59475fc3f677e6720c2e87ed0ad921bcaa0773414a"
+    ),
+    # The v1 scene-finding text, unchanged.
+    "scene-first-prompt-v10": (
+        "3c9b020cf9a664a8a2174b57692dbdb02f4dc6e527c0514d15144fa70659fd22"
+    ),
+
+    "scene-structure-prompt-v10": (
+        "140d79943591ef131e72be4ead8dbd02b7ba246c3aee1821769373e143887b06"
     ),
 }
 
@@ -546,12 +875,65 @@ def build_scene_request(
         "max_tokens": max_output_tokens,
     }
 
+def build_structure_request(
+    context_view: str,
+    batch_view: str,
+    scene_list: str,
+    *,
+    model: str,
+    prompt_version: str,
+    figures: Sequence[Figure] = (),
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
+    max_input_chars: int = MAX_INPUT_CHARS,
+) -> dict[str, Any]:
+    """One batch of scenes for the structure prompt. The document-wide conditions come first, the
+    same in every batch, so the service can reuse that prefix across batches. The scenes' figures
+    follow the text as images (OpenAI content parts), each after a line with its number and caption."""
+    prompt = resolve_scene_prompt(prompt_version)
+    text = ("===== 全文档共用的试验条件 =====\n" + (context_view or "（无）")
+            + "\n\n===== 本批场景用到的章节 =====\n" + batch_view
+            + "\n\n===== 本批场景清单 =====\n" + scene_list)
+    if len(prompt) + len(text) > max_input_chars:
+        raise SceneDocumentTooLarge(
+            f"structure batch is {len(prompt) + len(text):,} chars, exceeding the {max_input_chars:,} limit"
+        )
+    content: str | list[dict[str, Any]] = text
+    if figures:
+        content = [{"type": "text", "text": text + f"\n\n===== 本批场景的示意图（{len(figures)} 张，附在下面）====="}]
+        for figure in figures:
+            content.append({"type": "text", "text": f"{figure.label}（第 {figure.page_number} 页）：{figure.caption}"})
+            content.append({"type": "image_url",
+                            "image_url": {"url": "data:image/png;base64," + base64.b64encode(figure.png).decode()}})
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": content},
+        ],
+        "response_format": {"type": "json_object"},
+        "thinking": {"type": "enabled"},
+        "max_tokens": max_output_tokens,
+    }
+
 def request_sha256(request_body: dict[str, Any]) -> str:
 
     raw = json.dumps(request_body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return _sha256_text(raw)
 
-def parse_scene_response(envelope: dict[str, Any]) -> dict[str, Any]:
+def parse_structure_response(envelope: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The structures of a batch response by scene_id; entries without one are skipped."""
+    parsed = _response_object(envelope)
+    if not isinstance(parsed.get("scenes"), list):
+        raise SceneResponseInvalid("response must contain a scenes list")
+    result: dict[str, dict[str, Any]] = {}
+    for entry in parsed["scenes"]:
+        if isinstance(entry, dict) and isinstance(entry.get("scene_id"), str) and isinstance(entry.get("structure"), dict):
+            result.setdefault(entry["scene_id"].strip(), entry["structure"])
+    if not result:
+        raise SceneResponseInvalid("response contains no scene structure with a scene_id")
+    return result
+
+def _response_object(envelope: dict[str, Any]) -> dict[str, Any]:
 
     choices = envelope.get("choices") or []
     if not choices:
@@ -580,6 +962,11 @@ def parse_scene_response(envelope: dict[str, Any]) -> dict[str, Any]:
 
     if not isinstance(parsed, dict):
         raise SceneResponseInvalid("model returned a JSON value that is not an object")
+    return parsed
+
+def parse_scene_response(envelope: dict[str, Any]) -> dict[str, Any]:
+
+    parsed = _response_object(envelope)
     if not isinstance(parsed.get('scenes'), list) or not isinstance(parsed.get('shared_config_node_ids', []), list):
         raise SceneResponseInvalid('response must contain a scenes list and optional shared_config_node_ids list')
     for scene in parsed['scenes']:

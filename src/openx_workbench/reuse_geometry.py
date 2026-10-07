@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import math
 
+from . import reuse_policy as policy
 from .models import PositionIR
-from .road_geometry import RoadReferenceLine
+from .road_geometry import RoadReferenceLine, locate, place_on
 
 
 def _bearing(forward: float, left: float) -> str:
-    if forward > 5.0:
+    if forward > policy.ALONGSIDE_M:
         longitudinal = "front"
-    elif forward < -5.0:
+    elif forward < -policy.ALONGSIDE_M:
         longitudinal = "rear"
     else:
         longitudinal = "alongside"
-    if abs(left) <= 1.5:
+    if abs(left) <= policy.SAME_LANE_M:
         return f"{longitudinal}_same_lane"
     return f"{longitudinal}_{'left' if left > 0 else 'right'}"
 
@@ -28,21 +29,40 @@ def _relative_facing(
     ego: PositionIR,
     target: PositionIR,
     roads: dict[str, RoadReferenceLine],
+    ego_turn: float = 0.0,
 ) -> str:
+    """Which way the target faces relative to the ego; with `ego_turn` (radians, left positive),
+    relative to the ego after its routing turned it that far."""
+    relative = _relative_heading(ego, target, roads)
+    return _facing(relative - ego_turn) if relative is not None else "unknown"
+
+
+def _relative_heading(
+    ego: PositionIR,
+    target: PositionIR,
+    roads: dict[str, RoadReferenceLine],
+) -> float | None:
     if target.kind == "RelativeObjectPosition":
         relative = _number(target.orientation, "h")
         if relative is None:
-            return "same"
+            return 0.0
         if target.orientation.get("type") == "absolute":
             ego_heading = _ego_heading(ego, roads)
             if ego_heading is None:
-                return "unknown"
+                return None
             relative -= ego_heading
-        return _facing(relative)
+        return relative
 
     road_id = ego.attributes.get("roadId") or target.attributes.get("roadId")
     road = roads.get(road_id or "")
-    if road is not None:
+    along = _along_road(ego, target, roads) if road is None else None
+    if along is not None:
+        road, ego_s, _, target_s, _ = along
+        ego_heading, target_heading = _position_heading(ego, None), _position_heading(target, None)
+        ego_reference, target_reference = road.heading_at(ego_s), road.heading_at(target_s)
+        if None not in (ego_heading, target_heading, ego_reference, target_reference):
+            return _wrap(target_heading - target_reference) - _wrap(ego_heading - ego_reference)
+    if road is not None and along is None:
         ego_coordinates = _road_coordinates(ego, road)
         target_coordinates = _road_coordinates(target, road)
         if ego_coordinates is not None and target_coordinates is not None:
@@ -60,13 +80,13 @@ def _relative_facing(
             ):
                 ego_deviation = _wrap(ego_heading - ego_reference)
                 target_deviation = _wrap(target_heading - target_reference)
-                return _facing(target_deviation - ego_deviation)
+                return target_deviation - ego_deviation
 
     ego_heading = _ego_heading(ego, roads)
     target_heading = _position_heading(target, None)
     if ego_heading is None or target_heading is None:
-        return "unknown"
-    return _facing(target_heading - ego_heading)
+        return None
+    return target_heading - ego_heading
 
 
 def _heading_on_road(
@@ -86,9 +106,9 @@ def _heading_on_road(
 
 def _facing(angle: float) -> str:
     delta = abs(_wrap(angle))
-    if delta <= math.pi / 6:
+    if delta <= policy.FACING_SAME_MAX:
         return "same"
-    if delta >= 5 * math.pi / 6:
+    if delta >= policy.FACING_OPPOSITE_MIN:
         return "opposite"
     return "crossing"
 
@@ -139,11 +159,18 @@ def _relative_offset(
             offset = _number(target.attributes, "offset") or 0.0
             direction = _ego_road_direction(ego, roads)
             if ds is not None and lane_delta is not None and direction is not None:
-                return ds * direction, (lane_delta * 3.5 + offset) * direction
+                return ds * direction, (lane_delta * policy.LANE_WIDTH_M + offset) * direction
 
     road_offset = _road_relative_offset(ego, target, roads)
     if road_offset is not None:
         return road_offset
+
+    along = _along_road(ego, target, roads)
+    if along is not None:
+        road, ego_s, ego_t, target_s, target_t = along
+        direction = _travel_direction(ego, road, ego_s)
+        if direction is not None:
+            return (target_s - ego_s) * direction, (target_t - ego_t) * direction
 
     if ego.kind == target.kind == "WorldPosition":
         ex = _number(ego.attributes, "x")
@@ -159,6 +186,31 @@ def _relative_offset(
             -dx * math.sin(heading) + dy * math.cos(heading),
         )
     return None
+
+
+def _along_road(
+    ego: PositionIR,
+    target: PositionIR,
+    roads: dict[str, RoadReferenceLine],
+) -> tuple[RoadReferenceLine, float, float, float, float] | None:
+    """Two world positions measured along the road the ego starts on: (road, ego s, ego t,
+    target s, target t). On a curve, a car ahead in the ego's lane lies far to one side in a
+    straight line from the ego, but on the same road offset. None when the ego is on no road of
+    the file (the file is missing, or it starts inside a junction) or the target is beside
+    another one: the straight line then stays the only reading.
+    """
+    if not roads or ego.kind != "WorldPosition" or target.kind != "WorldPosition":
+        return None
+    coordinates = [(_number(item.attributes, "x"), _number(item.attributes, "y")) for item in (ego, target)]
+    if any(value is None for pair in coordinates for value in pair):
+        return None
+    (ex, ey), (tx, ty) = coordinates
+    located = locate(roads, ex, ey)
+    if located is None:
+        return None
+    road, ego_s, ego_t = located
+    placed = place_on(road, tx, ty)
+    return (road, ego_s, ego_t, *placed) if placed is not None else None
 
 
 def _ego_heading(
@@ -293,7 +345,7 @@ def _lane_position_fallback(
     direction = 1.0 if ego_lane < 0 else -1.0
     return (
         (target_s - ego_s) * direction,
-        (target_lane - ego_lane) * 3.5 * direction,
+        (target_lane - ego_lane) * policy.LANE_WIDTH_M * direction,
     )
 
 

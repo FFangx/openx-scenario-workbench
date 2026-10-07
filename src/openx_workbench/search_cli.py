@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .catalog import build_catalog_from_directory
 from .retrieval import OpenXIndex, build_encoder
+from .synonyms import expand_query
 
 
 def main() -> None:
@@ -28,7 +29,7 @@ def main() -> None:
             index = OpenXIndex(assets, encoder)
             if args.index:
                 index.save(args.index)
-        results = index.search(args.query, top_k=args.top_k)
+        results = index.search(expand_query(args.query), top_k=args.top_k)
     except (OSError, RuntimeError, ValueError) as exc:
         parser.error(str(exc))
 

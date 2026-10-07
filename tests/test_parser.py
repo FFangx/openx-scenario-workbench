@@ -32,6 +32,19 @@ def test_parse_xodr_summarizes_network():
     assert road.geometry_types == {"line": 1}
 
 
+def test_parse_xodr_reads_speed_limits_traffic_lights_and_marked_areas():
+    road = parse_xodr(
+        '<OpenDRIVE><header revMajor="1" revMinor="6"/><road id="1" length="100"><planView/>'
+        '<objects><object id="1" type="crosswalk" s="10" t="0"/><object id="2" type="stopline" s="20" t="0"/>'
+        '<object id="3" type="parkingSpace" s="30" t="0"/><object id="4" type="pole" s="40" t="0"/></objects>'
+        '<signals><signal id="1" s="5" t="3" dynamic="no" country="CHN" type="1010203800001413" value="80" unit="km/h"/>'
+        '<signal id="2" s="9" t="3" dynamic="no" country="DE" type="274" value="30" unit="mph"/>'
+        '<signal id="3" s="50" t="3" dynamic="yes" type="1.000.001" value="-1"/>'
+        '<signal id="4" s="60" t="3" dynamic="no" type="Graphics" value="0" unit="m"/></signals></road></OpenDRIVE>')
+    assert road.speed_limits_kph == [48.3, 80.0]
+    assert road.furniture == {"crosswalk": 1, "parking_space": 1, "stop_line": 1, "traffic_light": 1}
+
+
 def test_bundle_warns_when_filename_does_not_match():
     bundle = parse_bundle(
         (FIXTURES / "minimal.xosc").read_bytes(),

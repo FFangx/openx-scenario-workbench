@@ -64,7 +64,14 @@ def test_owned_job_terminates_grandchild(tmp_path):
         process.wait(timeout=5)
 
 
+def _require_web():
+    from openx_workbench.launcher import web_available
+    if not web_available():
+        pytest.skip("web/dist is not built")
+
+
 def test_real_service_health_restart_and_stop(tmp_path, monkeypatch):
+    _require_web()
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path / "data"))
     service = Service(tmp_path)
     try:
@@ -73,10 +80,15 @@ def test_real_service_health_restart_and_stop(tmp_path, monkeypatch):
             service.start()
             if previous:
                 assert previous.poll() is not None
-            deadline = time.monotonic() + 20
+            deadline = time.monotonic() + 30
             while not service.ready() and time.monotonic() < deadline:
                 time.sleep(0.1)
             assert service.ready()
+        with urlopen(service.url + "/", timeout=5) as response:
+            assert b'<div id="root">' in response.read()
+        with urlopen(service.url + "/api/projects", timeout=5) as response:
+            assert response.status == 200
+        assert (tmp_path / "web-service.log").exists()
         process = service.process
         service.stop()
         assert process.poll() is not None
@@ -84,43 +96,18 @@ def test_real_service_health_restart_and_stop(tmp_path, monkeypatch):
         service.stop()
 
 
-def test_real_web_service_serves_the_built_workbench(tmp_path, monkeypatch):
-    from openx_workbench.launcher import web_available
-    if not web_available():
-        pytest.skip("web/dist is not built or the [web] extra is not installed")
-    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path / "data"))
-    service = Service(tmp_path, "web")
-    try:
-        service.start()
-        deadline = time.monotonic() + 30
-        while not service.ready() and time.monotonic() < deadline:
-            time.sleep(0.1)
-        assert service.ready()
-        with urlopen(service.url + "/", timeout=5) as response:
-            assert b'<div id="root">' in response.read()
-        with urlopen(service.url + "/api/projects", timeout=5) as response:
-            assert response.status == 200
-        assert (tmp_path / "web-service.log").exists()
-    finally:
-        service.stop()
-
-
-def test_launcher_keeps_streamlit_as_classic_companion(tmp_path):
-    launcher = Launcher(tmp_path, no_browser=True, ui="web")
-    assert (launcher.service.kind, launcher.classic.kind) == ("web", "streamlit")
-    single = Launcher(tmp_path, no_browser=True, ui="streamlit")
-    assert single.classic is single.service
-    with pytest.raises(ValueError):
-        Service(tmp_path, "desktop")
-    launcher.server.server_close()
-    single.server.server_close()
+def test_launcher_refuses_to_start_without_the_built_interface(tmp_path, monkeypatch):
+    monkeypatch.setattr("openx_workbench.launcher.web_available", lambda: False)
+    with pytest.raises(RuntimeError, match="npm run build"):
+        Launcher(tmp_path, no_browser=True)
 
 
 def test_control_requires_token_and_duplicate_open_reuses_service(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path / "data"))
     revision = ["authored-v1"]
     monkeypatch.setattr("openx_workbench.launcher.source_revision", lambda: revision[0])
-    launcher = Launcher(tmp_path, no_browser=True, ui="streamlit")
+    _require_web()
+    launcher = Launcher(tmp_path, no_browser=True)
     thread = threading.Thread(target=launcher.run, kwargs={"headless": True})
     thread.start()
     try:

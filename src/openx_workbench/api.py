@@ -2,31 +2,38 @@
 
 from __future__ import annotations
 
-import threading
+import json
 from dataclasses import asdict
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import matching
-from .asset_store import AssetStore, AssetVersion
-from .catalog import OpenXAsset
-from .pdf_store import PdfStore, StoredScene
-from .presentation import asset_display_title, difference_text, display
+from .api_assets import router as assets_router
+from .api_bindings import router as bindings_router
+from .api_common import (FACETS, DecisionRequest, MatchRequest, _cache, _catalog, _lock, _matches, _run,
+                         _scene_json, _candidate_json, _store, _trace_for, _version)
+from .api_jobs import router as jobs_router
+from .api_preview import router as preview_router
+from .api_schemas import (Health, Library, Overview, PdfDocument, Project, ProjectList, Report, ReportDetail,
+                          SavedDecision, SearchResponse, SelectedProject, Trace, documented)
+from .api_settings import router as settings_router
+from .api_workflow import router as workflow_router
+from .checkout import checkout_root
+from .pdf_store import PdfStore
 from .preview_frames import read_frame
 from .project_store import ProjectStore
-from .retrieval import OpenXIndex, RetrievalResult
+from .report_html import render_report
+from .reuse_trace import checked_trace, sign_off
 
-FACETS = ("function_type", "label_road_type", "label_target_type")
-WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+WEB_DIST = checkout_root() / "web" / "dist"
 
 app = FastAPI(title="OpenX Scenario Workbench API", version="0.1.0")
-_lock = threading.Lock()
-_cache: dict[str, Any] = {}
 
 
 @app.exception_handler(ValueError)
@@ -34,120 +41,37 @@ async def _value_error(_: Request, error: ValueError) -> JSONResponse:
     return JSONResponse({"detail": str(error)}, status_code=400)
 
 
-# ---------- shared state ----------
+@app.middleware("http")
+async def _this_machine_only(request: Request, call_next):
+    """The service binds to loopback; also refuse other sites driving it through the user's browser.
 
-def _store() -> AssetStore:
-    return AssetStore()
-
-
-def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
-    """Parsed assets are reused until the set of stored versions changes."""
-    store = _store()
-    key = tuple(sorted(version.version_id for version in store.latest()))
-    with _lock:
-        if _cache.get("catalog_key") != key:
-            _cache["catalog"] = store.catalog()
-            _cache["catalog_key"] = key
-        return _cache["catalog"]
+    A foreign Host header means DNS rebinding; a foreign Origin on a write means a cross-site form or fetch.
+    """
+    host = urlsplit("//" + request.headers.get("host", "")).hostname
+    origin = request.headers.get("origin")
+    if host not in LOCAL_HOSTS or (request.method not in {"GET", "HEAD", "OPTIONS"} and origin
+                                   and urlsplit(origin).hostname not in LOCAL_HOSTS):
+        return JSONResponse({"detail": "Only pages served from this computer may use the workbench API."},
+                            status_code=403)
+    return await call_next(request)
 
 
-def _index(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
-    identity = matching.index_identity(catalog, encoder_name)
-    with _lock:
-        if _cache.get("index_identity") != identity:
-            _cache.update(index_identity=identity, index=matching.open_index(catalog, identity))
-        return _cache["index"]
+app.include_router(assets_router)
+app.include_router(bindings_router)
+app.include_router(jobs_router)
+app.include_router(preview_router)
+app.include_router(settings_router)
+app.include_router(workflow_router)
 
 
-def _scene(pdf: PdfStore, project_id: str, document_id: str, scene_id: str,
-           revision: int | None = None) -> StoredScene:
-    revisions = pdf.revisions(project_id, document_id, scene_id)
-    if not revisions:
-        raise HTTPException(404, "Unknown extracted scene.")
-    if revision is None:
-        return revisions[-1]
-    stored = next((item for item in revisions if item.revision == revision), None)
-    if stored is None:
-        raise HTTPException(404, "Unknown scene revision.")
-    return stored
-
-
-# ---------- serializers ----------
-
-def _source_region(package) -> dict[str, Any] | None:
-    """Page and PDF-point box of the scene's first cited blocks, for an evidence thumbnail."""
-    blocks = [block for block in package.extraction.get("source_blocks", []) if len(block.get("bbox") or []) == 4]
-    if not blocks:
-        return None
-    page = blocks[0]["page_number"]
-    boxes = [block["bbox"] for block in blocks if block["page_number"] == page]
-    return {"page": page, "clip": [round(min(box[0] for box in boxes), 1), round(min(box[1] for box in boxes), 1),
-                                   round(max(box[2] for box in boxes), 1), round(max(box[3] for box in boxes), 1)]}
-
-
-def _scene_json(stored: StoredScene) -> dict[str, Any]:
-    package = stored.package
-    evidence = package.evidence
-    return {
-        "source_region": _source_region(package),
-        "scene_id": stored.scene_id, "revision": stored.revision, "package_id": package.package_id,
-        "title": package.title, "preferred_text": package.preferred_text,
-        "section_id": evidence[0].section_id if evidence else "",
-        "pages": [min(e.page_start for e in evidence), max(e.page_end for e in evidence)] if evidence else None,
-        "evidence": [asdict(item) for item in evidence],
-        "review_status": package.extraction.get("review_status", "pending"),
-        "classification": {key: package.classification.get(key)
-                           for key in ("function", "road_type", "intent", "method", "confidence")},
-        "entities": package.entities, "actions": package.actions, "road_types": package.road_types,
-    }
-
-
-def _candidate_json(result: RetrievalResult, version: AssetVersion | None, lang: str) -> dict[str, Any]:
-    asset = result.asset
-    scenario, road = asset.bundle.scenario, asset.bundle.road
-    return {
-        # Catalog keys are "asset:version"; the stores and file routes address the bare asset ID.
-        "asset_id": version.asset_id if version else asset.asset_id.split(":")[0],
-        "version_id": version.version_id if version else None,
-        "version_number": version.version_number if version else None,
-        "source_name": version.source_name if version else "",
-        "compatibility": version.compatibility if version else "not_tested",
-        "title": asset.title, "display_title": asset_display_title(asset, lang),
-        "xosc": asset.xosc_name, "xodr": asset.xodr_name,
-        "description": scenario.description or "",
-        "classification": asset.classification,
-        "scores": {"combined": result.score, "semantic": result.vector_score,
-                   "scenario": result.scenario_score, "road": result.road_score},
-        "level": result.confirmation_level, "structural_level": result.reuse_level,
-        "review_kind": result.confirmation_review_kind,
-        "change_cost": result.estimated_change_cost,
-        "reasons": [{"code": reason, "label": display(reason, lang)} for reason in result.reasons],
-        "differences": [{**asdict(item), "category_label": display(item.category, lang),
-                         "requested_label": display(item.requested, lang),
-                         "candidate_label": display(item.candidate, lang),
-                         "text": difference_text(item, lang)} for item in result.differences],
-        "standard_checks": result.standard_checks,
-        "scenario": {"name": scenario.name, "entities": [asdict(entity) for entity in scenario.entities],
-                     "actions": sorted({action.kind for action in scenario.actions}),
-                     "trigger_count": len(scenario.triggers),
-                     "parameters": [item.get("name", "") for item in scenario.parameters],
-                     "environment": scenario.environment},
-        "road": {"total_length_m": road.total_length, "lane_count": road.lane_count,
-                 "lane_types": road.lane_types, "geometry_types": road.geometry_types,
-                 "junction_count": road.junction_count, "road_count": len(road.road_ids),
-                 "revision": road.revision},
-        "has_frame": bool(version and read_frame(_store(), version)),
-    }
-
-
-@app.get("/api/health")
+@app.get("/api/health", **documented(Health))
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 # ---------- projects and documents ----------
 
-@app.get("/api/projects")
+@app.get("/api/projects", **documented(ProjectList))
 def projects() -> dict[str, Any]:
     store = ProjectStore(_store())
     last = store.last()
@@ -155,23 +79,27 @@ def projects() -> dict[str, Any]:
             "last_project_id": last.project_id if last else None}
 
 
-@app.post("/api/projects/{project_id}/select")
+class ProjectRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+@app.post("/api/projects", **documented(Project))
+def create_project(request: ProjectRequest) -> dict[str, Any]:
+    return asdict(ProjectStore(_store()).create(request.name))
+
+
+@app.post("/api/projects/{project_id}/select", **documented(SelectedProject))
 def select_project(project_id: str) -> dict[str, str]:
     ProjectStore(_store()).set_last(project_id)
     return {"project_id": project_id}
 
 
-@app.get("/api/projects/{project_id}/documents")
+@app.get("/api/projects/{project_id}/documents", **documented(list[PdfDocument]))
 def documents(project_id: str) -> list[dict[str, Any]]:
     pdf = PdfStore(_store())
     return [{**asdict(document), "size_bytes": (pdf.blobs / document.sha256).stat().st_size
              if (pdf.blobs / document.sha256).exists() else None}
             for document in pdf.documents(project_id)]
-
-
-@app.get("/api/projects/{project_id}/documents/{document_id}/scenes")
-def scenes(project_id: str, document_id: str) -> list[dict[str, Any]]:
-    return [_scene_json(item) for item in PdfStore(_store()).scenes(project_id, document_id)]
 
 
 def _document(pdf: PdfStore, project_id: str, document_id: str):
@@ -221,7 +149,7 @@ def document_page(project_id: str, document_id: str, page: int, width: int = 480
 
 # ---------- asset library ----------
 
-@app.get("/api/library")
+@app.get("/api/library", **documented(Library))
 def library() -> dict[str, Any]:
     catalog, versions = _catalog()
     facets: dict[str, set[str]] = {key: set() for key in FACETS}
@@ -234,14 +162,6 @@ def library() -> dict[str, Any]:
     imported = [version.created_at for version in versions.values()]
     return {"asset_count": len(catalog), "last_import": max(imported) if imported else None,
             "encoder": matching.preferred_encoder(), "facets": {key: sorted(values) for key, values in facets.items()}}
-
-
-def _version(asset_id: str, version_id: str) -> AssetVersion:
-    version = next((item for item in _store().versions()
-                    if item.asset_id == asset_id and item.version_id == version_id), None)
-    if version is None:
-        raise HTTPException(404, "Unknown asset version.")
-    return version
 
 
 @app.get("/api/assets/{asset_id}/versions/{version_id}/frame")
@@ -257,6 +177,8 @@ def asset_file(asset_id: str, version_id: str, role: str) -> Response:
     if role not in {"scenario", "road"}:
         raise HTTPException(404, "Unknown file role.")
     version = _version(asset_id, version_id)
+    if role == "road" and version.road_missing:
+        raise HTTPException(404, "Road file missing.")
     name = (version.xosc_name if role == "scenario" else version.xodr_name).rsplit("/", 1)[-1]
     return Response(_store().file_bytes(version, role), media_type="application/xml",
                     headers={"Content-Disposition": f'inline; filename="{name}"'})
@@ -264,51 +186,7 @@ def asset_file(asset_id: str, version_id: str, role: str) -> Response:
 
 # ---------- matching ----------
 
-class MatchRequest(BaseModel):
-    project_id: str
-    document_id: str | None = None
-    scene_id: str | None = None
-    revision: int | None = None
-    text: str = ""
-    filters: dict[str, str] = Field(default_factory=dict)
-    top_k: int = Field(8, ge=1, le=50)
-    encoder: str | None = None
-    lang: str = "en"
-
-
-class DecisionRequest(MatchRequest):
-    asset_id: str
-    version_id: str
-
-
-def _run(request: MatchRequest) -> tuple[StoredScene | None, list[RetrievalResult], dict, str]:
-    catalog, versions = _catalog()
-    stored = None
-    if request.scene_id:
-        if not request.document_id:
-            raise ValueError("A scene needs its document ID.")
-        stored = _scene(PdfStore(_store()), request.project_id, request.document_id,
-                        request.scene_id, request.revision)
-    query = matching.scene_query(stored.package if stored else None, request.text, skip_contained=True)
-    if query is None and not request.text.strip():
-        raise ValueError("Select a scene or enter search text.")
-    encoder = request.encoder or matching.preferred_encoder()
-    if encoder not in matching.ENCODERS:
-        raise ValueError("Unknown encoder.")
-    results = matching.search(_index(catalog, encoder), query, request.text,
-                              top_k=len(catalog)) if catalog else []
-    return stored, results, versions, encoder
-
-
-def _matches(asset: OpenXAsset, filters: dict[str, str]) -> bool:
-    for key, wanted in filters.items():
-        value = asset.classification.get(key)
-        if wanted not in (value if isinstance(value, list) else [value]):
-            return False
-    return True
-
-
-@app.post("/api/search")
+@app.post("/api/search", **documented(SearchResponse))
 def search(request: MatchRequest) -> dict[str, Any]:
     unknown = set(request.filters) - set(FACETS)
     if unknown:
@@ -321,43 +199,84 @@ def search(request: MatchRequest) -> dict[str, Any]:
                         for result in kept[:request.top_k]]}
 
 
-def _trace_for(request: DecisionRequest) -> tuple[dict, AssetVersion | None]:
-    stored, results, versions, _ = _run(request)
-    result = next((item for item in results
-                   if (stored_version := versions.get(item.asset.asset_id)) is not None
-                   and stored_version.asset_id == request.asset_id), None)
-    version = versions.get(result.asset.asset_id) if result else None
-    if result is None or version is None or version.version_id != request.version_id:
-        raise ValueError("The selected asset version is no longer the latest in the library. Search again.")
-    return matching.assessment_trace(result, stored.package if stored else None, version, stored), version
-
-
-@app.post("/api/trace")
+@app.post("/api/trace", **documented(Trace))
 def trace(request: DecisionRequest) -> dict[str, Any]:
     return _trace_for(request)[0]
 
 
-@app.post("/api/decisions")
+@app.post("/api/decisions", **documented(SavedDecision))
 def save_decision(request: DecisionRequest) -> dict[str, Any]:
     if not request.scene_id:
         raise ValueError("Select a PDF scene before saving a reuse decision.")
     payload, version = _trace_for(request)
-    if payload["reuse"]["level"] == "review":
-        raise ValueError("Resolve the open review items before saving a reuse decision.")
+    payload = sign_off(payload, {item.item: item.reason for item in request.confirmations})
     path = ProjectStore(_store()).save_decision(request.project_id, version, payload)
     return {"report_id": path.stem, "saved_to": str(path)}
 
 
-@app.get("/api/projects/{project_id}/reports")
+@app.get("/api/projects/{project_id}/reports", **documented(list[Report]))
 def reports(project_id: str) -> list[dict[str, Any]]:
     result = []
     for report in ProjectStore(_store()).reports(project_id):
-        trace = report.get("trace") or {}
+        trace = checked_trace(report.get("trace") or {})
         source = trace.get("source") or {}
+        reuse = trace.get("reuse") or {}
         result.append({**{key: report.get(key) for key in ("report_id", "saved_at", "asset_id", "version_id")},
+                       "kind": "batch" if trace.get("kind") == "batch_match" else "decision",
                        "scene": {key: source.get(key) for key in ("title", "scene_id", "revision", "document_id")},
-                       "level": (trace.get("reuse") or {}).get("level")})
+                       "level": reuse.get("level"), "review_kind": reuse.get("review_kind") or "",
+                       "signed_off": bool(reuse.get("review_signoff")),
+                       "counts": trace.get("counts"), "scene_count": trace.get("scene_count")})
     return result
+
+
+def _report(project_id: str, report_id: str) -> dict[str, Any]:
+    report = next((item for item in ProjectStore(_store()).reports(project_id) if item["report_id"] == report_id), None)
+    if report is None:
+        raise HTTPException(404, "Unknown report.")
+    return {**report, "trace": checked_trace(report["trace"])}
+
+
+@app.get("/api/projects/{project_id}/reports/{report_id}", **documented(ReportDetail))
+def report_detail(project_id: str, report_id: str) -> dict[str, Any]:
+    """The saved snapshot, plus which of its source scenes still exist to reopen for review."""
+    report = _report(project_id, report_id)
+    trace = report["trace"]
+    sources = [entry["source"] for entry in trace.get("entries", [])] if trace.get("kind") == "batch_match"         else [trace.get("source") or {}]
+    pdf = PdfStore(_store())
+    known = {document.document_id for document in pdf.documents(project_id)}
+    existing = {(document_id, scene.scene_id) for document_id in {s.get("document_id") for s in sources} & known
+                for scene in pdf.scenes(project_id, document_id)}
+    return {**report, "reopenable": [{"document_id": d, "scene_id": s} for d, s in sorted(existing)
+                                     if any(src.get("document_id") == d and src.get("scene_id") == s for src in sources)]}
+
+
+@app.get("/api/projects/{project_id}/reports/{report_id}/download")
+def report_download(project_id: str, report_id: str, format: str = "json", lang: str = "zh") -> Response:
+    report = _report(project_id, report_id)
+    stem = f"openx-{'batch' if report['trace'].get('kind') == 'batch_match' else 'decision'}-{report_id}"
+    if format == "html":
+        return Response(render_report(report["trace"], language="zh" if lang == "zh" else "en"), media_type="text/html",
+                        headers={"Content-Disposition": f'attachment; filename="{stem}.html"'})
+    if format != "json":
+        raise HTTPException(400, "Unknown format.")
+    return Response(json.dumps(report["trace"], ensure_ascii=False, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{stem}.json"'})
+
+
+@app.get("/api/overview", **documented(Overview))
+def overview() -> dict[str, Any]:
+    store = _store()
+    versions = store.versions()
+    latest = store.latest()
+    recent = sorted(versions, key=lambda item: item.created_at, reverse=True)[:8]
+    return {"assets": len(latest), "versions": len(versions),
+            "playable": sum(item.compatibility == "playable" for item in latest),
+            "unavailable": sum(item.compatibility in {"unsupported", "failed", "timeout", "road_missing"} for item in latest),
+            "untested": sum(item.compatibility == "not_tested" for item in latest),
+            "recent": [{key: getattr(item, key) for key in ("asset_id", "version_id", "title", "source_name",
+                                                             "version_number", "compatibility", "created_at")}
+                       for item in recent]}
 
 
 if WEB_DIST.is_dir():

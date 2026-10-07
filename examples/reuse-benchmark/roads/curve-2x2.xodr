@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="7" name="Curved two-lane-per-direction road (R = 250 m)" version="1.00" date="2026-10-04"/>
+  <road name="Curved two-lane-per-direction road (R = 250 m)" length="400" id="1" junction="-1">
+    <planView><geometry s="0" x="0" y="0" hdg="0" length="20"><line/></geometry><geometry s="20" x="20" y="0" hdg="0" length="380"><arc curvature="0.004"/></geometry></planView>
+    <lanes><laneSection s="0"><left><lane id="2" type="driving" level="false"><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane><lane id="1" type="driving" level="false"><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></left><center><lane id="0" type="none" level="false"/></center><right><lane id="-1" type="driving" level="false"><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane><lane id="-2" type="driving" level="false"><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></right></laneSection></lanes>
+  </road>
+</OpenDRIVE>

@@ -1,42 +1,9 @@
-from pathlib import Path
-
-import pymupdf
 import pytest
 
 pytest.importorskip("fastapi")
-from fastapi.testclient import TestClient
 
-from openx_workbench import api
 from openx_workbench.asset_store import AssetStore
-from openx_workbench.catalog import AssetFile
-from openx_workbench.pdf_store import PdfStore
 from openx_workbench.project_store import ProjectStore
-
-
-def _pdf(title: str) -> bytes:
-    document = pymupdf.open()
-    page = document.new_page()
-    page.insert_text((72, 72), f"7.4.1 {title} scenario\nTarget vehicle cuts in on a straight road. TTC = 3.0 s.")
-    data = document.tobytes()
-    document.close()
-    return data
-
-
-@pytest.fixture
-def workbench(tmp_path, monkeypatch):
-    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
-    api._cache.clear()
-    assets = AssetStore()
-    fixtures = Path(__file__).parent / "fixtures"
-    version = assets.import_files([AssetFile(name, (fixtures / name).read_bytes())
-                                   for name in ("minimal.xosc", "minimal.xodr")])[0]
-    project = ProjectStore(assets).create("API")
-    document = PdfStore(assets).import_pdf(project.project_id, "rules.pdf", _pdf("Cut-in"), "Test", engine="legacy")
-    scene = PdfStore(assets).scenes(project.project_id, document.document_id)[0]
-    base = {"project_id": project.project_id, "document_id": document.document_id,
-            "scene_id": scene.scene_id, "encoder": "hashing"}
-    yield TestClient(api.app), base, version
-    api._cache.clear()
 
 
 def test_lists_projects_documents_and_scenes(workbench):
@@ -92,3 +59,27 @@ def test_decisions_are_recomputed_and_guarded(workbench):
     assert stale.status_code == 400 and "no longer the latest" in stale.json()["detail"]
     no_scene = {key: value for key, value in request.items() if key != "scene_id"}
     assert client.post("/api/decisions", json={**no_scene, "text": "cut in"}).status_code == 400
+
+
+def test_overview_counts_versions_and_recent_imports(workbench):
+    client, _, version = workbench
+    overview = client.get("/api/overview").json()
+    assert (overview["assets"], overview["versions"], overview["untested"], overview["playable"]) == (1, 1, 1, 0)
+    assert overview["recent"][0]["version_id"] == version.version_id
+
+
+def test_saved_report_detail_and_downloads(workbench):
+    client, base, version = workbench
+    trace = client.post("/api/trace", json={**base, "asset_id": version.asset_id, "version_id": version.version_id}).json()
+    report_id = ProjectStore(AssetStore()).save_decision(base["project_id"], version, trace).stem
+    listed = client.get(f"/api/projects/{base['project_id']}/reports").json()[0]
+    assert listed["kind"] == "decision" and listed["scene"]["scene_id"] == base["scene_id"]
+    detail = client.get(f"/api/projects/{base['project_id']}/reports/{report_id}").json()
+    assert detail["trace"]["standard_checks"] is not None
+    assert detail["reopenable"] == [{"document_id": base["document_id"], "scene_id": base["scene_id"]}]
+    html = client.get(f"/api/projects/{base['project_id']}/reports/{report_id}/download?format=html&lang=zh")
+    assert html.headers["content-type"].startswith("text/html") and "OpenX 复用评估报告" in html.text
+    assert f'openx-decision-{report_id}.html' in html.headers["content-disposition"]
+    saved = client.get(f"/api/projects/{base['project_id']}/reports/{report_id}/download").json()
+    assert saved["candidate"]["version_id"] == version.version_id
+    assert client.get(f"/api/projects/{base['project_id']}/reports/{'0' * 32}").status_code == 404

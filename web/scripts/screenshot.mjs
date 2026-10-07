@@ -21,6 +21,8 @@ page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") 
 page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message}`));
 await page.goto((process.argv[4] ?? "http://localhost:5173") + "/", { waitUntil: "networkidle" });
 if (process.env.LIVE) {
+  // The workbench opens on the start page; enter the first PDF's workflow.
+  await page.locator(".start-doc").first().click();
   await page.waitForSelector(".cand-table tbody tr.ant-table-row", { timeout: 120000 });
   await page.waitForLoadState("networkidle");
 }

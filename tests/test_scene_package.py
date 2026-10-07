@@ -52,3 +52,12 @@ def test_scene_package_preserves_explicit_relative_position():
     query = scene_package_to_query(package)
 
     assert query.participant_relations == frozenset({"rear", "adjacent_lane"})
+
+
+def test_a_clause_reads_heading_then_body():
+    from openx_workbench.scene_package import clause_text
+
+    assert clause_text("5.2.2 在试验有效的前提下，记录结果。", "") == "5.2.2 在试验有效的前提下，记录结果。"
+    assert clause_text("A.1 前方车辆静止", "目标车静止于车道中央。") == "A.1 前方车辆静止\n目标车静止于车道中央。"
+    assert clause_text("A.1 前方车辆静止", "A.1 前方车辆静止\n目标车静止。") == "A.1 前方车辆静止\n目标车静止。"
+    assert clause_text("", " 正文 ") == "正文"

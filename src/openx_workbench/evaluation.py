@@ -52,10 +52,10 @@ def load_corpus(path: Path):
 def evaluate(index: OpenXIndex, cases):
     rows = []
     for case, query in cases:
-        name_route = index._recall(
+        name_route = index.recall(
             index.encoder.encode(query.text), min(5, len(index.assets))
         )
-        structure_route = index._recall(
+        structure_route = index.recall(
             index.encoder.encode(query_structure_text(query)),
             min(5, len(index.assets)),
             structure=True,

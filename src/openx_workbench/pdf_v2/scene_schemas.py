@@ -1,6 +1,7 @@
 """Adapted ScenarioManager V2 core; see docs/PDF_MIGRATION.md."""
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from typing import Literal, get_args
@@ -70,6 +71,21 @@ LateralDirection = Literal["左", "右", "未知"]
 
 LaneDirection = Literal["单向", "双向", "未知"]
 
+# Which way the ego leaves a junction or roundabout.
+EgoTurn = Literal["直行", "左转", "右转", "掉头", "未知"]
+
+# Traffic control whose presence the test relies on (a traffic-light test, a speed-limit test).
+TrafficControl = Literal["交通信号灯", "限速标志"]
+
+# The ego's lane among the lanes of its own direction.
+EgoLane = Literal["最左侧车道", "最右侧车道", "中间车道", "未知"]
+
+# Where a spatial fact comes from: stated in the source, necessarily implied by it (with a
+# reason), drawn in one of the scene's figures (prompt v10 on: the quote names the figure, the
+# reason says what it shows), or not determinable. Only a quote found in the scene's own text, or
+# a figure sent with the scene, keeps a fact.
+EvidenceSource = Literal["原文", "推出", "图", "未知"]
+
 TestedFunction = Literal[
 
     "NOA", "AEB", "ACC", "LSS", "APA", "FCW",
@@ -81,9 +97,30 @@ TestedFunction = Literal[
 
 _ACTION_TO_SIGNATURE: dict[str, tuple[str, ...]] = {"静止": ()}
 
+# Spatial fields that carry evidence, on a participant and on the scene.
+ParticipantEvidenceField = Literal["bearing", "facing", "alternative_group"]
+SceneEvidenceField = Literal["ego_turn", "ego_lane"]
+
+
+def _unset(value: object) -> bool:
+    return value is None
+
+
+class FieldEvidence(BaseModel):
+    """What a spatial fact rests on: the quoted source, the reasoning for an implied one, and
+    why a person should check it (an unfound quote, a contradiction, two readings that differ)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
+
+    source: EvidenceSource = "未知"
+    quote: str | None = Field(default=None, max_length=200, exclude_if=_unset)
+    reason: str | None = Field(default=None, max_length=200, exclude_if=_unset)
+    review: str | None = Field(default=None, max_length=300, exclude_if=_unset)
+
+
 class SceneParticipant(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     kind: ParticipantKind
     bearing: Bearing = "未知方位"
@@ -91,6 +128,16 @@ class SceneParticipant(BaseModel):
     actions: tuple[ParticipantAction, ...] = ()
 
     age: PedestrianAge = "未知"
+    # This participant's own initial speed. Optional, and left out of the stored structure when
+    # unset, so revisions saved before it existed read back unchanged.
+    speed_kph: float | None = Field(default=None, ge=0, allow_inf_nan=False, exclude_if=lambda value: value is None)
+    # Participants sharing a label are alternatives, one of which takes part in a run ("a car, a
+    # tricycle or a pedestrian stands ahead"). Optional and left out when unset, like the speed.
+    alternative_group: str | None = Field(default=None, min_length=1, max_length=16,
+                                          exclude_if=lambda value: value is None)
+    # Evidence for the spatial fields (prompt v9 on); left out when empty, like the fields above.
+    evidence: dict[ParticipantEvidenceField, FieldEvidence] = Field(default_factory=dict,
+                                                                   exclude_if=lambda value: not value)
 
     def signature_actions(self) -> tuple[str, ...]:
 
@@ -101,7 +148,7 @@ class SceneParticipant(BaseModel):
 
 class SceneRelation(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     subject: ParticipantKind
     relation: RelationKind
@@ -109,7 +156,7 @@ class SceneRelation(BaseModel):
 
 class SceneParams(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     ego_speed_kph: float | None = None
     target_speeds_kph: tuple[float, ...] = ()
@@ -124,12 +171,15 @@ class SceneParams(BaseModel):
     lane_direction: LaneDirection = "未知"
 
     fog_visibility_m: float | None = None
+    # Speed-limit sign values the test sets up; several are alternatives (chosen by the set speed).
+    # Left out of the stored structure when empty, so earlier revisions read back unchanged.
+    speed_limits_kph: tuple[float, ...] = Field(default=(), exclude_if=lambda value: not value)
 
     end_condition: str | None = None
 
 class SceneStructure(BaseModel):
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", json_schema_serialization_defaults_required=True)
 
     road_class: RoadClass = "未知"
 
@@ -145,7 +195,15 @@ class SceneStructure(BaseModel):
     lane_marking: LaneMarking = "未知"
     parking_operation: ParkingOperation = "未知"
     test_intent: TestIntent = "未知"
+    # Left out of the stored structure at their defaults, so earlier revisions read back unchanged.
+    ego_turn: EgoTurn = Field(default="未知", exclude_if=lambda value: value == "未知")
+    traffic_controls: tuple[TrafficControl, ...] = Field(default=(), exclude_if=lambda value: not value)
+    ego_lane: EgoLane = Field(default="未知", exclude_if=lambda value: value == "未知")
     params: SceneParams = SceneParams()
+    # Evidence for the ego's turn and lane, and notes for a person that belong to no single field
+    # (two readings named different participants). Prompt v9 on; left out when empty.
+    evidence: dict[SceneEvidenceField, FieldEvidence] = Field(default_factory=dict, exclude_if=lambda value: not value)
+    review_flags: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
 
 class ProposedScene(BaseModel):
 
@@ -291,6 +349,30 @@ _PARKING_OP_VALUES = _literal_values(ParkingOperation)
 _TEST_INTENT_VALUES = _literal_values(TestIntent)
 _LATERAL_DIR_VALUES = _literal_values(LateralDirection)
 _LANE_DIR_VALUES = _literal_values(LaneDirection)
+_EGO_TURN_VALUES = _literal_values(EgoTurn)
+_TRAFFIC_CONTROL_VALUES = _literal_values(TrafficControl)
+_EGO_LANE_VALUES = _literal_values(EgoLane)
+_EVIDENCE_SOURCES = _literal_values(EvidenceSource)
+_PARTICIPANT_EVIDENCE_FIELDS = _literal_values(ParticipantEvidenceField)
+_SCENE_EVIDENCE_FIELDS = _literal_values(SceneEvidenceField)
+
+
+def _parse_evidence(raw: object, fields: frozenset[str], dropped: set[str]) -> dict[str, FieldEvidence]:
+    """A model's evidence per field; an unknown source reads as 未知 and overlong text is cut."""
+    if not isinstance(raw, dict):
+        return {}
+    result = {}
+    for field, item in raw.items():
+        if field not in fields or not isinstance(item, dict):
+            continue
+        source = str(item.get("source") or "").strip()
+        if source not in _EVIDENCE_SOURCES:
+            if source:
+                dropped.add(f"evidence.source={source}")
+            source = "未知"
+        quote, reason = (str(item.get(key) or "").strip()[:200] or None for key in ("quote", "reason"))
+        result[field] = FieldEvidence(source=source, quote=quote, reason=reason)
+    return result
 
 def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | None:
 
@@ -328,6 +410,20 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
             dropped.add(f"{field}={value!r}")
             return None
 
+    def _speed(value: object, field: str = "participant_speed") -> float | None:
+        speed = _number(value, field)
+        if speed is not None and not (math.isfinite(speed) and speed >= 0):
+            dropped.add(f"{field}={value!r}")
+            return None
+        return speed
+
+    def _group(value: object) -> str | None:
+        text = str(value or "").strip()
+        if len(text) > 16:
+            dropped.add(f"alternative_group={text}")
+            return None
+        return text or None
+
     participants: list[SceneParticipant] = []
     for item in raw.get("participants") or ():
         if not isinstance(item, dict):
@@ -340,6 +436,9 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
                 facing=_pick(item.get("facing"), _FACING_VALUES, "facing", "未知"),
                 actions=_pick_many(item.get("actions"), _PARTICIPANT_ACTION_VALUES, "action"),
                 age=_pick(item.get("age"), _AGE_VALUES, "age", "未知"),
+                speed_kph=_speed(item.get("speed_kph")),
+                alternative_group=_group(item.get("alternative_group")),
+                evidence=_parse_evidence(item.get("evidence"), _PARTICIPANT_EVIDENCE_FIELDS, dropped),
             )
         )
 
@@ -379,6 +478,10 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
         lane_count=_number(params_raw.get("lane_count"), "lane_count"),
         lane_direction=_pick(params_raw.get("lane_direction"), _LANE_DIR_VALUES, "lane_direction", "未知"),
         fog_visibility_m=_number(params_raw.get("fog_visibility_m"), "fog_visibility"),
+        speed_limits_kph=tuple(sorted({
+            limit for limit in (_speed(item, "speed_limit") for item in (params_raw.get("speed_limits_kph") or ()))
+            if limit
+        })),
 
         end_condition=end_condition_raw[:120] or None,
     )
@@ -398,7 +501,11 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
         lane_marking=_pick(raw.get("lane_marking"), _LANE_MARKING_VALUES, "lane_marking", "未知"),
         parking_operation=_pick(raw.get("parking_operation"), _PARKING_OP_VALUES, "parking_operation", "未知"),
         test_intent=_pick(raw.get("test_intent"), _TEST_INTENT_VALUES, "test_intent", "未知"),
+        ego_turn=_pick(raw.get("ego_turn"), _EGO_TURN_VALUES, "ego_turn", "未知"),
+        traffic_controls=_pick_many(raw.get("traffic_controls"), _TRAFFIC_CONTROL_VALUES, "traffic_control"),
+        ego_lane=_pick(raw.get("ego_lane"), _EGO_LANE_VALUES, "ego_lane", "未知"),
         params=params,
+        evidence=_parse_evidence(raw.get("evidence"), _SCENE_EVIDENCE_FIELDS, dropped),
     )
 
 def parse_scene_proposal(

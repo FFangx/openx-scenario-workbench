@@ -5,7 +5,8 @@ import base64
 import ctypes
 import json
 import os
-from dataclasses import asdict, dataclass, field
+import re
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
@@ -21,12 +22,46 @@ class ModelConfig:
     model: str = "deepseek-v4-flash"
     api_key: str = field(default="", repr=False)
     thinking: bool = True
+    # Thinking effort sent as `reasoning_effort` while thinking is on; empty keeps the service
+    # default. Levels come from the service's model list (DeepSeek: effort.supported_levels).
+    reasoning_effort: str = ""
+    # Output limit of every call: the model's own maximum (the settings take it from the service's
+    # model list). Only generated tokens are billed, and thinking counts against it.
     max_tokens: int = 64000
     timeout: int = 900
+    # Model requests a PDF extraction sends at once (its structure calls). DeepSeek allows thousands
+    # per account; a service that rate-limits answers 429 and the call is retried after a pause.
+    concurrency: int = 64
+    # The model reads images: a PDF extraction then sends each scene's figures with its text. The
+    # settings take it from the service's model list (input_modalities).
+    image_input: bool = False
+
+
+@dataclass(frozen=True)
+class ModelInfo:
+    """One entry of the service's model list, with what it declares about thinking effort."""
+    id: str
+    effort_levels: tuple[str, ...] = ()
+    default_effort: str = ""
+    max_output_tokens: int | None = None
+    image_input: bool = False
+
+
+EFFORT = re.compile(r"^[a-z][a-z0-9_-]{0,19}$")
 
 
 class ModelError(ValueError):
-    pass
+    # True when trying again may succeed: rate limits, server errors, timeouts.
+    retryable = False
+
+
+def _failure(message: str, *, retryable: bool = False) -> ModelError:
+    error = ModelError(message)
+    error.retryable = retryable
+    return error
+
+
+MAX_TOKENS_LIMIT = 1_048_576
 
 
 def base_url(value: str) -> str:
@@ -40,6 +75,15 @@ def base_url(value: str) -> str:
         if path.endswith(suffix):
             path = path[:-len(suffix)]
     return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def draft_config(saved: ModelConfig, endpoint: str, key: str = "", **values) -> ModelConfig:
+    """Settings edits over the saved config; a saved key never silently follows an edited endpoint."""
+    try:
+        same_endpoint = base_url(endpoint) == base_url(saved.base_url)
+    except ModelError:
+        same_endpoint = False
+    return replace(saved, base_url=endpoint, api_key=key.strip() or (saved.api_key if same_endpoint else ""), **values)
 
 
 def _protect(data: bytes, *, decrypt=False) -> bytes:
@@ -76,8 +120,11 @@ def load_config(root: Path | None = None) -> ModelConfig:
 
 def save_config(config: ModelConfig, root: Path | None = None) -> None:
     normalized = base_url(config.base_url)
-    if not config.model.strip() or not 256 <= config.max_tokens <= 131072 or not 10 <= config.timeout <= 1800:
-        raise ModelError("请检查模型名、输出上限和超时 / Check model, output limit and timeout.")
+    if (not config.model.strip() or not 256 <= config.max_tokens <= MAX_TOKENS_LIMIT or not 10 <= config.timeout <= 1800
+            or not 1 <= config.concurrency <= 256):
+        raise ModelError("请检查模型名、输出上限、超时和并发数 / Check model, output limit, timeout and concurrency.")
+    if config.reasoning_effort and not EFFORT.match(config.reasoning_effort):
+        raise ModelError("思考等级无效 / Invalid thinking effort.")
     target = (root or default_store_root()) / "model_settings.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     value = asdict(config)
@@ -114,29 +161,48 @@ class ModelClient:
             return result
         except HTTPError as error:
             hints = {401: "Key 无效", 403: "无访问权限", 404: "地址或模型不存在", 429: "额度不足或限流"}
-            raise ModelError(f"模型服务 HTTP {error.code}: {hints.get(error.code, '请检查地址、模型参数或服务状态')} / Model request failed.") from None
+            raise _failure(f"模型服务 HTTP {error.code}: {hints.get(error.code, '请检查地址、模型参数或服务状态')} / Model request failed.",
+                           retryable=error.code == 429 or error.code >= 500) from None
         except (URLError, OSError, TimeoutError):
-            raise ModelError("模型服务连接失败或超时 / Model connection failed or timed out.") from None
+            raise _failure("模型服务连接失败或超时 / Model connection failed or timed out.", retryable=True) from None
         except ModelError:
             raise
         except (ValueError, TypeError):
             raise ModelError("模型服务未返回有效 JSON / Invalid JSON response from model service.") from None
 
     def models(self) -> list[str]:
-        result = self.request("/models", timeout=30)
-        models = sorted({item["id"] for item in result.get("data", []) if isinstance(item, dict) and isinstance(item.get("id"), str)})
-        if not models:
-            raise ModelError("服务未提供模型清单，可手动输入模型名 / No model list; enter a model ID manually.")
-        return models
+        return [item.id for item in self.catalog()]
 
-    def complete(self, body):
-        request = {**body, "model": self.config.model}
-        request["max_tokens"] = min(int(request.get("max_tokens", self.config.max_tokens)), self.config.max_tokens)
+    def catalog(self) -> list[ModelInfo]:
+        """The service's models in id order; effort levels only where the service declares them."""
+        result = self.request("/models", timeout=30)
+        found: dict[str, ModelInfo] = {}
+        for item in result.get("data", []):
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                continue
+            effort = item.get("effort") if isinstance(item.get("effort"), dict) else {}
+            levels = tuple(level for level in effort.get("supported_levels") or ()
+                           if isinstance(level, str) and EFFORT.match(level))
+            default = effort.get("default_level") if effort.get("default_level") in levels else ""
+            limit = item.get("max_output_tokens")
+            modalities = item.get("input_modalities") if isinstance(item.get("input_modalities"), list) else []
+            found.setdefault(item["id"], ModelInfo(item["id"], levels, default,
+                                                   limit if isinstance(limit, int) and limit > 0 else None,
+                                                   "image" in modalities))
+        if not found:
+            raise ModelError("服务未提供模型清单，可手动输入模型名 / No model list; enter a model ID manually.")
+        return [found[key] for key in sorted(found)]
+
+    def complete(self, body, *, timeout=None):
+        # Every call may use the whole output limit: a smaller cap only truncates a long thought.
+        request = {**body, "model": self.config.model, "max_tokens": self.config.max_tokens}
         if urlsplit(base_url(self.config.base_url)).hostname == "api.deepseek.com":
             request["thinking"] = {"type": "enabled" if self.config.thinking else "disabled"}
         else:
             request.pop("thinking", None)
-        response = self.request("/chat/completions", request)
+        if self.config.thinking and self.config.reasoning_effort:
+            request["reasoning_effort"] = self.config.reasoning_effort
+        response = self.request("/chat/completions", request, timeout=min(timeout or self.config.timeout, self.config.timeout))
         choices = response.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             # Some compatible services return an error envelope with HTTP 200.
@@ -147,7 +213,7 @@ class ModelClient:
 
     def probe(self) -> str:
         response = self.complete({"messages": [{"role": "user", "content": 'Return only this JSON: {"ok":true}'}],
-                                  "response_format": {"type": "json_object"}, "max_tokens": 2048})
+                                  "response_format": {"type": "json_object"}})
         try:
             choice = response["choices"][0]
             if choice.get("finish_reason") != "stop" or json.loads(choice["message"]["content"]).get("ok") is not True:

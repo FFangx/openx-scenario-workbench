@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSCENARIO>
+  <FileHeader revMajor="1" revMinor="2" date="2026-10-04T00:00:00" description="AEB pedestrian crossing from the nearside, 5 km/h, ego 40 km/h" author="OpenX Scenario Workbench reuse benchmark (authored)"/>
+  <RoadNetwork><LogicFile filepath="../roads/straight-2x2.xodr"/></RoadNetwork>
+  <Entities>
+    <ScenarioObject name="Ego"><Vehicle name="Ego" vehicleCategory="car"><BoundingBox><Center x="1.25" y="0" z="0.75"/><Dimensions width="1.8" length="4.5" height="1.5"/></BoundingBox></Vehicle></ScenarioObject>
+    <ScenarioObject name="T1"><Pedestrian name="T1" model="adult" mass="75" pedestrianCategory="pedestrian"><BoundingBox><Center x="-0.75" y="0" z="0.9"/><Dimensions width="0.6" length="0.5" height="1.8"/></BoundingBox></Pedestrian></ScenarioObject>
+  </Entities>
+  <Environment name="Environment"><TimeOfDay animation="false" dateTime="2026-06-01T12:00:00"/><Weather cloudState="free"><Precipitation precipitationType="dry" precipitationIntensity="0" intensity="0"/><Fog visualRange="1200"/></Weather><RoadCondition frictionScaleFactor="1.0"/></Environment>
+  <Storyboard>
+    <Init><Actions><Private entityRef="Ego"><PrivateAction><TeleportAction><Position><LanePosition roadId="1" laneId="-1" s="20" offset="0"><Orientation type="relative" h="0.0000"/></LanePosition></Position></TeleportAction></PrivateAction><PrivateAction><LongitudinalAction><SpeedAction><SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/><SpeedActionTarget><AbsoluteTargetSpeed value="11.1111"/></SpeedActionTarget></SpeedAction></LongitudinalAction></PrivateAction></Private><Private entityRef="T1"><PrivateAction><TeleportAction><Position><LanePosition roadId="1" laneId="-2" s="55" offset="0"><Orientation type="relative" h="1.5708"/></LanePosition></Position></TeleportAction></PrivateAction><PrivateAction><LongitudinalAction><SpeedAction><SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/><SpeedActionTarget><AbsoluteTargetSpeed value="1.3889"/></SpeedActionTarget></SpeedAction></LongitudinalAction></PrivateAction></Private></Actions></Init>
+    
+    <StopTrigger><ConditionGroup><Condition name="end" delay="0" conditionEdge="rising"><ByValueCondition><SimulationTimeCondition value="20" rule="greaterThan"/></ByValueCondition></Condition></ConditionGroup></StopTrigger>
+  </Storyboard>
+</OpenSCENARIO>

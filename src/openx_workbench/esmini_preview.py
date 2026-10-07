@@ -97,6 +97,23 @@ class PreviewProcess:
         shutil.rmtree(self.workdir, ignore_errors=True)
 
 
+def record_outcome(store: AssetStore, version: AssetVersion, status: dict) -> str:
+    """Store on the version whether it played, as the desktop workbench did; returns its preview state."""
+    if status["state"] == "failed":
+        if version.compatibility != "failed" or version.compatibility_detail != status.get("error", ""):
+            store.set_compatibility(version, "failed", status.get("error", ""))
+        return "failed"
+    if status["state"] == "finished" and not status.get("frames"):
+        if version.compatibility != "failed":
+            store.set_compatibility(version, "failed", "esmini finished without rendered frames.")
+        return "failed"
+    if status.get("frames"):
+        if version.compatibility != "playable":
+            store.set_compatibility(version, "playable")
+        return "playable"
+    return version.compatibility
+
+
 def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
                   *, duration: int = 30) -> PreviewProcess:
     if not executable.is_file() or not (executable.parent / "esminiLib.dll").is_file():

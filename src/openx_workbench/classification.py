@@ -14,6 +14,8 @@ from .pdf_store import PdfStore
 
 FUNCTIONS = tuple(get_args(TestedFunction))
 ROADS = ("直道", "弯道", "交叉口", "停车场", "环岛", "匝道", "未知")
+# Road types read from a map name when the road file is missing (parser.map_road_features).
+MAP_ROAD_LABELS = {"straight": "直道", "curve": "弯道", "junction": "交叉口", "parking": "停车场", "roundabout": "环岛"}
 TARGETS = ("乘用车", "商用车", "两轮车", "行人", "骑行者", "障碍物", "动物")
 
 
@@ -23,8 +25,12 @@ def classify_asset(store, version, *, client=None, use_model=False):
     text = f"{asset.title} {asset.bundle.scenario.description or ''} {version.xosc_name}"
     functions = [fn for fn in FUNCTIONS if re.search(r"(?<![A-Za-z])" + re.escape(fn) + r"(?![A-Za-z])", text, re.I)]
     road = asset.bundle.road
+    if road.file_missing:
+        road_label = next((MAP_ROAD_LABELS[f] for f in road.inferred_features if f in MAP_ROAD_LABELS), "未知")
+    else:
+        road_label = "交叉口" if road.junction_count else ("弯道" if any(k in road.geometry_types for k in ("arc", "spiral")) else "未知")
     rule = {"function_type": functions[0] if len(functions) == 1 else "未知",
-            "label_road_type": "交叉口" if road.junction_count else ("弯道" if any(k in road.geometry_types for k in ("arc", "spiral")) else "未知"),
+            "label_road_type": road_label,
             "label_target_type": _target_labels(asset),
             "label_actions": sorted({action.kind for action in asset.bundle.scenario.actions}),
             "scenario_intent": asset.bundle.scenario.description or asset.title}
@@ -45,7 +51,7 @@ def classify_asset(store, version, *, client=None, use_model=False):
             if len(payload) > 60000:
                 raise ValueError("场景结构过大，需要人工分类 / Asset exceeds classification input limit.")
             response = client.complete({"messages": [{"role": "system", "content": system}, {"role": "user", "content": payload}],
-                                        "response_format": {"type": "json_object"}, "max_tokens": 8192})
+                                        "response_format": {"type": "json_object"}})
             choice = response["choices"][0]
             if choice.get("finish_reason") != "stop":
                 raise ValueError("分类响应未完成 / Incomplete classification response.")
@@ -73,11 +79,12 @@ def classify_asset(store, version, *, client=None, use_model=False):
 
 
 def _target_labels(asset):
-    from .reuse import bundle_participant_signatures
+    from .reuse_facts import bundle_participant_signatures, bundle_scenery_signatures
     labels = {"pedestrian": "行人", "cyclist": "骑行者", "motorcycle": "两轮车",
               "vehicle": "乘用车", "truck": "商用车", "bus": "商用车", "van": "商用车",
               "trailer": "商用车", "obstacle": "障碍物"}
-    return sorted({labels[item.kind] for item in bundle_participant_signatures(asset.bundle) if item.kind in labels})
+    return sorted({labels[item.kind] for item in (*bundle_participant_signatures(asset.bundle), *bundle_scenery_signatures(asset.bundle))
+                   if item.kind in labels})
 
 
 def read_classification(store, version):

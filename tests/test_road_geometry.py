@@ -3,7 +3,7 @@ import math
 import pytest
 
 from openx_workbench.parser import parse_bundle
-from openx_workbench.reuse import (
+from openx_workbench.reuse_facts import (
     bundle_participant_relations,
     bundle_participant_signatures,
 )

@@ -9,6 +9,12 @@ class EntityIR:
     name: str
     kind: str
     category: str | None = None
+    # 3D model of the object (its `name` attribute or `model` property) and its
+    # BoundingBox width and height in metres, when declared. Authoring tools often keep
+    # default boxes (a child model as tall as an adult), so height describes, never decides.
+    model: str | None = None
+    width: float | None = None
+    height: float | None = None
 
 
 @dataclass(slots=True)
@@ -20,6 +26,22 @@ class ActionIR:
     phase: str = "story"
     source_path: str = ""
     event_path: str = ""
+    # Innermost action element (e.g. CustomCommandAction, LongitudinalDistanceAction).
+    element: str = ""
+    event_name: str = ""
+    # SpeedAction dynamicsShape (step, linear, ...).
+    shape: str | None = None
+    # CustomCommandAction text.
+    command: str | None = None
+    # Active OverrideControllerValueAction channels and their values (Brake, Gear, ...).
+    overrides: dict[str, str] = field(default_factory=dict)
+    # LaneChangeAction target: {"kind": "RelativeTargetLane", "value": "1", "entityRef": ...}.
+    lane_target: dict[str, str] = field(default_factory=dict)
+    # Where a routing action sends the actor, in order: route waypoints, trajectory vertices or an
+    # AcquirePosition target, e.g. {"kind": "WorldPosition", "x": ..., "h": ...}.
+    waypoints: list[dict[str, str]] = field(default_factory=list)
+    # EnvironmentAction reading (weather, time_of_day, fog_visibility_m), as for the scenario.
+    environment: dict[str, str | float] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -35,6 +57,8 @@ class TriggerIR:
     source_path: str = ""
     event_path: str = ""
     attributes: dict[str, str] = field(default_factory=dict)
+    # The position a condition refers to (ReachPositionCondition, DistanceCondition): its kind and attributes.
+    position: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -75,6 +99,18 @@ class RoadIR:
     junction_count: int = 0
     signal_count: int = 0
     object_count: int = 0
+    # Driving lanes only (see parser._lane_profile); 0 when none were read.
+    lanes_same_direction: int = 0  # most driving lanes one direction offers on one cross-section
+    lanes_total: int = 0  # most driving lanes of both directions on one cross-section
+    lane_markings: list[str] = field(default_factory=list)  # "solid"/"broken" drawn on driving lanes
+    speed_limits_kph: list[float] = field(default_factory=list)  # signed limits along the road
+    # Counted traffic_light / crosswalk / stop_line / parking_space (parser._road_furniture).
+    furniture: dict[str, int] = field(default_factory=dict)
+    # The referenced OpenDRIVE file is not available (e.g. a simulator's
+    # built-in map). Only the map name is known; `inferred_features` are
+    # road types read from that name, never from geometry.
+    file_missing: bool = False
+    inferred_features: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -84,6 +120,9 @@ class ParseBundle:
     warnings: list[str] = field(default_factory=list)
     road_geometry: dict[str, Any] = field(default_factory=dict, repr=False)
     validation: dict[str, Any] = field(default_factory=dict)
+    # Authoring-tool metadata outside the OpenSCENARIO file, such as a
+    # ScenarioManager case's map and environment presets.
+    source_case: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
         return {

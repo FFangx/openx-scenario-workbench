@@ -6,22 +6,26 @@
    URL and API key. Fetch the model list, choose an ID or type one manually, test
    the selected model, then save. Listing models and completing a JSON request
    are separate checks. Some services do not implement `/models`; manual IDs
-   remain supported.
-2. Create/select a project and import a PDF in **PDF workflow**. Scanned pages require the optional local OCR runtime described below.
+   remain supported. Under advanced options, thinking can be switched off and
+   its effort chosen from the levels the service lists for the model (DeepSeek's
+   `/models` reports `effort.supported_levels`, e.g. low/high/max); it is sent as
+   `reasoning_effort` while thinking is on. Services that list no levels keep
+   their default.
+2. Create/select a project and import PDFs from the start page or the PDF card's **⋯ → Import PDFs** in the workbench; extraction runs as a background job with live progress. Scanned pages require the optional local OCR runtime described below.
    Import sends document text to the configured model. It parses blocks and the
    chapter tree first, then performs scene-first extraction and classification.
-3. Select a scene, inspect its own and shared clauses, structure, classification
-   and review issues. Edits create a revision; original page evidence is immutable.
-4. **Confirm and publish revision** adds a snapshot to the machine-wide PDF
-   requirement library. Find it under **Asset management → PDF requirements**,
-   download the scene package or return to the source document. These requirements
-   are distinct from runnable XOSC/XODR assets.
+3. Opening the PDF shows its clause reuse assessment. **Generate suggestions** asks
+   the model which assets each clause can reuse; adopt or change the conclusions.
+4. To inspect a clause's extracted facts, use **Search manually** on it and open
+   **Requirement facts**: clauses, structure, classification and review issues.
+   **Edit facts** creates a revision; original page evidence is immutable, and a
+   confirmed conclusion of that clause is marked for reconfirmation.
 5. Import `.sim`, `.xosc`/`.xodr`, or ZIP assets as before. Enable model
    classification on import, or classify a saved version later. Inspect the
    rule/model/final audit, correct the labels, and confirm them. Classification
    never modifies the immutable scenario or road files.
 
-Old rule-extracted PDFs remain readable. **Re-extract with V2** creates a separate
+Old rule-extracted PDFs remain readable. **⋯ → Extraction record → Extract scenes again** creates a separate
 document result; old revisions and saved reports remain intact. The legacy parser
 is available explicitly to offline callers via `engine="legacy"`; the UI never
 silently falls back to it after a V2/model failure.
@@ -38,8 +42,42 @@ details were removed; no private corpus, configuration, model responses or
 evaluation data was copied. No ScenarioManager installation is needed at runtime.
 
 OpenX owns orchestration, HTTP transport, persistence and UI. It uses the same
-default `chain` heading decoder and `scene-first-prompt-v6`, preserves typed scene
-structures, subtree expansion, shared clauses, source anchors and review issues.
+default `chain` heading decoder and, since 2026-10-07, `scene-first-prompt-v10`: v9 (below) with
+the scene's figures. Standards often place a target only in a figure ("如图C.10所示"); the text
+parser keeps only its caption. `pdf_v2/figures.py` reads captions from the page as laid out
+(a parser may fold one into a table or a heading), takes the region between a caption and the
+running text above it, cuts it to the vector drawings, pictures and labels there and renders it as
+PNG. A scene is read with the figures its own text names by number, then those captioned in its
+own sections, then those of the clauses it refers to (at most six; figures of sections it shares
+with other scenes stay out unless named). When the configured model declares image input (the
+settings take `input_modalities` from the model list), they follow the scene's text as image parts
+of the same request. `scene-structure-prompt-v10` adds the evidence source "图": the quote names a
+figure sent with the scene and the reason says what it shows; code checks both. The text still
+wins over a figure, and a crossing target's bearing is the side it starts from. Matching uses a
+fact read from a figure only as an aid: it ranks, it never blocks or decides the verdict
+(see REUSE_ALIGNMENT.md, figure tier). The figures a
+structure was read with are stored per scene and shown, cut from the page, on the fact's tag.
+v9 found the scenes in one call with the unchanged v1 instructions, then read their structure scene by
+scene (`scene-structure-prompt-v9`): one scene per call with the clauses its text refers to by
+number ("按照C.3.3.2.3.9的方法"), each scene read three times, all calls sent concurrently (64 by
+default; DeepSeek allows thousands per account). Four scenes per call paraphrased some quotes and
+two readings left four times the unknowns on the evaluation standards. The structure prompt keeps v8's fields, reads either-or targets also from
+parameter-table rows, keeps only bearing definitions that map from the wording itself, and adds
+the ego's lane and evidence for every spatial field (a participant's bearing, facing and either-or
+group, the ego's turn and lane): stated, implied with a reason, or unknown, with a verbatim quote.
+A fact whose quote is not in its own scene's text (page numbers and running headers inside a sentence
+are ignored), or on which most readings do not agree, reads as unknown and is marked for review; contradictions (standing participants quoting one sentence with
+different bearings, a near-side participant on the left, an occluder on the other side) are only
+marked (`pdf_v2/structure_evidence.py`). Each call may use the model's whole output limit; a batch is
+retried for a broken reply, missing scenes or a rate limit, and one extraction makes at most
+`CALL_LIMIT` uncached calls. Before v9, `scene-first-prompt-v8`
+(v7 plus either-or participants `alternative_group`, the ego's way through a junction
+`ego_turn`, the traffic control a test relies on `traffic_controls`, speed-limit sign
+values `speed_limits_kph`, and a bearing defined by the lane a participant is in when the
+test starts; v7 added a per-participant `speed_kph`; earlier prompts stay frozen). The new
+fields are left out of a stored structure at their defaults, so earlier revisions read
+back unchanged. It preserves typed scene structures, subtree expansion, shared clauses,
+source anchors and review issues.
 Additional checks reject incomplete finishes and malformed response collections
 instead of treating them as successful empty extractions. Invalid references are
 reported; a response whose scenes all have invalid anchors fails explicitly.
@@ -102,7 +140,8 @@ Model initialization/CPU recognition can be slow; completed OCR results are cach
 Schemas come from esmini revision `61b44a717d2ade513b4d66d1348b35c5d3dbdc3b`,
 preserving their original ASAM license headers. The local registry covers XOSC
 1.0–1.4 and XODR 1.4–1.8. Unknown versions are reported as unsupported; no nearest
-version is substituted. XML structure checks and diagnostics appear in the asset
+version is substituted. Settings → File standards can move to a newer esmini revision after
+previewing which library verdicts change, and roll back one step. XML structure checks and diagnostics appear in the asset
 library, retrieval candidates and JSON/HTML decisions. They do not certify complete
 ASAM semantics or esmini execution. `OPENX_SCHEMA_DIR` can select another registry.
 Schema diagnostics do not invalidate unchanged semantic vectors.

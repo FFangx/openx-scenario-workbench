@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
@@ -128,6 +129,7 @@ class RoadReferenceLine:
     rule: str
     segments: list[GeometrySegment]
     lane_sections: list[LaneSection] = field(default_factory=list)
+    junction: str = "-1"  # the junction this road connects through, "-1" for an ordinary road
 
     def segment_at(self, s: float) -> GeometrySegment | None:
         return next((item for item in reversed(self.segments) if item.s <= s), None)
@@ -250,5 +252,110 @@ def parse_road_geometry(data: bytes | str) -> dict[str, RoadReferenceLine]:
             rule=road.get("rule", ""),
             segments=sorted(segments, key=lambda item: item.s),
             lane_sections=sorted(lane_sections, key=lambda item: item.s),
+            junction=road.get("junction", "-1"),
         )
     return roads
+
+
+# ---------- the curve a vehicle drives into ----------
+# Read from ScenarioManager libraries (ego_curve_radius): real test curves have radii of 15-833 m,
+# while transition polynomials sample as 1174 m and more; parking-space connector arcs are under
+# 19 m long, the shortest test curve 45 m. The gaps between them set both limits.
+STRAIGHT_RADIUS_M = 1000.0  # a segment this flat or flatter is straight
+MIN_CURVE_LENGTH_M = 30.0  # a shorter segment adjusts the alignment, it is no curve
+JOIN_DISTANCE_M = 2.0  # road ends this close continue each other
+LOCATE_DISTANCE_M = 30.0  # farther from every reference line, the vehicle is on no road of the file
+ON_LINE_M = 1.0  # a point this far from where its (s, t) leads lies beyond the road's end, not beside it
+
+
+def place_on(road: RoadReferenceLine, x: float, y: float) -> tuple[float, float] | None:
+    """(s, t) of a point beside `road`'s reference line; None beyond either end or farther away
+    than LOCATE_DISTANCE_M."""
+    found = road.road_from_world(x, y)
+    if found is None:
+        return None
+    s, t = found
+    back = road.world_from_road(s, t)
+    if abs(t) > LOCATE_DISTANCE_M or back is None or math.dist(back[:2], (x, y)) > ON_LINE_M:
+        return None
+    return s, t
+
+
+def locate(roads: dict[str, RoadReferenceLine], x: float, y: float) -> tuple[RoadReferenceLine, float, float] | None:
+    """The ordinary road (no junction connector) a point lies beside, the nearest reference line
+    first, with the point's (s, t); None when it is beside none."""
+    return min(((road, *found) for road in roads.values()
+                if road.junction == "-1" and road.segments and (found := place_on(road, x, y))),
+               key=lambda item: abs(item[2]), default=None)
+
+
+def segment_radius(segment: GeometrySegment) -> float | None:
+    """A segment's representative radius in metres; None for lines and spiral transitions
+    (the arc they lead into is the curve)."""
+    if segment.kind == "arc":
+        return abs(1.0 / segment.curvature) if abs(segment.curvature) > 1e-9 else None
+    if segment.kind == "paramPoly3" and segment.coefficients:
+        _, bu, cu, du, _, bv, cv, dv = segment.coefficients
+        radii = []
+        for step in range(1, 10):  # p = 0.1 .. 0.9, away from the end points
+            p = step / 10
+            du_dp, dv_dp = bu + 2 * cu * p + 3 * du * p * p, bv + 2 * cv * p + 3 * dv * p * p
+            denominator = (du_dp**2 + dv_dp**2) ** 1.5
+            curvature = (du_dp * (2 * cv + 6 * dv * p) - dv_dp * (2 * cu + 6 * du * p)) / denominator if denominator > 1e-12 else 0.0
+            if abs(curvature) > 1e-12:
+                radii.append(abs(1.0 / curvature))
+        return statistics.median(radii) if radii else None
+    return None
+
+
+def _first_curve(road: RoadReferenceLine, from_s: float | None, forward: bool) -> float | None:
+    for segment in road.segments if forward else reversed(road.segments):
+        if from_s is not None and (segment.s + segment.length < from_s if forward else segment.s > from_s):
+            continue  # already behind the vehicle
+        if segment.length < MIN_CURVE_LENGTH_M:
+            continue
+        radius = segment_radius(segment)
+        if radius is not None and radius < STRAIGHT_RADIUS_M:
+            return radius
+    return None
+
+
+def _ends(road: RoadReferenceLine) -> tuple[tuple[float, float], tuple[float, float]]:
+    first, last = road.segments[0], road.segments[-1]
+    return first.point_at(first.s), last.point_at(last.s + last.length)
+
+
+def path_curve_radius(roads: dict[str, RoadReferenceLine], x: float, y: float, heading: float) -> float | None:
+    """Radius of the first curve ahead of a vehicle at (x, y) heading `heading`, in metres.
+
+    One map often holds several curves (R251 to R833 along one road), so the curve is the one the
+    vehicle drives into, not the map's. Junction connectors (turning R32-R58, roundabout R2-R5)
+    are no curve tests and are left out. The search follows the road the vehicle is on, then up to
+    two roads joined to its end. None: no road found, or no curve ahead.
+    """
+    located = min(((road, *place) for road in roads.values()
+                   if road.junction == "-1" and road.segments and (place := road.road_from_world(x, y))),
+                  key=lambda item: abs(item[2]), default=None)
+    if located is None or abs(located[2]) > LOCATE_DISTANCE_M:
+        return None
+    road, s, _ = located
+    reference = road.heading_at(s)
+    if reference is None:
+        return None
+    forward = abs(math.remainder(heading - reference, math.tau)) < math.pi / 2
+    radius, visited = _first_curve(road, s, forward), {road.road_id}
+    for _ in range(2):
+        if radius is not None:
+            break
+        exit_point = _ends(road)[1 if forward else 0]
+        joined = next(((other, start) for other in roads.values()
+                       if other.road_id not in visited and other.junction == "-1" and other.segments
+                       for start, end in (_ends(other),)
+                       if math.dist(start, exit_point) < JOIN_DISTANCE_M or math.dist(end, exit_point) < JOIN_DISTANCE_M),
+                      None)
+        if joined is None:
+            break
+        road, forward = joined[0], math.dist(joined[1], exit_point) < JOIN_DISTANCE_M
+        visited.add(road.road_id)
+        radius = _first_curve(road, None, forward)
+    return round(radius) if radius is not None else None

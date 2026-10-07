@@ -1,9 +1,11 @@
 """Translate controlled business vocabulary, preserving source identifiers."""
 import re
-from .scene_package import STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS
+from pathlib import PurePosixPath
+from .scene_package import STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS, STRUCTURE_TURNS
 
 LABELS = {
-    "direct": "可直接复用", "modify": "修改后复用", "rebuild": "需要重建", "new_build": "需要新建", "review": "待复核",
+    "direct": "可直接复用", "modify": "修改后复用", "major_modify": "大幅修改后复用", "rebuild": "需要重建",
+    "new_build": "需要新建", "review": "待复核", "signed_off": "复核后确认",
     "undecidable": "事实不足，无法判断", "partial": "部分事实待核对", "standards": "文件标准待复核",
     "recall": "仅相似召回", "no_candidates": "没有候选资产",
     "scenario_structure_match": "场景结构匹配", "road_structure_match": "道路结构匹配", "partial_match": "部分匹配",
@@ -13,7 +15,8 @@ LABELS = {
     "ego_speed_kph": "主车速度（km/h）", "lane_count": "车道数", "ttc_value": "TTC（s）",
     "lane_direction": "车道方向", "curve_radius_m": "弯道半径（m）", "end_condition": "结束条件",
     "ego_speed": "主车速度", "ttc": "碰撞时间", "speed": "速度", "target_speed": "目标速度",
-    "straight": "直道", "curve": "弯道", "junction": "交叉口", "motorway": "高速路",
+    "straight": "直道", "curve": "弯道", "junction": "交叉口", "motorway": "高速路", "parking": "停车场",
+    "roundabout": "环岛", "road_missing": "道路文件缺失",
     "cruise": "匀速行驶", "speed_change": "变速", "stop": "刹停", "lane_change": "变道",
     "follow": "定距跟车", "static": "静止", "unknown": "未知", "missing": "缺失",
     "not_tested": "未测试", "playable": "可播放", "failed": "失败", "valid": "通过",
@@ -29,18 +32,92 @@ LABELS = {
     "resolve parameter before confirming reuse": "解析参数后再确认复用", "verify declared requirement": "核对原文需求",
     "verify road classification": "核对道路分类", "select or modify OpenDRIVE": "选择或修改道路文件",
     "modify start trigger": "修改开始触发条件", "set target initial speeds": "设置目标初始速度",
+    "set participant initial speed": "设置参与者初始速度",
     "verify or change environment": "核对或修改环境",
     "verify and set parameter in XOSC": "核对并设置场景参数", "set parameter in XOSC": "设置场景参数",
-    "relations": "参与者关系", "participant_signature": "参与者", "venue_features": "场地特征", "lane_marking": "车道线",
+    "relations": "参与者关系", "participant_signature": "参与者", "background_participant": "背景参与者",
+    "no additional participant": "无多余参与者", "remove extra participant": "删除多余参与者",
+    "keep or remove background participants": "保留或删除背景参与者", "venue_features": "场地特征", "lane_marking": "车道线",
     "parking_operation": "泊车操作", "test_intent": "试验目的", "road_class": "道路类型",
     "lateral_direction": "横向方向", "fog_visibility_m": "能见度（m）", "ttc_s": "TTC（s）", "distance_m": "距离（m）",
     "car": "乘用车", "truck": "卡车", "pedestrian": "行人", "bicycle": "两轮车",
     "ahead": "正前方", "behind": "正后方", "same": "同向", "opposite": "对向",
     "dry": "晴天", "rain": "雨天", "fog": "雾天", "snow": "雪天", "day": "日间", "night": "夜间",
     "combined": "综合相似度",
+    "relation": "参与者关系", "occludes": "遮挡", "not found": "未发现",
+    "place an occluding participant": "布置遮挡参与者",
+    "driver_intervention": "驾驶员干预", "no driver_intervention": "无驾驶员干预",
+    "add driver input override": "添加驾驶员输入接管", "remove driver input override": "移除驾驶员输入接管",
+    "park_in": "泊入", "park_out": "泊出", "no parking": "无泊车操作", "change parking operation": "调整泊车操作",
+    "placement": "摆位", "move start position or retime trigger": "调整起点或触发时机",
+    "turn standing participant": "调整静止参与者朝向",
+    "not scripted": "文件未写", "confirm the system changes lanes": "核对被测系统自行换道",
+    "ego_route": "主车路线", "not read": "未读出", "verify the ego's route": "核对主车路线",
+    "change the ego's route": "修改主车路线",
+    "traffic_light": "交通信号灯", "speed_limit": "限速标志", "no traffic_light": "无交通信号灯",
+    "no speed_limit": "无限速标志", "no speed limit sign": "无限速标志", "road file missing": "道路文件缺失",
+    "verify traffic control": "核对交通控制设施", "add traffic control to OpenDRIVE": "在道路文件中添加交通控制设施",
+    "verify speed limit signs": "核对限速标志", "add a speed limit sign to OpenDRIVE": "在道路文件中添加限速标志",
+    "set the speed limit sign value": "调整限速标志数值",
+    "variant": "任选其一", "select or build the other alternatives": "其余任选项另选或另建素材",
+    "ego_lane": "主车车道",
+    "figure": "示意图", "check against the figure": "对照示意图核对", "not compared": "未比对",
+    # Whole sentences of the comparison: read word by word they came out half English ("verify 参与者 facts")
+    # or wrong ("same test" is no 同向 test).
+    "story": "故事", "participants or interaction": "参与者或交互", "not stated in the requirement": "需求未写明",
+    "decide by hand whether this is the same test": "人工判断是否同一测试",
+    "add participant": "添加参与者", "verify participant facts": "核对参与者事实",
+    "verify participant placement and facing": "核对参与者位置和朝向",
+    "remove additional participant behavior": "删除参与者多余的行为",
+    "switch the tested function and its scoring": "更换被测功能及其评分",
+    "not in the file": "文件中没有", "confirm the system under test drives": "核对由被测系统驾驶",
+    "build a driver-intervention test": "新建驾驶员干预试验", "build a parking test": "新建泊车试验",
+    "no driving lanes read": "未读出行车道", "verify lane count": "核对车道数", "select a road with more lanes": "选择车道更多的道路",
+    "no lane lines read": "未读出车道线", "verify lane lines": "核对车道线",
+    "select or modify OpenDRIVE lane lines": "选择或修改道路文件的车道线",
+    "select or modify OpenDRIVE curve": "选择或修改道路文件的弯道",
+    "distance": "距离", "headway": "车头时距",
+    "build a different scenario family": "新建其他场景类型", "verify candidate scenario family": "核对候选场景类型",
+    "add or replace entity": "添加或替换参与者", "adjust participant placement": "调整参与者位置",
 }
+MARKINGS = {"solid": "实线", "broken": "虚线"}
+
+
+def _key_value(match: re.Match) -> str | None:
+    """A fact as key=value: the key is the workbench's own, the value may quote the requirement, which
+    stays as written unless it is made of the workbench's own words."""
+    key, value = match[1], match[2]
+    if key not in LABELS:
+        return None
+    if value in LABELS:
+        value = LABELS[value]
+    elif re.fullmatch(r"[a-z_]+(?:[,+/][a-z_]+)*", value):
+        value = re.sub(r"[a-z][a-z_]+", lambda word: LABELS.get(word[0], word[0]), value)
+    return f"{LABELS[key]}={value}"
+
+
+# Phrases the comparison writes with values in them, as whole Chinese phrases.
+TEMPLATES = (
+    (re.compile(r"target speeds=(.*)", re.S), lambda match: f"目标速度={match[1]}"),
+    (re.compile(r"curve radius (\S+) m"), lambda match: f"弯道半径 {match[1]} m"),
+    (re.compile(r"lines: (.*)"), lambda match: "车道线：" + "、".join(
+        MARKINGS.get(item.strip(), item.strip()) for item in match[1].split(",") if item.strip())),
+    (re.compile(r"(solid|broken) lane line"), lambda match: MARKINGS[match[1]] + "车道线"),
+    (re.compile(r"participant age=(.*)", re.S), lambda match: f"参与者年龄={match[1]}"),
+    (re.compile(r"([a-z_]+)=(.*)", re.S), _key_value),
+)
+LABELS.update({f"ego_turn={value}": "主车" + label for label, value in STRUCTURE_TURNS.items()})
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):
     LABELS.update({value: key for key, value in vocabulary.items()})
+
+
+# Lane counts the road comparison writes out (reuse_structured.LANE_SCOPES); read word by word,
+# "total" would become a similarity score.
+LANE_PHRASE = re.compile(r"(at least )?(\d+) lanes in (total|one direction)")
+
+
+def _lanes(match: re.Match) -> str:
+    return f"{'至少 ' if match[1] else ''}{match[2]} 条车道（{'双向合计' if match[3] == 'total' else '单向'}）"
 
 
 def display(value, language="zh"):
@@ -49,8 +126,11 @@ def display(value, language="zh"):
         return text
     if text in LABELS:
         return LABELS[text]
+    for pattern, render in TEMPLATES:
+        if (match := pattern.fullmatch(text)) and (shown := render(match)) is not None:
+            return shown
     # Translate tokens in controlled signatures, never file paths or XML identifiers.
-    return re.sub(r"[a-z][a-z_]+", lambda m: LABELS.get(m[0], m[0]), text)
+    return re.sub(r"[a-z][a-z_]+", lambda m: LABELS.get(m[0], m[0]), LANE_PHRASE.sub(_lanes, text))
 
 
 def difference_text(difference, language):
@@ -60,6 +140,14 @@ def difference_text(difference, language):
     if language == "zh" and action == difference.action:
         action = "核对原文与候选结构" if not difference.verified else "调整候选场景"
     return f"{category}：{requested} → {action}"
+
+
+def asset_map_name(asset) -> str:
+    """The road's name a person knows: the authoring tool's map name, else the OpenDRIVE header's, else the
+    road file's stem. Tools that export cases often name the files by an id."""
+    bundle = asset.bundle
+    name = str((bundle.source_case or {}).get("map_name") or "").strip() or (bundle.road.name or "").strip()
+    return name or (PurePosixPath(asset.xodr_name.replace("\\", "/")).stem if asset.xodr_name else "")
 
 
 def asset_display_title(asset, language="zh"):

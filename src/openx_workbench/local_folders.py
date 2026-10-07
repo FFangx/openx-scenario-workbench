@@ -10,7 +10,7 @@ import sys
 
 def choose_folder(title: str, initial: Path) -> Path | None:
     # A separate process gives Tk its own main thread and keeps UI resources
-    # out of Streamlit's worker threads. No folder contents are uploaded.
+    # out of the web server's worker threads. No folder contents are uploaded.
     result = subprocess.run(
         [sys.executable, str(Path(__file__).resolve()), title, str(initial)],
         capture_output=True, text=True, encoding="utf-8", timeout=180,
