@@ -95,6 +95,9 @@ nor stands in the ego's path, so it is a background participant
 (`scene_facts.background_participants`), left over at a low cost per group
 (`COST_BACKGROUND_PARTICIPANT`) instead of the cost of an extra participant. Behavior
 change, background pedestrian and target speed add up to 2.75, below `MAJOR_MODIFY_COST`.
+Rerun on 2026-10-07 (hashing) after figure-read facts became a ranking aid (`TIER_FIGURE`),
+a participant keeping its distance came to drive along, and world positions came to be
+measured along the ego's road: workbench rows unchanged.
 
 ## What the numbers say
 

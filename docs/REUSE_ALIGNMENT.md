@@ -34,6 +34,12 @@ It does not introduce a second ingestion, model or indexing stack.
   requested hard stop). Requested to stand still or to follow, it stays a behavior.
   A requirement that names no behavior leaves every one open: nothing the asset's
   participant does is extra (it is verified as a participant fact).
+- Where a participant is (2026-10-07). Lane, road and relative positions are measured
+  on the road they name. Two world positions are measured along the road the ego starts
+  on, when the file holds one it lies beside (`road_geometry.locate`): on a curve, a car
+  ahead in the ego's lane lies far to one side in a straight line, but in the same lane
+  on the road. Off every road, beyond its end, or without the road file, the straight
+  line stays the only reading; nothing is guessed about a road that is not there.
 - When both the requirement and the asset put the ego under system control, a
   requested lane change the asset does not script is the system's to make (a
   system-triggered lane change leaves nothing in the file): listed to confirm, at no

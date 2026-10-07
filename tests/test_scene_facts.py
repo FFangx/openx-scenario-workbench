@@ -439,6 +439,20 @@ def test_curve_radius_ahead_of_the_ego_confirms_or_changes_a_requested_radius():
     assert radius(250) == [("road", True)]
 
 
+def test_world_positions_are_measured_along_the_road_the_ego_is_on():
+    from openx_workbench.road_geometry import parse_road_geometry
+
+    # A car 240 m ahead in the ego's lane, around the bend: 22 m to the left in a straight line.
+    x, y, h = parse_road_geometry(CURVED_ROAD)["1"].world_from_road(250, -1.75)
+    xosc = scenario(vehicle("Target"), place("Ego", 10, -1.75, 10) + place("Target", round(x, 3), round(y, 3), 10, round(h, 4)))
+    with_road = build_catalog([AssetFile("lib/c.xosc", xosc.encode()), AssetFile("ThreeLanes.xodr", CURVED_ROAD.encode())])[0]
+    assert [item.key() for item in asset_structure_query(with_road).participant_signatures] == [
+        "vehicle@front_same_lane:same:cruise"]
+    # Without the road file the straight line stays the only reading.
+    assert [item.key() for item in asset_structure_query(asset(xosc)).participant_signatures] == [
+        "vehicle@front_left:same:cruise"]
+
+
 def light(name, hour):
     environment = (f'<GlobalAction><EnvironmentAction><Environment name="{name}"><TimeOfDay animation="false" '
                    f'dateTime="2020-11-11T{hour}:00:00"/></Environment></EnvironmentAction></GlobalAction>')

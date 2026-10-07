@@ -265,6 +265,28 @@ STRAIGHT_RADIUS_M = 1000.0  # a segment this flat or flatter is straight
 MIN_CURVE_LENGTH_M = 30.0  # a shorter segment adjusts the alignment, it is no curve
 JOIN_DISTANCE_M = 2.0  # road ends this close continue each other
 LOCATE_DISTANCE_M = 30.0  # farther from every reference line, the vehicle is on no road of the file
+ON_LINE_M = 1.0  # a point this far from where its (s, t) leads lies beyond the road's end, not beside it
+
+
+def place_on(road: RoadReferenceLine, x: float, y: float) -> tuple[float, float] | None:
+    """(s, t) of a point beside `road`'s reference line; None beyond either end or farther away
+    than LOCATE_DISTANCE_M."""
+    found = road.road_from_world(x, y)
+    if found is None:
+        return None
+    s, t = found
+    back = road.world_from_road(s, t)
+    if abs(t) > LOCATE_DISTANCE_M or back is None or math.dist(back[:2], (x, y)) > ON_LINE_M:
+        return None
+    return s, t
+
+
+def locate(roads: dict[str, RoadReferenceLine], x: float, y: float) -> tuple[RoadReferenceLine, float, float] | None:
+    """The ordinary road (no junction connector) a point lies beside, the nearest reference line
+    first, with the point's (s, t); None when it is beside none."""
+    return min(((road, *found) for road in roads.values()
+                if road.junction == "-1" and road.segments and (found := place_on(road, x, y))),
+               key=lambda item: abs(item[2]), default=None)
 
 
 def segment_radius(segment: GeometrySegment) -> float | None:
