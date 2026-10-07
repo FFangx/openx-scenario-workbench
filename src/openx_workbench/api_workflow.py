@@ -17,7 +17,7 @@ from .api_common import (DecisionRequest, _cache, _candidate_for, _catalog, _exp
                          _scene, _scene_json, _store, _trace_for)
 from .api_schemas import (BatchResult, Explanation, ExtractionRecord, Publication, QueuedScene, Revision, SavedBatch,
                           SceneSchema, documented)
-from .batch_matching import batch_signature, match_document
+from .batch_matching import batch_signature, match_documents
 from .pdf_store import PdfStore, StoredScene
 from .project_store import ProjectStore
 from .report_html import render_report
@@ -137,13 +137,16 @@ def extraction_download(project_id: str, document_id: str) -> Response:
 # ---------- whole-document matching ----------
 
 class BatchRequest(BaseModel):
+    document_ids: list[str] = Field(min_length=1, description="The PDFs matched together, in this order.")
     encoder: str | None = None
 
 
-def _batch(project_id: str, document_id: str, encoder: str | None) -> tuple[dict, str]:
+def _batch(project_id: str, document_ids: list[str], encoder: str | None) -> tuple[dict, str]:
     pdf = PdfStore(_store())
-    document = _document(pdf, project_id, document_id)
-    scenes = pdf.scenes(project_id, document_id)
+    if len(set(document_ids)) != len(document_ids):
+        raise ValueError("Select each PDF once.")
+    documents = [_document(pdf, project_id, document_id) for document_id in document_ids]
+    scenes = [scene for document in documents for scene in pdf.scenes(project_id, document.document_id)]
     catalog, versions = _catalog()
     encoder = encoder or matching.preferred_encoder()
     if encoder not in matching.ENCODERS:
@@ -151,25 +154,27 @@ def _batch(project_id: str, document_id: str, encoder: str | None) -> tuple[dict
     if not catalog or not scenes:
         raise ValueError("批量匹配需要资产和场景 / Matching needs assets and scenes.")
     index = _index(catalog, encoder)
-    signature = batch_signature(document, scenes, index.fingerprint, versions, index.encoder.encoder_id)
-    return {"document": document, "scenes": scenes, "index": index, "versions": versions, "encoder": encoder}, signature
+    signature = batch_signature(documents, scenes, index.fingerprint, versions, index.encoder.encoder_id)
+    return {"documents": documents, "scenes": scenes, "index": index, "versions": versions, "encoder": encoder}, signature
 
 
-def _cached_batch(signature: str) -> dict:
+def _cached_batch(project_id: str, signature: str) -> dict:
     entry = _cache.get("batches", {}).get(signature)
-    if entry is None:
-        raise HTTPException(404, "This summary has expired. Match the PDF again.")
+    if entry is None or entry["project_id"] != project_id:
+        raise HTTPException(404, "This summary has expired. Match the PDFs again.")
     return entry
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/batch", **documented(BatchResult))
-def batch(project_id: str, document_id: str, request: BatchRequest) -> dict[str, Any]:
-    """Matches every scene of the PDF against the current library; the result is kept for saving and download."""
-    inputs, signature = _batch(project_id, document_id, request.encoder)
-    trace = match_document(inputs["document"], inputs["scenes"], inputs["index"], inputs["versions"])
+@router.post("/projects/{project_id}/batch", **documented(BatchResult))
+def batch(project_id: str, request: BatchRequest) -> dict[str, Any]:
+    """Matches every scene of the selected PDFs against the current library in one summary; the result is
+    kept for saving and download."""
+    inputs, _ = _batch(project_id, request.document_ids, request.encoder)
+    trace = match_documents(inputs["documents"], inputs["scenes"], inputs["index"], inputs["versions"])
     with _lock:
         cache = _cache.setdefault("batches", {})
-        cache[trace["signature"]] = {"trace": trace, "encoder": inputs["encoder"]}
+        cache[trace["signature"]] = {"trace": trace, "encoder": inputs["encoder"], "project_id": project_id,
+                                     "document_ids": request.document_ids}
         while len(cache) > BATCH_LIMIT:
             cache.pop(next(iter(cache)))
     return {"signature": trace["signature"], "trace": checked_trace(trace)}
@@ -179,23 +184,20 @@ class BatchSaveRequest(BaseModel):
     signature: str
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/batch/save", **documented(SavedBatch))
-def batch_save(project_id: str, document_id: str, request: BatchSaveRequest) -> dict[str, str]:
-    entry = _cached_batch(request.signature)
-    trace = entry["trace"]
-    _, current = _batch(project_id, document_id, entry["encoder"])
-    if current != request.signature or trace["source"]["document_id"] != document_id:
+@router.post("/projects/{project_id}/batch/save", **documented(SavedBatch))
+def batch_save(project_id: str, request: BatchSaveRequest) -> dict[str, str]:
+    entry = _cached_batch(project_id, request.signature)
+    _, current = _batch(project_id, entry["document_ids"], entry["encoder"])
+    if current != request.signature:
         raise ValueError("场景、资产或编码器已改变，请重新匹配 / Scenes, assets or encoder changed. Match again.")
-    path = ProjectStore(_store()).save_batch(project_id, trace)
+    path = ProjectStore(_store()).save_batch(project_id, entry["trace"])
     return {"report_id": path.stem}
 
 
-@router.get("/projects/{project_id}/documents/{document_id}/batch/{signature}/download")
-def batch_download(project_id: str, document_id: str, signature: str,
-                   format: Literal["json", "html"] = "json", lang: str = "zh") -> Response:
-    trace = _cached_batch(signature)["trace"]
-    if trace["source"]["document_id"] != document_id:
-        raise HTTPException(404, "Unknown summary for this PDF.")
+@router.get("/projects/{project_id}/batch/{signature}/download")
+def batch_download(project_id: str, signature: str, format: Literal["json", "html"] = "json",
+                   lang: str = "zh") -> Response:
+    trace = _cached_batch(project_id, signature)["trace"]
     if format == "html":
         return Response(render_report(trace, language="zh" if lang == "zh" else "en"), media_type="text/html",
                         headers={"Content-Disposition": 'attachment; filename="openx-document.html"'})

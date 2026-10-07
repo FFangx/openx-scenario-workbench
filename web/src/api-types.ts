@@ -492,6 +492,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch
+         * @description Matches every scene of the selected PDFs against the current library in one summary; the result is
+         *     kept for saving and download.
+         */
+        post: operations["batch_api_projects__project_id__batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/batch/{signature}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Batch Download */
+        get: operations["batch_download_api_projects__project_id__batch__signature__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/batch/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch Save */
+        post: operations["batch_save_api_projects__project_id__batch_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bindings
+         * @description Every scene of the selected PDFs with the model's suggestion and the confirmed binding, each marked
+         *     when something changed since: the scene's facts, or a newer version of an asset it names.
+         */
+        get: operations["bindings_api_projects__project_id__bindings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/bindings/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept
+         * @description Confirms current suggestions as proposed; outdated or failed suggestions are left alone.
+         */
+        post: operations["accept_api_projects__project_id__bindings_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/bindings/coverage": {
         parameters: {
             query?: never;
@@ -513,6 +609,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/bindings/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest
+         * @description Asks the configured model which candidates build the same test as each scene. Sends the scenes'
+         *     source text and extracted facts, and each candidate's name, story and differences, to that model.
+         */
+        post: operations["suggest_api_projects__project_id__bindings_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/documents": {
         parameters: {
             query?: never;
@@ -528,122 +645,6 @@ export interface paths {
          * @description Extracts scenes with the configured model; sends the PDF text to that model.
          */
         post: operations["import_pdfs_api_projects__project_id__documents_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/projects/{project_id}/documents/{document_id}/batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Batch
-         * @description Matches every scene of the PDF against the current library; the result is kept for saving and download.
-         */
-        post: operations["batch_api_projects__project_id__documents__document_id__batch_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/projects/{project_id}/documents/{document_id}/batch/{signature}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Batch Download */
-        get: operations["batch_download_api_projects__project_id__documents__document_id__batch__signature__download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/projects/{project_id}/documents/{document_id}/batch/save": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Batch Save */
-        post: operations["batch_save_api_projects__project_id__documents__document_id__batch_save_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/projects/{project_id}/documents/{document_id}/bindings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Bindings
-         * @description Every scene of the PDF with the model's suggestion and the confirmed binding, each marked when
-         *     something changed since: the scene's facts, or a newer version of an asset it names.
-         */
-        get: operations["bindings_api_projects__project_id__documents__document_id__bindings_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/projects/{project_id}/documents/{document_id}/bindings/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Accept
-         * @description Confirms current suggestions as proposed; outdated or failed suggestions are left alone.
-         */
-        post: operations["accept_api_projects__project_id__documents__document_id__bindings_accept_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/projects/{project_id}/documents/{document_id}/bindings/suggest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Suggest
-         * @description Asks the configured model which candidates build the same test as each scene. Sends the scenes'
-         *     source text and extracted facts, and each candidate's name, story and differences, to that model.
-         */
-        post: operations["suggest_api_projects__project_id__documents__document_id__bindings_suggest_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1297,10 +1298,15 @@ export interface components {
         /** AcceptRequest */
         AcceptRequest: {
             /**
-             * Scene Ids
+             * Document Ids
+             * @description The PDFs shown together; the reply lists their scenes.
+             */
+            document_ids: string[];
+            /**
+             * Scenes
              * @description Accept these scenes' suggestions as they are, replacing a binding. When omitted: every scene not bound yet whose suggestion prefers an asset the model judged the same test.
              */
-            scene_ids?: string[] | null;
+            scenes?: components["schemas"]["SceneRef"][] | null;
         };
         /**
          * AssetBinding
@@ -1459,6 +1465,11 @@ export interface components {
         };
         /** BatchRequest */
         BatchRequest: {
+            /**
+             * Document Ids
+             * @description The PDFs matched together, in this order.
+             */
+            document_ids: string[];
             /** Encoder */
             encoder?: string | null;
         };
@@ -1937,16 +1948,6 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
-        /** DocumentBindings */
-        DocumentBindings: {
-            /** Document Id */
-            document_id: string;
-            job: components["schemas"]["Job"] | null;
-            /** Pdf Sha256 */
-            pdf_sha256: string;
-            /** Scenes */
-            scenes: components["schemas"]["SceneBinding"][];
-        };
         /** DocumentCoverage */
         DocumentCoverage: {
             /** Document Id */
@@ -2110,6 +2111,17 @@ export interface components {
             observations: components["schemas"]["Observation"][];
             /** Verdict */
             verdict: string;
+        };
+        /** GroupBindings */
+        GroupBindings: {
+            /**
+             * Documents
+             * @description The PDFs shown together, in the order selected.
+             */
+            documents: components["schemas"]["SummaryDocument"][];
+            job: components["schemas"]["Job"] | null;
+            /** Scenes */
+            scenes: components["schemas"]["SceneBinding"][];
         };
         /** Health */
         Health: {
@@ -2830,6 +2842,10 @@ export interface components {
         /** SceneBinding */
         SceneBinding: {
             binding: components["schemas"]["ConfirmedBinding"] | null;
+            /** Document Id */
+            document_id: string;
+            /** Filename */
+            filename: string;
             /**
              * Key
              * @description The requirement: PDF content, clause number and extracted title.
@@ -2953,6 +2969,13 @@ export interface components {
             kind: "乘用车" | "卡车" | "客车" | "厢式车" | "挂车" | "摩托车" | "两轮车" | "三轮车" | "行人" | "障碍物" | "未知";
             /** Speed Kph */
             speed_kph?: number | null;
+        };
+        /** SceneRef */
+        SceneRef: {
+            /** Document Id */
+            document_id: string;
+            /** Scene Id */
+            scene_id: string;
         };
         /** SceneRelation */
         SceneRelation: {
@@ -3412,15 +3435,29 @@ export interface components {
         /** SuggestRequest */
         SuggestRequest: {
             /**
+             * Document Ids
+             * @description The PDFs whose scenes are suggested for, in one job.
+             */
+            document_ids: string[];
+            /**
              * Encoder
              * @description Retrieval backend of the candidates; the preferred one when omitted.
              */
             encoder?: string | null;
             /**
-             * Scene Ids
-             * @description Only these scenes; every scene of the PDF when omitted.
+             * Scenes
+             * @description Only these scenes; every scene of the PDFs when omitted.
              */
-            scene_ids?: string[] | null;
+            scenes?: components["schemas"]["SceneRef"][] | null;
+        };
+        /** SummaryDocument */
+        SummaryDocument: {
+            /** Document Id */
+            document_id: string;
+            /** Filename */
+            filename: string;
+            /** Pdf Sha256 */
+            pdf_sha256: string;
         };
         /**
          * Trace
@@ -3481,13 +3518,27 @@ export interface components {
         };
         /** TraceSource */
         TraceSource: {
-            /** Document Id */
+            /**
+             * Document Id
+             * @description The scene's PDF; in a whole-PDF summary only when it covers one PDF.
+             */
             document_id?: string | null;
+            /**
+             * Documents
+             * @description The PDFs a whole-PDF summary covers.
+             * @default []
+             */
+            documents?: components["schemas"]["SummaryDocument"][];
             /**
              * Evidence
              * @default []
              */
             evidence?: components["schemas"]["Evidence"][];
+            /**
+             * Filename
+             * @description A summary row's PDF.
+             */
+            filename?: string | null;
             /** Revision */
             revision?: number | null;
             /** Scene Id */
@@ -4382,6 +4433,180 @@ export interface operations {
             };
         };
     };
+    batch_api_projects__project_id__batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_download_api_projects__project_id__batch__signature__download_get: {
+        parameters: {
+            query?: {
+                format?: "json" | "html";
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                signature: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_save_api_projects__project_id__batch_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bindings_api_projects__project_id__bindings_get: {
+        parameters: {
+            query: {
+                /** @description The PDFs shown together, in this order. */
+                document_ids: string[];
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_api_projects__project_id__bindings_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     coverage_api_projects__project_id__bindings_coverage_get: {
         parameters: {
             query?: never;
@@ -4400,6 +4625,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BindingCoverage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_api_projects__project_id__bindings_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
                 };
             };
             /** @description Validation Error */
@@ -4456,218 +4716,6 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_import_pdfs_api_projects__project_id__documents_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_api_projects__project_id__documents__document_id__batch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BatchResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_download_api_projects__project_id__documents__document_id__batch__signature__download_get: {
-        parameters: {
-            query?: {
-                format?: "json" | "html";
-                lang?: string;
-            };
-            header?: never;
-            path: {
-                document_id: string;
-                project_id: string;
-                signature: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_save_api_projects__project_id__documents__document_id__batch_save_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BatchSaveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SavedBatch"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    bindings_api_projects__project_id__documents__document_id__bindings_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBindings"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    accept_api_projects__project_id__documents__document_id__bindings_accept_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AcceptRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBindings"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    suggest_api_projects__project_id__documents__document_id__bindings_suggest_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SuggestRequest"];
             };
         };
         responses: {
@@ -4910,7 +4958,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentBindings"];
+                    "application/json": components["schemas"]["SceneBinding"];
                 };
             };
             /** @description Validation Error */
@@ -4943,7 +4991,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentBindings"];
+                    "application/json": components["schemas"]["SceneBinding"];
                 };
             };
             /** @description Validation Error */

@@ -368,11 +368,19 @@ class Library(Shape):
 
 # ---------- traces and reports ----------
 
+class SummaryDocument(Shape):
+    document_id: str
+    filename: str
+    pdf_sha256: str
+
+
 class TraceSource(Open):
     title: str | None = None
     scene_id: str | None = None
     revision: int | None = None
-    document_id: str | None = None
+    document_id: str | None = Field(None, description="The scene's PDF; in a whole-PDF summary only when it covers one PDF.")
+    filename: str | None = Field(None, description="A summary row's PDF.")
+    documents: list[SummaryDocument] = Field([], description="The PDFs a whole-PDF summary covers.")
     evidence: list[Evidence] = []
 
 
@@ -743,6 +751,8 @@ class ConfirmedBinding(Shape):
 
 
 class SceneBinding(Shape):
+    document_id: str
+    filename: str
     scene_id: str
     revision: int
     title: str
@@ -753,9 +763,8 @@ class SceneBinding(Shape):
     binding: ConfirmedBinding | None
 
 
-class DocumentBindings(Shape):
-    document_id: str
-    pdf_sha256: str
+class GroupBindings(Shape):
+    documents: list[SummaryDocument] = Field(description="The PDFs shown together, in the order selected.")
     scenes: list[SceneBinding]
     job: Job | None
 

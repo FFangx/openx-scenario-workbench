@@ -46,8 +46,9 @@ def test_extraction_record_of_a_rule_extracted_pdf(workbench):
 
 def test_batch_summary_downloads_and_saves_only_while_current(workbench):
     client, base, _ = workbench
-    url = f"/api/projects/{base['project_id']}/documents/{base['document_id']}/batch"
-    matched = client.post(url, json={"encoder": "hashing"}).json()
+    url = f"/api/projects/{base['project_id']}/batch"
+    request = {"document_ids": [base["document_id"]], "encoder": "hashing"}
+    matched = client.post(url, json=request).json()
     assert matched["trace"]["kind"] == "batch_match" and matched["trace"]["scene_count"] == 1
     html = client.get(f"{url}/{matched['signature']}/download?format=html&lang=en")
     assert "attachment" in html.headers["content-disposition"] and "OpenX document assessment" in html.text
@@ -55,10 +56,13 @@ def test_batch_summary_downloads_and_saves_only_while_current(workbench):
     saved = client.post(url + "/save", json={"signature": matched["signature"]}).json()
     latest = client.get(f"/api/projects/{base['project_id']}/reports").json()[0]
     assert (latest["report_id"], latest["kind"]) == (saved["report_id"], "batch")
-    stale = client.post(url, json={"encoder": "hashing"}).json()
+    stale = client.post(url, json=request).json()
     client.post(scene_url(base, "/revisions"), json={"edits": {"title": "Changed after matching"}})
     refused = client.post(url + "/save", json={"signature": stale["signature"]})
     assert refused.status_code == 400 and "Match again" in refused.json()["detail"]
+    assert client.post(url, json={"document_ids": [base["document_id"]] * 2}).status_code == 400
+    assert client.post(url, json={"document_ids": []}).status_code == 422
+    assert client.post(f"/api/projects/{base['project_id']}/batch/save", json={"signature": "0" * 64}).status_code == 404
 
 
 def test_report_and_explanations_follow_the_current_assessment(workbench, monkeypatch):

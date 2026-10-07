@@ -28,7 +28,7 @@ _ZH = {
     "Schema revision": "标准定义版本", "Issues": "原始诊断", "Status": "状态", "Evidence explanation": "证据解释",
     "Citation locations": "引用位置", "OpenX document assessment": "OpenX 文档评估报告",
     "Review and missing candidates require follow-up; these are assessment snapshots.": "待复核和无候选场景需要继续处理；此报告保留评估时的快照。",
-    "Scene": "需求场景", "Revision": "事实修订", "Top candidates": "候选（前三）", "Assessment": "评估结论", "Change cost": "修改成本（相对分值）",
+    "Document": "文档", "Scene": "需求场景", "Revision": "事实修订", "Top candidates": "候选（前三）", "Assessment": "评估结论", "Change cost": "修改成本（相对分值）",
     "Review sign-off": "复核确认", "Signed at": "确认时间", "Review item": "复核项", "Reason": "确认理由",
     "File standard checks did not pass or could not run": "文件标准检查未通过或未完成",
 }
@@ -149,6 +149,7 @@ def render_report(trace: dict[str, Any], *, language="en") -> str:
     else:
         rows = []
         details = []
+        grouped = len(trace["source"].get("documents") or []) > 1  # one summary of several PDFs names each row's
         for entry in trace.get("entries", []):
             source = entry["source"]
             candidates = entry.get("candidates", [])
@@ -159,13 +160,16 @@ def render_report(trace: dict[str, Any], *, language="en") -> str:
                                      quote=True) for rank, item in enumerate(candidates[:3], 1)) or "—"
             values = (source.get("title"), source.get("revision"), top,
                       display(assessment.get("review_kind") or assessment["level"], language), assessment.get("estimated_change_cost", "—"))
-            rows.append("<tr>" + "".join("<td>" + (value if index == 2 else escape(str(value), quote=True)) + "</td>"
-                                         for index, value in enumerate(values)) + "</tr>")
+            cells = ["<td>" + (value if index == 2 else escape(str(value), quote=True)) + "</td>"
+                     for index, value in enumerate(values)]
+            if grouped:
+                cells.insert(0, "<td>" + escape(str(source.get("filename") or "—"), quote=True) + "</td>")
+            rows.append("<tr>" + "".join(cells) + "</tr>")
             details.extend(_report_body(candidate, language) for candidate in candidates)
         body = ("<h1>OpenX document assessment</h1><p>" + escape(str(trace["source"]["title"]))
                 + "</p><p>" + ("检索编码器：" if language == "zh" else "Encoder: ") + escape(str(trace["encoder"])) + "</p><p>" + ("场景数量：" if language == "zh" else "Scene counts: ")
                 + escape(" · ".join(f"{display(k, language)}: {v}" for k, v in trace.get("counts", {}).items())) + "</p><p>Review and missing candidates require follow-up; these are assessment snapshots.</p>"
-                + "<table class=wide><thead><tr><th>Scene</th><th>Revision</th><th>Top candidates</th><th>Assessment</th><th>Change cost</th></tr></thead><tbody>"
+                + "<table class=wide><thead><tr>" + ("<th>Document</th>" if grouped else "") + "<th>Scene</th><th>Revision</th><th>Top candidates</th><th>Assessment</th><th>Change cost</th></tr></thead><tbody>"
                 + "".join(rows) + "</tbody></table>" + "".join(details))
     header = _REPORT_HEADER.replace('lang="en"', 'lang="zh-CN"') if language == "zh" else _REPORT_HEADER
     return _localized_templates(header, language) + _localized_templates(body, language) + "</body></html>"

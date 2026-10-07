@@ -289,11 +289,24 @@ try {
   await editor.locator(".ant-btn-primary").filter({ hasText: "Update binding" }).click();
   await bindRows().first().filter({ hasText: "Change first" }).waitFor();
   const docs = await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents`)).json();
-  const bound = (await Promise.all(docs.map(async (d) => (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents/${d.document_id}/bindings`)).json())))
-    .flatMap((v) => v.scenes).find((s) => s.binding?.status === "modify");
+  const bound = (await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/bindings?${docs.map((d) => `document_ids=${d.document_id}`).join("&")}`)).json())
+    .scenes.find((s) => s.binding?.status === "modify");
   check("a person's change is stored as their own choice", bound?.binding.source === "manual" && bound.binding.changes === "Slow the target down");
   await p.request.delete(`${BASE}/api/settings/model/key`);
   fake.stop();
+
+  // several PDFs matched and bound together in one table
+  await p.locator(".ant-modal:visible .batch-docs .ant-select").click();
+  await p.locator(".ant-select-dropdown:visible .ant-select-item-option:not(.ant-select-item-option-selected)").first().click();
+  await p.locator(".ant-modal:visible .ant-modal-title").click();
+  await p.locator(".ant-modal:visible .ant-tabs-tab").filter({ hasText: "Reuse verdicts" }).click();
+  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Match all scenes" }).click();
+  await p.locator(".ant-modal:visible .batch-table:not(.bind-table) tbody tr.ant-table-row").nth(4).waitFor({ timeout: 120000 });
+  const groupNames = await p.locator(".ant-modal:visible .batch-table:not(.bind-table) tbody tr.ant-table-row td:nth-child(2)").allInnerTexts();
+  check("two PDFs are matched in one table naming each row's PDF", groupNames.length === 8 && new Set(groupNames).size === 2, groupNames.join(", "));
+  await p.locator(".ant-modal:visible .ant-tabs-tab").filter({ hasText: "Bind assets" }).click();
+  await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "4 / 8 confirmed" }).waitFor();
+  check("the binding table lists both PDFs' scenes", (await bindRows().count()) === 8);
   await closeModal();
 
   // extraction record of the rule-extracted demo PDF

@@ -405,6 +405,8 @@ a { color: var(--link); }
 .batch-cand { display: flex; align-items: center; gap: 6px; min-width: 0; line-height: 20px; }
 .batch-cand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .batch-tabs .ant-tabs-nav { margin-bottom: 10px; }
+.batch-docs { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; font-size: 12.5px; }
+.batch-docs .ant-select { flex: 1; min-width: 0; }
 .bind-table .ant-table-tbody > tr.ant-table-row { cursor: pointer; }
 .bind-table .ant-table-expanded-row > td { background: var(--soft) !important; }
 .bind-status { display: inline-flex; gap: 4px; }

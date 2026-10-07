@@ -136,7 +136,7 @@ export function RequirementsPanel(p: Props) {
       { key: "import", label: t("导入 PDF…", "Import PDFs…") },
       { type: "divider" as const },
       { key: "open", label: t("打开 PDF", "Open PDF"), disabled: !doc },
-      { key: "batch", label: t("整份 PDF 匹配与汇总…", "Match entire PDF…"), disabled: !doc || p.scope === "all" },
+      { key: "batch", label: t("整份 PDF 匹配与汇总…", "Match entire PDFs…"), disabled: !p.docs.length },
       { key: "extraction", label: t("解析与校验记录…", "Extraction record…"), disabled: !doc || p.scope === "all" },
     ],
     onClick: ({ key }: { key: string }) =>
@@ -224,11 +224,12 @@ export function RequirementsPanel(p: Props) {
         <ImportPdfDialog open={dialog === "import"} projectId={projectId} onClose={() => setDialog(null)} onImported={(ids) => p.onDocsChanged(ids[ids.length - 1])} />
       )}
       {projectId && doc && (
-        <>
-          <ExtractionDialog open={dialog === "extraction"} projectId={projectId} doc={doc} onClose={() => setDialog(null)}
-            onReextracted={(ids) => p.onDocsChanged(ids[0])} />
-          <BatchDialog open={dialog === "batch"} projectId={projectId} doc={doc} onClose={() => setDialog(null)} />
-        </>
+        <ExtractionDialog open={dialog === "extraction"} projectId={projectId} doc={doc} onClose={() => setDialog(null)}
+          onReextracted={(ids) => p.onDocsChanged(ids[0])} />
+      )}
+      {projectId && p.docs.length > 0 && (
+        <BatchDialog open={dialog === "batch"} projectId={projectId} docs={p.docs}
+          initial={p.scope === "all" || !doc ? p.docs.map((d) => d.document_id) : [doc.document_id]} onClose={() => setDialog(null)} />
       )}
     </section>
   );

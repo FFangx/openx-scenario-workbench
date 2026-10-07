@@ -1,6 +1,7 @@
-"""Requirement ↔ asset binding routes: the model's suggestions for a PDF, and the table a person confirms.
+"""Requirement ↔ asset binding routes: the model's suggestions for the PDFs a person selected, and the table
+a person confirms.
 
-`POST .../bindings/suggest` starts a background job (one per PDF) that ranks every scene's candidates
+`POST .../bindings/suggest` starts a background job (one per project) that ranks every scene's candidates
 and asks the configured model about them; it sends the scenes' source text and the candidates'
 stories to that model. Nothing enters the binding table until a person confirms a row.
 """
@@ -9,12 +10,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from . import jobs, matching
 from .api_common import _catalog, _index, _store
-from .api_schemas import AssetBinding, BindingCoverage, DocumentBindings, Job, documented
+from .api_schemas import AssetBinding, BindingCoverage, GroupBindings, Job, SceneBinding, documented
 from .asset_store import AssetStore
 from .binding_store import BindingStore, requirement_keys, scene_digest, section_of, stale_reasons
 from .binding_suggest import Judge, suggest_scenes
@@ -27,16 +28,44 @@ KIND = "binding_suggest"
 STATUS_OF = {"同一测试": "same", "同一测试但要改": "modify"}  # the model's bindable verdicts
 
 
-def _scope(store: AssetStore, project_id: str, document_id: str) -> str:
-    return f"{store.root.resolve()}|{project_id}|{document_id}"
+def _scope(store: AssetStore, project_id: str) -> str:
+    return f"{store.root.resolve()}|{project_id}"
 
 
-def _scenes(project_id: str, document_id: str) -> tuple[PdfStore, PdfDocument, list[StoredScene]]:
-    pdf = PdfStore(_store())
-    document = next((item for item in pdf.documents(project_id) if item.document_id == document_id), None)
-    if document is None:
-        raise HTTPException(404, "Unknown PDF document.")
-    return pdf, document, pdf.scenes(project_id, document_id)
+class Group:
+    """The selected PDFs of a project, their scenes in that order and each scene's requirement key."""
+
+    def __init__(self, project_id: str, document_ids: list[str]):
+        if not document_ids:
+            raise ValueError("Select at least one PDF.")
+        if len(set(document_ids)) != len(document_ids):
+            raise ValueError("Select each PDF once.")
+        self.pdf = PdfStore(_store())
+        self.project_id = project_id
+        known = {item.document_id: item for item in self.pdf.documents(project_id)}
+        if any(item not in known for item in document_ids):
+            raise HTTPException(404, "Unknown PDF document.")
+        self.documents: list[PdfDocument] = [known[item] for item in document_ids]
+        self.scenes: list[StoredScene] = []
+        self.keys: dict[tuple[str, str], str] = {}
+        for document in self.documents:
+            scenes = self.pdf.scenes(project_id, document.document_id)
+            self.scenes.extend(scenes)
+            for scene_id, key in requirement_keys(self.pdf, project_id, document.document_id, scenes).items():
+                self.keys[(document.document_id, scene_id)] = key
+
+    def key(self, scene: StoredScene) -> str:
+        return self.keys[(scene.document.document_id, scene.scene_id)]
+
+    def scene(self, document_id: str, scene_id: str) -> StoredScene:
+        scene = next((item for item in self.scenes
+                      if item.document.document_id == document_id and item.scene_id == scene_id), None)
+        if scene is None:
+            raise HTTPException(404, "Unknown extracted scene.")
+        return scene
+
+    def select(self, refs: list[SceneRef] | None) -> list[StoredScene]:
+        return self.scenes if refs is None else [self.scene(ref.document_id, ref.scene_id) for ref in refs]
 
 
 def _latest(store: AssetStore) -> dict[str, Any]:
@@ -67,53 +96,62 @@ def _binding_json(entry: dict[str, Any], scene: StoredScene, latest: dict[str, A
             "confirmed_in": {key: requirement.get(key) for key in ("project_id", "document_id", "scene_id", "revision")}}
 
 
-def _view(project_id: str, document_id: str) -> dict[str, Any]:
-    pdf, document, scenes = _scenes(project_id, document_id)
-    store = BindingStore(pdf.assets)
-    keys = requirement_keys(pdf, project_id, document_id, scenes)
-    latest = _latest(pdf.assets)
+def _rows(group: Group, scenes: list[StoredScene]) -> list[dict[str, Any]]:
+    """Each scene with the model's suggestion and the confirmed binding."""
+    store = BindingStore(group.pdf.assets)
+    latest = _latest(group.pdf.assets)
     entries = store.entries()
-    suggestions = store.suggestions(document.sha256)
+    suggestions = {document.sha256: store.suggestions(document.sha256) for document in {
+        scene.document.document_id: scene.document for scene in scenes}.values()}
     rows = []
     for scene in scenes:
-        key = keys[scene.scene_id]
+        key = group.key(scene)
         evidence = scene.package.evidence
-        suggestion, entry = suggestions.get(key), entries.get(key)
+        suggestion, entry = suggestions[scene.document.sha256].get(key), entries.get(key)
         rows.append({
+            "document_id": scene.document.document_id, "filename": scene.document.filename,
             "scene_id": scene.scene_id, "revision": scene.revision, "title": scene.package.title,
             "section_id": section_of(scene.package), "key": key,
             "pages": [min(item.page_start for item in evidence), max(item.page_end for item in evidence)] if evidence else None,
             "suggestion": _suggestion_json(suggestion, scene, latest) if suggestion else None,
             "binding": _binding_json(entry, scene, latest) if entry else None,
         })
-    job = jobs.latest(KIND, _scope(pdf.assets, project_id, document_id))
-    return {"document_id": document_id, "pdf_sha256": document.sha256, "scenes": rows,
-            "job": job.snapshot() if job else None}
+    return rows
 
 
-@router.get("/projects/{project_id}/documents/{document_id}/bindings", **documented(DocumentBindings))
-def bindings(project_id: str, document_id: str) -> dict[str, Any]:
-    """Every scene of the PDF with the model's suggestion and the confirmed binding, each marked when
-    something changed since: the scene's facts, or a newer version of an asset it names."""
-    return _view(project_id, document_id)
+def _view(group: Group) -> dict[str, Any]:
+    job = jobs.latest(KIND, _scope(group.pdf.assets, group.project_id))
+    return {"documents": [{"document_id": item.document_id, "filename": item.filename, "pdf_sha256": item.sha256}
+                          for item in group.documents],
+            "scenes": _rows(group, group.scenes), "job": job.snapshot() if job else None}
+
+
+@router.get("/projects/{project_id}/bindings", **documented(GroupBindings))
+def bindings(project_id: str, document_ids: list[str] = Query(description="The PDFs shown together, in this order.")
+             ) -> dict[str, Any]:
+    """Every scene of the selected PDFs with the model's suggestion and the confirmed binding, each marked
+    when something changed since: the scene's facts, or a newer version of an asset it names."""
+    return _view(Group(project_id, document_ids))
+
+
+class SceneRef(BaseModel):
+    document_id: str
+    scene_id: str
 
 
 class SuggestRequest(BaseModel):
-    scene_ids: list[str] | None = Field(None, description="Only these scenes; every scene of the PDF when omitted.")
+    document_ids: list[str] = Field(description="The PDFs whose scenes are suggested for, in one job.")
+    scenes: list[SceneRef] | None = Field(None, description="Only these scenes; every scene of the PDFs when omitted.")
     encoder: str | None = Field(None, description="Retrieval backend of the candidates; the preferred one when omitted.")
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/bindings/suggest", **documented(Job))
-def suggest(project_id: str, document_id: str, request: SuggestRequest) -> dict[str, Any]:
+@router.post("/projects/{project_id}/bindings/suggest", **documented(Job))
+def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
     """Asks the configured model which candidates build the same test as each scene. Sends the scenes'
     source text and extracted facts, and each candidate's name, story and differences, to that model."""
-    pdf, _, scenes = _scenes(project_id, document_id)
-    if request.scene_ids is not None:
-        wanted = set(request.scene_ids)
-        scenes = [scene for scene in scenes if scene.scene_id in wanted]
-        if len(scenes) != len(wanted):
-            raise HTTPException(404, "Unknown extracted scene.")
-    if not scenes or not pdf.assets.latest():
+    group = Group(project_id, request.document_ids)
+    scenes = group.select(request.scenes)
+    if not scenes or not group.pdf.assets.latest():
         raise ValueError("绑定建议需要资产和场景 / Suggestions need assets and scenes.")
     client = ModelClient()
     if not client.config.api_key:
@@ -123,12 +161,11 @@ def suggest(project_id: str, document_id: str, request: SuggestRequest) -> dict[
         raise ValueError("Unknown encoder.")
 
     def work(job: jobs.Job) -> dict[str, Any]:
-        store = BindingStore(pdf.assets)
-        keys = requirement_keys(pdf, project_id, document_id, scenes)
+        store = BindingStore(group.pdf.assets)
         job.update(stage="ranking", total=len(scenes))
         catalog, versions = _catalog()
         index = _index(catalog, encoder)
-        judge = Judge(client, pdf.assets.root / "model_cache", job.cancel)
+        judge = Judge(client, group.pdf.assets.root / "model_cache", job.cancel)
         progress = {"ranked": 0, "judged": 0}
 
         def ranked(scene: StoredScene) -> None:
@@ -144,11 +181,12 @@ def suggest(project_id: str, document_id: str, request: SuggestRequest) -> dict[
 
         failed = suggest_scenes(
             scenes, index, versions, judge, client.config.concurrency, digest=scene_digest,
-            save=lambda scene, record: store.save_suggestion(scene.document.sha256, keys[scene.scene_id], record),
+            save=lambda scene, record: store.save_suggestion(scene.document.sha256, group.key(scene), record),
             ranked=ranked, judged=judged)
-        return {"project_id": project_id, "document_ids": [document_id], "failed": failed, "usage": dict(judge.spent)}
+        return {"project_id": project_id, "document_ids": request.document_ids, "failed": failed,
+                "usage": dict(judge.spent)}
 
-    job = jobs.Job(KIND, _scope(pdf.assets, project_id, document_id))
+    job = jobs.Job(KIND, _scope(group.pdf.assets, project_id))
     return jobs.start(job, work).snapshot()
 
 
@@ -166,13 +204,6 @@ class BindingRequest(BaseModel):
     changes: str = Field("", max_length=2000)
 
 
-def _scene(scenes: list[StoredScene], scene_id: str) -> StoredScene:
-    scene = next((item for item in scenes if item.scene_id == scene_id), None)
-    if scene is None:
-        raise HTTPException(404, "Unknown extracted scene.")
-    return scene
-
-
 def _proposal(suggestion: dict[str, Any] | None, scene: StoredScene, latest: dict[str, Any]):
     """The suggestion as a binding (status, candidates, preferred id), or None when it is outdated or failed."""
     if not suggestion or suggestion.get("failure") or _suggestion_json(suggestion, scene, latest)["outdated"]:
@@ -185,17 +216,17 @@ def _proposal(suggestion: dict[str, Any] | None, scene: StoredScene, latest: dic
     return STATUS_OF[preferred["verdict"]], chosen, preferred["asset_id"]
 
 
-@router.put("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/binding", **documented(DocumentBindings))
+@router.put("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/binding", **documented(SceneBinding))
 def confirm(project_id: str, document_id: str, scene_id: str, request: BindingRequest) -> dict[str, Any]:
     """Stores the person's binding of the scene, replacing an earlier one; the named versions are pinned.
     It counts as the accepted suggestion when it is exactly what the current suggestion proposed."""
-    pdf, document, scenes = _scenes(project_id, document_id)
-    scene = _scene(scenes, scene_id)
-    store = BindingStore(pdf.assets)
-    key = requirement_keys(pdf, project_id, document_id, scenes)[scene_id]
-    suggestion = store.suggestions(document.sha256).get(key)
+    group = Group(project_id, [document_id])
+    scene = group.scene(document_id, scene_id)
+    store = BindingStore(group.pdf.assets)
+    key = group.key(scene)
+    suggestion = store.suggestions(scene.document.sha256).get(key)
     words = {(item["asset_id"], item["version_id"]): item for item in (suggestion or {}).get("candidates", [])}
-    versions = {(item.asset_id, item.version_id): item for item in pdf.assets.versions()}
+    versions = {(item.asset_id, item.version_id): item for item in group.pdf.assets.versions()}
     preferred = request.preferred or (request.assets[0].asset_id if request.assets else None)
     chosen = []
     for item in request.assets:
@@ -207,63 +238,58 @@ def confirm(project_id: str, document_id: str, scene_id: str, request: BindingRe
                        "reason": said.get("reason"), "changes": said.get("changes")})
     if request.assets and not any(item["preferred"] for item in chosen):
         raise ValueError("The preferred asset must be one of the bound assets.")
-    proposal = _proposal(suggestion, scene, _latest(pdf.assets))
+    proposal = _proposal(suggestion, scene, _latest(group.pdf.assets))
     accepted = proposal is not None and proposal[0] == request.status and proposal[2] == preferred and {
         (item["asset_id"], item["version_id"]) for item in proposal[1]} == {
         (item.asset_id, item.version_id) for item in request.assets}
     store.confirm(key, scene, request.status, chosen, changes=request.changes,
                   source="suggestion" if accepted else "manual")
-    return _view(project_id, document_id)
+    return _rows(group, [scene])[0]
 
 
-@router.delete("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/binding", **documented(DocumentBindings))
+@router.delete("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/binding", **documented(SceneBinding))
 def unbind(project_id: str, document_id: str, scene_id: str) -> dict[str, Any]:
     """Removes the scene's confirmed binding and releases the versions it pinned."""
-    pdf, _, scenes = _scenes(project_id, document_id)
-    _scene(scenes, scene_id)
-    BindingStore(pdf.assets).remove(requirement_keys(pdf, project_id, document_id, scenes)[scene_id])
-    return _view(project_id, document_id)
+    group = Group(project_id, [document_id])
+    scene = group.scene(document_id, scene_id)
+    BindingStore(group.pdf.assets).remove(group.key(scene))
+    return _rows(group, [scene])[0]
 
 
 class AcceptRequest(BaseModel):
-    scene_ids: list[str] | None = Field(
+    document_ids: list[str] = Field(description="The PDFs shown together; the reply lists their scenes.")
+    scenes: list[SceneRef] | None = Field(
         None, description="Accept these scenes' suggestions as they are, replacing a binding. When omitted: every "
                           "scene not bound yet whose suggestion prefers an asset the model judged the same test.")
 
 
-@router.post("/projects/{project_id}/documents/{document_id}/bindings/accept", **documented(DocumentBindings))
-def accept(project_id: str, document_id: str, request: AcceptRequest) -> dict[str, Any]:
+@router.post("/projects/{project_id}/bindings/accept", **documented(GroupBindings))
+def accept(project_id: str, request: AcceptRequest) -> dict[str, Any]:
     """Confirms current suggestions as proposed; outdated or failed suggestions are left alone."""
-    pdf, document, scenes = _scenes(project_id, document_id)
-    store = BindingStore(pdf.assets)
-    keys = requirement_keys(pdf, project_id, document_id, scenes)
-    latest = _latest(pdf.assets)
+    group = Group(project_id, request.document_ids)
+    store = BindingStore(group.pdf.assets)
+    latest = _latest(group.pdf.assets)
     entries = store.entries()
-    suggestions = store.suggestions(document.sha256)
-    if request.scene_ids is not None:
-        wanted = set(request.scene_ids)
-        selected = [scene for scene in scenes if scene.scene_id in wanted]
-        if len(selected) != len(wanted):
-            raise HTTPException(404, "Unknown extracted scene.")
-    else:
-        selected = [scene for scene in scenes if keys[scene.scene_id] not in entries]
-    versions = {(item.asset_id, item.version_id): item for item in pdf.assets.versions()}
+    suggestions = {document.sha256: store.suggestions(document.sha256) for document in group.documents}
+    selected = group.select(request.scenes) if request.scenes is not None else [
+        scene for scene in group.scenes if group.key(scene) not in entries]
+    versions = {(item.asset_id, item.version_id): item for item in group.pdf.assets.versions()}
     for scene in selected:
-        proposal = _proposal(suggestions.get(keys[scene.scene_id]), scene, latest)
+        proposal = _proposal(suggestions[scene.document.sha256].get(group.key(scene)), scene, latest)
         if proposal is None:
-            if request.scene_ids is not None:
+            if request.scenes is not None:
                 raise ValueError(f"{scene.package.title}: 建议已过期或失败，请重新建议 / "
                                  "The suggestion is outdated or failed; ask again.")
             continue
         status, chosen, preferred = proposal
-        if request.scene_ids is None and status != "same":
+        if request.scenes is None and status != "same":
             continue
         assets = [{"version": versions[(item["asset_id"], item["version_id"])],
                    "preferred": item["asset_id"] == preferred, "verdict": item["verdict"],
                    "reason": item["reason"], "changes": item["changes"]} for item in chosen]
         changes = next((item["changes"] for item in chosen if item["asset_id"] == preferred), "")
-        store.confirm(keys[scene.scene_id], scene, status, assets, changes=changes, source="suggestion")
-    return _view(project_id, document_id)
+        store.confirm(group.key(scene), scene, status, assets, changes=changes, source="suggestion")
+    return _view(group)
 
 
 # ---------- reverse lookup and coverage ----------

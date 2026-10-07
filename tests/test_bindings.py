@@ -44,6 +44,25 @@ class FakeModel:
                       "binding": ["C1", "C2"], "preferred": "C1", "note": ""})
 
 
+class Base:
+    """The binding routes of the selected PDFs of a project."""
+
+    def __init__(self, client, project, documents):
+        self.client, self.documents, self.url = client, documents, f"/api/projects/{project}"
+
+    def view(self):
+        return self.client.get(self.url + "/bindings", params={"document_ids": self.documents}).json()
+
+    def suggest(self, **extra):
+        return self.client.post(self.url + "/bindings/suggest", json={"document_ids": self.documents, **extra})
+
+    def accept(self, **extra):
+        return self.client.post(self.url + "/bindings/accept", json={"document_ids": self.documents, **extra})
+
+    def scene(self, row):
+        return f"{self.url}/documents/{row['document_id']}/scenes/{row['scene_id']}/binding"
+
+
 @pytest.fixture
 def demo(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path / "data"))
@@ -56,7 +75,7 @@ def demo(tmp_path, monkeypatch):
     client = TestClient(api.app, base_url="http://127.0.0.1")
     client.put("/api/settings/preferences", json={"encoder": "hashing"})  # BGE would load a large model
     project, document = seeded["project_id"], seeded["documents"][0]["document_id"]
-    yield client, f"/api/projects/{project}/documents/{document}", model, seeded
+    yield client, Base(client, project, [document]), model, seeded
     api._cache.clear()
 
 
@@ -70,11 +89,11 @@ def finished(client, job):
 
 
 def suggested(client, base):
-    response = client.post(base + "/bindings/suggest", json={})
+    response = base.suggest()
     assert response.status_code == 200, response.text
     job = finished(client, response.json())
     assert job["status"] == "completed", job
-    return job, client.get(base + "/bindings").json()
+    return job, base.view()
 
 
 def test_title_order_reads_chinese_pieces_and_ignores_numbers_and_notes():
@@ -115,7 +134,7 @@ def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
     suggested(client, base)
     assert model.calls == 4
 
-    view = client.post(base + "/bindings/accept", json={}).json()
+    view = base.accept().json()
     bound = [row["binding"] for row in view["scenes"]]
     assert all(item and item["status"] == "same" and item["source"] == "suggestion" and item["stale"] == []
                for item in bound)
@@ -127,6 +146,22 @@ def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
         store.delete_version(version)  # a bound version stays
 
 
+def test_one_job_suggests_for_several_pdfs_and_lists_them_together(demo):
+    client, base, model, seeded = demo
+    documents = [item["document_id"] for item in reversed(seeded["documents"])]
+    group = Base(client, seeded["project_id"], documents)
+    job, view = suggested(client, group)
+    expected = [item["document_id"] for item in reversed(seeded["documents"]) for _ in range(item["scenes"])]
+    assert [row["document_id"] for row in view["scenes"]] == expected  # the PDFs in the order selected
+    assert model.calls == len(expected) and job["result"]["document_ids"] == documents
+    assert [item["document_id"] for item in view["documents"]] == documents
+    assert {row["filename"] for row in view["scenes"]} == {"demo-aeb-protocol.pdf", "demo-aeb-protocol-zh.pdf"}
+    assert base.view()["job"]["id"] == job["id"]  # one suggestion job per project, seen from any selection
+    assert all(row["binding"] for row in group.accept().json()["scenes"])
+    assert client.get(group.url + "/bindings", params={"document_ids": documents[:1] * 2}).status_code == 400
+    assert client.get(group.url + "/bindings", params={"document_ids": ["unknown"]}).status_code == 404
+
+
 def test_a_person_changes_the_choice_marks_none_and_removes(demo):
     client, base, _, _ = demo
     _, view = suggested(client, base)
@@ -135,8 +170,8 @@ def test_a_person_changes_the_choice_marks_none_and_removes(demo):
     request = {"status": "modify", "changes": "把目标车改成静止",
                "assets": [{"asset_id": item["asset_id"], "version_id": item["version_id"]} for item in others],
                "preferred": others[1]["asset_id"]}
-    url = f"{base}/scenes/{row['scene_id']}/binding"
-    binding = client.put(url, json=request).json()["scenes"][0]["binding"]
+    url = base.scene(row)
+    binding = client.put(url, json=request).json()["binding"]
     assert binding["source"] == "manual" and binding["status"] == "modify" and binding["changes"] == "把目标车改成静止"
     assert [item["preferred"] for item in binding["assets"]] == [False, True]
     assert binding["assets"][0]["verdict"] == "不是"  # the model's words travel with the asset
@@ -145,10 +180,10 @@ def test_a_person_changes_the_choice_marks_none_and_removes(demo):
     pinned = lambda: {item.version_id for item in store.versions()
                       if any(ref.startswith("binding:") for ref in store.references(item))}
     assert pinned() == {item["version_id"] for item in others}
-    none = client.put(url, json={"status": "none"}).json()["scenes"][0]["binding"]
+    none = client.put(url, json={"status": "none"}).json()["binding"]
     assert none["status"] == "none" and none["assets"] == [] and pinned() == set()
     assert client.put(url, json={"status": "same"}).status_code == 400  # same test needs an asset
-    assert client.delete(url).json()["scenes"][0]["binding"] is None
+    assert client.delete(url).json()["binding"] is None
     assert client.delete(url).status_code == 400
 
     # Accepting the row's own suggestion as is counts as the suggestion.
@@ -156,30 +191,30 @@ def test_a_person_changes_the_choice_marks_none_and_removes(demo):
     chosen = [item for item in suggestion["candidates"] if item["id"] in suggestion["binding"]]
     exact = {"status": "same", "assets": [{"asset_id": item["asset_id"], "version_id": item["version_id"]}
                                           for item in chosen]}
-    assert client.put(url, json=exact).json()["scenes"][0]["binding"]["source"] == "suggestion"
+    assert client.put(url, json=exact).json()["binding"]["source"] == "suggestion"
 
 
 def test_an_edited_scene_or_a_new_asset_version_asks_for_a_second_look(demo):
     client, base, _, seeded = demo
     _, view = suggested(client, base)
-    client.post(base + "/bindings/accept", json={})
+    base.accept()
     row = view["scenes"][0]
     pdf = PdfStore(AssetStore())
     project, document = seeded["project_id"], seeded["documents"][0]["document_id"]
     pdf.revise_scene(project, document, row["scene_id"], {"title": row["title"] + " (edited)"})
-    edited = client.get(base + "/bindings").json()["scenes"][0]
+    edited = base.view()["scenes"][0]
     assert edited["key"] == row["key"]  # an edit keeps the requirement
     assert edited["binding"]["stale"] == ["scene"] and edited["suggestion"]["outdated"] == ["scene"]
-    assert client.post(base + "/bindings/accept", json={"scene_ids": [row["scene_id"]]}).status_code == 400
+    assert base.accept(scenes=[{"document_id": row["document_id"], "scene_id": row["scene_id"]}]).status_code == 400
 
     # A new version of a bound asset: the binding keeps its version and asks again.
-    bound = client.get(base + "/bindings").json()["scenes"][1]["binding"]["assets"][0]
+    bound = base.view()["scenes"][1]["binding"]["assets"][0]
     store = AssetStore()
     version = next(item for item in store.versions() if item.version_id == bound["version_id"])
     scenario = store.file_bytes(version, "scenario").replace(b"<FileHeader", b"<!-- v2 -->\n<FileHeader", 1)
     store.import_files([AssetFile(version.source_name, scenario), AssetFile("minimal.xodr", (FIXTURES / "minimal.xodr").read_bytes())])
     api._cache.clear()
-    again = client.get(base + "/bindings").json()["scenes"][1]
+    again = base.view()["scenes"][1]
     assert again["binding"]["stale"] == ["asset"] and again["binding"]["assets"][0]["version_id"] == bound["version_id"]
     assert "asset" in again["suggestion"]["outdated"]
 
@@ -187,14 +222,14 @@ def test_an_edited_scene_or_a_new_asset_version_asks_for_a_second_look(demo):
 def test_the_same_pdf_in_another_project_finds_the_binding(demo):
     client, base, _, seeded = demo
     suggested(client, base)
-    client.post(base + "/bindings/accept", json={})
+    base.accept()
     store = AssetStore()
     pdf = PdfStore(store)
     source = pdf.documents(seeded["project_id"])[-1]
     other = pdf.projects.create("Second")
     copy = pdf.import_pdf(other.project_id, source.filename, pdf.pdf_bytes(source), source.source_standard, engine="legacy")
-    rows = client.get(f"/api/projects/{other.project_id}/documents/{copy.document_id}/bindings").json()["scenes"]
-    first = client.get(base + "/bindings").json()["scenes"]
+    rows = Base(client, other.project_id, [copy.document_id]).view()["scenes"]
+    first = base.view()["scenes"]
     # Revision 1 of the copy has the extracted titles; the demo's confirmed scenes are revision 2.
     assert [row["key"] for row in rows] == [row["key"] for row in first]
     assert all(row["binding"]["confirmed_in"]["project_id"] == seeded["project_id"] for row in rows)
@@ -206,12 +241,13 @@ def test_replies_that_never_fit_fail_the_scene_and_a_wrong_key_fails_the_run(dem
     job, view = suggested(client, base)
     assert job["result"]["failed"] == 4 and model.calls == 12  # three readings each
     assert all(row["suggestion"]["failure"].startswith("candidates not judged") for row in view["scenes"])
-    assert client.post(base + "/bindings/accept", json={}).json()["scenes"][0]["binding"] is None
+    assert base.accept().json()["scenes"][0]["binding"] is None
 
     def refuse(body):
         raise ModelError("模型服务 HTTP 401")
     model.answer = refuse
-    response = client.post(base + "/bindings/suggest", json={"scene_ids": [view["scenes"][0]["scene_id"]]})
+    first = view["scenes"][0]
+    response = base.suggest(scenes=[{"document_id": first["document_id"], "scene_id": first["scene_id"]}])
     assert finished(client, response.json())["status"] == "failed"
 
 
@@ -219,17 +255,17 @@ def test_suggestions_need_a_model(demo, monkeypatch):
     client, base, _, _ = demo
     monkeypatch.delenv("OPENX_LLM_API_KEY")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    response = client.post(base + "/bindings/suggest", json={})
+    response = base.suggest()
     assert response.status_code == 400 and "Key" in response.json()["detail"]
 
 
 def test_an_asset_lists_its_clauses_and_coverage_counts_every_pdf(demo):
     client, base, _, seeded = demo
     _, view = suggested(client, base)
-    client.post(base + "/bindings/accept", json={})
+    base.accept()
     rows = view["scenes"]
-    client.put(f"{base}/scenes/{rows[3]['scene_id']}/binding", json={"status": "none"})
-    preferred = next(item for item in client.get(base + "/bindings").json()["scenes"][0]["binding"]["assets"] if item["preferred"])
+    client.put(base.scene(rows[3]), json={"status": "none"})
+    preferred = next(item for item in base.view()["scenes"][0]["binding"]["assets"] if item["preferred"])
 
     clauses = client.get(f"/api/assets/{preferred['asset_id']}/bindings").json()
     first = next(item for item in clauses if item["scene_id"] == rows[0]["scene_id"])
@@ -243,7 +279,7 @@ def test_an_asset_lists_its_clauses_and_coverage_counts_every_pdf(demo):
     assert (matched["same"], matched["none"], matched["unconfirmed"]) == (3, 1, 0)
     assert other["unconfirmed"] == 4 and other["same"] == 0
     assert next(row for row in matched["scenes"] if row["scene_id"] == rows[0]["scene_id"])["assets"][0] == preferred["title"]
-    bound = {item["asset_id"] for row in client.get(base + "/bindings").json()["scenes"] if row["binding"]
+    bound = {item["asset_id"] for row in base.view()["scenes"] if row["binding"]
              for item in row["binding"]["assets"]}
     assert coverage["bound_asset_count"] == len(bound)
     assert len(coverage["unused_assets"]) == coverage["asset_count"] - len(bound) == 6 - len(bound)

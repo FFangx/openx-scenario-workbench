@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Checkbox, Input, Radio, Table, Tag, Tooltip, type TableColumnsType } from "antd";
 import { CheckOutlined, RobotOutlined } from "@ant-design/icons";
-import { api, type BindingDraft, type BindingStatus, type BindingSuggestion, type ConfirmedBinding, type DocumentBindings,
-  type Job, type Lang, type PdfDocument, type SceneBinding, type SuggestedCandidate } from "../api";
+import { api, type BindingDraft, type BindingStatus, type BindingSuggestion, type ConfirmedBinding, type GroupBindings,
+  type Job, type Lang, type PdfDocument, type SceneBinding, type SceneRef, type SuggestedCandidate } from "../api";
 import { dateTime, useT } from "../i18n";
 import { useJob } from "../jobs";
 import { BINDING_STATUS as STATUS } from "./BindingViews";
@@ -50,17 +50,22 @@ const staleText = (reasons: string[], t: (zh: string, en: string) => string) =>
 
 type Row = SceneBinding & { key: string };
 
-interface Props { projectId: string; doc: PdfDocument; open: boolean }
+const rowKey = (s: SceneRef) => `${s.document_id}/${s.scene_id}`;
+const ref = (s: SceneRef): SceneRef => ({ document_id: s.document_id, scene_id: s.scene_id });
 
-/** Requirement ↔ asset bindings of one PDF: the model suggests a group of assets per scene, a person confirms. */
-export function BindingPanel({ projectId, doc, open }: Props) {
+interface Props { projectId: string; docs: PdfDocument[]; open: boolean }
+
+/** Requirement ↔ asset bindings of the PDFs shown together: the model suggests a group of assets per scene, a person confirms. */
+export function BindingPanel({ projectId, docs, open }: Props) {
   const { t, lang } = useT();
-  const [view, setView] = useState<DocumentBindings | null>(null);
+  const [view, setView] = useState<GroupBindings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [initial, setInitial] = useState<Job | null>(null);
-  const reload = () => api.bindings(projectId, doc.document_id).then(setView).catch((e: Error) => setError(e.message));
+  const idsKey = docs.map((d) => d.document_id).join("|");
+  const ids = idsKey ? idsKey.split("|") : [];
+  const reload = () => ids.length && api.bindings(projectId, ids).then(setView).catch((e: Error) => setError(e.message));
   const { job, cancel } = useJob(initial, () => reload());
 
   useEffect(() => {
@@ -68,26 +73,32 @@ export function BindingPanel({ projectId, doc, open }: Props) {
     setView(null);
     setError(null);
     setExpanded([]);
-    api.bindings(projectId, doc.document_id).then((v) => {
+    if (!idsKey) return;
+    api.bindings(projectId, idsKey.split("|")).then((v) => {
       setView(v);
       setInitial(v.job ?? null);  // a run still going, or how the last one ended
     }).catch((e: Error) => setError(e.message));
-  }, [open, projectId, doc.document_id]);
+  }, [open, projectId, idsKey]);
 
-  const act = async (key: string, work: () => Promise<DocumentBindings>) => {
+  const run = async <T,>(key: string, work: () => Promise<T>, done: (value: T) => void) => {
     setBusy(key);
     setError(null);
     try {
-      setView(await work());
+      done(await work());
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(null);
     }
   };
-  const suggest = () => api.suggestBindings(projectId, doc.document_id).then(setInitial).catch((e: Error) => setError(e.message));
+  /** Every row of the PDFs shown. */
+  const act = (key: string, work: () => Promise<GroupBindings>) => run(key, work, setView);
+  /** One row: the reply replaces that row only. */
+  const actRow = (key: string, work: () => Promise<SceneBinding>) => run(key, work, (row) =>
+    setView((v) => v && { ...v, scenes: v.scenes.map((s) => (rowKey(s) === rowKey(row) ? row : s)) }));
+  const suggest = () => api.suggestBindings(projectId, ids).then(setInitial).catch((e: Error) => setError(e.message));
   const running = job?.status === "running";
-  const rows: Row[] = (view?.scenes ?? []).map((s) => ({ ...s, key: s.scene_id }));
+  const rows: Row[] = (view?.scenes ?? []).map((s) => ({ ...s, key: rowKey(s) }));
   const acceptable = rows.filter((r) => !r.binding && usable(r.suggestion) && proposal(r.suggestion).status === "same").length;
   const confirmed = rows.filter((r) => r.binding).length;
   const stale = rows.filter((r) => r.binding?.stale.length).length;
@@ -95,6 +106,8 @@ export function BindingPanel({ projectId, doc, open }: Props) {
   const failed = rows.filter((r) => r.suggestion?.failure).length;
 
   const columns: TableColumnsType<Row> = [
+    ...(docs.length > 1 ? [{ title: t("文档", "PDF"), key: "doc", width: "14%", ellipsis: true,
+      render: (_: unknown, r: Row) => <span title={r.filename}>{r.filename}</span> }] : []),
     {
       title: t("对应表", "Binding"), key: "status", width: 150,
       render: (_, r) => r.binding ? (
@@ -141,14 +154,14 @@ export function BindingPanel({ projectId, doc, open }: Props) {
         return (
           <span className="bind-actions" onClick={(e) => e.stopPropagation()}>
             {offer && (
-              <Button size="small" loading={busy === `accept:${r.scene_id}`}
-                onClick={() => act(`accept:${r.scene_id}`, () => api.acceptBindings(projectId, doc.document_id, [r.scene_id]))}>
+              <Button size="small" loading={busy === `accept:${r.key}`}
+                onClick={() => act(`accept:${r.key}`, () => api.acceptBindings(projectId, ids, [ref(r)]))}>
                 {t("接受建议", "Accept")}
               </Button>
             )}
             {r.binding?.status !== "none" && (
-              <Button size="small" type="text" loading={busy === `none:${r.scene_id}`}
-                onClick={() => act(`none:${r.scene_id}`, () => api.confirmBinding(projectId, doc.document_id, r.scene_id, { status: "none", assets: [], preferred: null, changes: "" }))}>
+              <Button size="small" type="text" loading={busy === `none:${r.key}`}
+                onClick={() => actRow(`none:${r.key}`, () => api.confirmBinding(projectId, ref(r), { status: "none", assets: [], preferred: null, changes: "" }))}>
                 {t("没有素材", "No asset")}
               </Button>
             )}
@@ -164,6 +177,7 @@ export function BindingPanel({ projectId, doc, open }: Props) {
         {t("模型从候选素材里挑出与每个需求场景做同一测试的一组素材（只差数值的变体算一组）。你确认后才存进对应表，所有项目共用。会把场景原文、抽取的事实和候选素材的名字、故事、差异发给已配置的模型。",
           "The model picks, for every scene, the group of candidate assets that build the same test (variants that differ only in values belong together). A row enters the binding table, shared by all projects, only when you confirm it. The scenes' source text and facts, and the candidates' names, stories and differences, go to your configured model.")}
       </p>
+      {!docs.length && <Alert type="info" showIcon title={t("先在上面选择 PDF。", "Select PDFs above first.")} />}
       {error && <Alert type="error" showIcon title={error} />}
       {job && (running || job.status !== "completed") && <JobProgress job={job} onCancel={cancel} unit={["个场景", "scenes"]} />}
       {failed > 0 && !running && (
@@ -176,7 +190,7 @@ export function BindingPanel({ projectId, doc, open }: Props) {
           </Button>
         </Tooltip>
         <Button icon={<CheckOutlined />} disabled={!acceptable || running} loading={busy === "accept-all"}
-          onClick={() => act("accept-all", () => api.acceptBindings(projectId, doc.document_id))}>
+          onClick={() => act("accept-all", () => api.acceptBindings(projectId, ids))}>
           {t(`接受全部“同一测试”的建议（${acceptable}）`, `Accept every "same test" suggestion (${acceptable})`)}
         </Button>
         {view && (
@@ -200,8 +214,8 @@ export function BindingPanel({ projectId, doc, open }: Props) {
             onExpandedRowsChange: (keys) => setExpanded(keys as string[]),
             expandRowByClick: true,
             expandedRowRender: (r) => (
-              <BindingEditor key={`${r.binding?.confirmed_at}|${r.suggestion?.created_at}`} row={r} busy={busy} onSave={(draft) => act(`save:${r.scene_id}`, () => api.confirmBinding(projectId, doc.document_id, r.scene_id, draft))}
-                onRemove={() => act(`remove:${r.scene_id}`, () => api.unbind(projectId, doc.document_id, r.scene_id))} />
+              <BindingEditor key={`${r.binding?.confirmed_at}|${r.suggestion?.created_at}`} row={r} busy={busy} onSave={(draft) => actRow(`save:${r.key}`, () => api.confirmBinding(projectId, ref(r), draft))}
+                onRemove={() => actRow(`remove:${r.key}`, () => api.unbind(projectId, ref(r)))} />
             ),
           }}
         />
@@ -270,11 +284,11 @@ function BindingEditor({ row, busy, onSave, onRemove }: { row: Row; busy: string
             onChange={(e) => setDraft((d) => ({ ...d, changes: e.target.value }))} />
         )}
         <div className="settings-actions">
-          <Button type="primary" size="small" disabled={!valid} loading={busy === `save:${row.scene_id}`} onClick={() => onSave(draft)}>
+          <Button type="primary" size="small" disabled={!valid} loading={busy === `save:${row.key}`} onClick={() => onSave(draft)}>
             {row.binding ? t("更新绑定", "Update binding") : t("确认绑定", "Confirm binding")}
           </Button>
           {row.binding && (
-            <Button size="small" loading={busy === `remove:${row.scene_id}`} onClick={onRemove}>{t("撤销绑定", "Remove binding")}</Button>
+            <Button size="small" loading={busy === `remove:${row.key}`} onClick={onRemove}>{t("撤销绑定", "Remove binding")}</Button>
           )}
           {row.binding && (
             <span className="muted">{t(`确认于 ${dateTime(row.binding.confirmed_at)}`, `Confirmed ${dateTime(row.binding.confirmed_at)}`)}</span>

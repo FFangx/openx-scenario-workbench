@@ -12,11 +12,13 @@ export const encoderName = (id: string | null | undefined, lang: string) =>
 export function BatchTable({ trace, target, onTarget, height = 200 }: { trace: Trace; target?: number; onTarget?: (i: number) => void; height?: number }) {
   const { t, lang } = useT();
   const entries: Entry[] = (trace.entries ?? []).map((e, i) => ({ ...e, key: i }));
+  const grouped = (trace.source?.documents?.length ?? 0) > 1;  // one summary of several PDFs names each row's
   const columns: TableColumnsType<Entry> = [
     {
       title: t("结论", "Verdict"), key: "v", width: 136,
       render: (_, e) => <Tag className={`mtag ${verdictClass(e.assessment.level)}`}>{verdictLabel(e.assessment.level, e.assessment.review_kind, lang)}</Tag>,
     },
+    ...(grouped ? [{ title: t("文档", "PDF"), key: "d", width: "16%", ellipsis: true, render: (_: unknown, e: Entry) => e.source.filename ?? "—" }] : []),
     { title: t("需求场景", "Scene"), key: "s", width: "26%", ellipsis: true, render: (_, e) => e.source.title },
     { title: t("页码", "Pages"), key: "p", width: 64, render: (_, e) => (e.source.evidence ?? []).map((x) => `${x.page_start}–${x.page_end}`).join(", ") || "—" },
     {
