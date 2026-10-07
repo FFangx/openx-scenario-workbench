@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { App as AntApp, ConfigProvider } from "antd";
+import { App as AntApp, Button, ConfigProvider } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { buildTheme } from "./theme";
@@ -8,7 +9,7 @@ import { sceneKey, useRequirements, type Scope } from "./useRequirements";
 import { useMatching } from "./useMatching";
 import { LangContext, useT } from "./i18n";
 import { FileNamesContext } from "./names";
-import { StepBar, TopBar, type Page } from "./components/TopBar";
+import { TopBar, type Page } from "./components/TopBar";
 import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OverviewPage } from "./components/OverviewPage";
@@ -17,6 +18,7 @@ import { RequirementsPanel } from "./components/RequirementsPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { DecisionPanel } from "./components/DecisionPanel";
 import { StartPage } from "./components/StartPage";
+import { BindingWorkspace } from "./components/BindingWorkspace";
 import { SearchPage } from "./components/SearchPage";
 
 function useSystemDark() {
@@ -90,14 +92,17 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const [page, setPage] = useState<Page>("workbench");
   const [dialog, setDialog] = useState<"help" | "settings" | null>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
-  const [queue, setQueue] = useState<string[]>([]);
   const [library, setLibrary] = useState<Library | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
   const [esmini, setEsmini] = useState<boolean>(false);
   const [libraryStamp, setLibraryStamp] = useState(0);
-  // The workbench opens on the start page; free-text search and the PDF workflow are entered from it.
-  const [mode, setMode] = useState<"start" | "search" | "pdf">("start");
+  // The workbench opens on the start page; free-text search and the PDF's binding table are entered from it,
+  // and finding an asset by hand (the rule-based search of one scene) from the table.
+  const [mode, setMode] = useState<"start" | "search" | "pdf" | "manual">("start");
   const [searchFrom, setSearchFrom] = useState<DOMRect | null>(null);
+  // The PDFs the binding table shows together, and the row to select when it opens.
+  const [bindDocs, setBindDocs] = useState<string[]>([]);
+  const [bindFocus, setBindFocus] = useState<string | null>(null);
 
   // Entering another scene puts its title in the search box; the matching hook owns that box.
   const enterQuery = useRef<(title: string) => void>(() => undefined);
@@ -133,7 +138,8 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   }, [projectId, docId, scope]);
 
   // A new scene revision (or language, or encoder) re-runs matching so the middle and right columns never show stale results.
-  const runKey = scene ? `${sceneKey(scene)}@${scene.revision}:${lang}:${prefs.encoder}:${libraryStamp}` : "";
+  // Only finding by hand shows them, so the binding table ranks nothing.
+  const runKey = scene && mode === "manual" ? `${sceneKey(scene)}@${scene.revision}:${lang}:${prefs.encoder}:${libraryStamp}` : "";
   useEffect(() => {
     if (runKey) runSearch({ text: scene!.title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,8 +158,32 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     setMode("search");
     if (text.trim()) textSearch.runSearch({ text });
   };
-  const enterWorkflow = (documentId?: string) => {
-    if (documentId) req.chooseDoc(documentId);
+  /** The binding table of one PDF. */
+  const enterWorkflow = (documentId: string) => {
+    req.chooseDoc(documentId);
+    setBindDocs([documentId]);
+    setBindFocus(null);
+    setMode("pdf");
+  };
+  /** Find an asset for one scene by hand: the rule-based search with the scene selected. */
+  const enterManual = (documentId: string, sceneId: string) => {
+    const key = `${documentId}/${sceneId}`;
+    setLeftTab("scenes");
+    setBindFocus(key);
+    if (req.scope === "pdf" && req.docId === documentId && scenes.some((s) => sceneKey(s) === key)) {
+      pickScene(key);
+    } else {
+      req.openLater(key);
+      req.chooseDoc(documentId);
+    }
+    setMode("manual");
+  };
+  /** Back to the binding table at the scene shown, with its PDF among those the table shows. */
+  const backToTable = () => {
+    if (scene) {
+      setBindFocus(sceneKey(scene));
+      if (!bindDocs.includes(scene.document_id)) setBindDocs([scene.document_id]);
+    }
     setMode("pdf");
   };
   const goHome = () => {
@@ -182,30 +212,21 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     textSearch.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadLibrary]);
+  /** A clause's row in the binding table, of this project or another one. */
   const openSceneIn = (pid: string, documentId: string, sceneId: string) => {
-    if (pid === projectId) {
-      openScene(documentId, sceneId);
-      return;
-    }
     setPage("workbench");
+    setBindDocs([documentId]);
+    setBindFocus(`${documentId}/${sceneId}`);
     setMode("pdf");
-    setLeftTab("facts");
-    switchProject(pid);
-    req.openLater(`${documentId}/${sceneId}`, documentId);
-    api.selectProject(pid).catch(() => undefined);
-  };
-  const openScene = (documentId: string, sceneId: string) => {
-    setPage("workbench");
-    setMode("pdf");
-    setLeftTab("facts");
-    const key = `${documentId}/${sceneId}`;
-    if (scenes.some((s) => sceneKey(s) === key)) {
-      pickScene(key);
+    if (pid !== projectId) {
+      switchProject(pid);
+      req.openLater(`${documentId}/${sceneId}`, documentId);
+      api.selectProject(pid).catch(() => undefined);
     } else {
-      req.openLater(key);
       req.chooseDoc(documentId);
     }
   };
+  const openScene = (documentId: string, sceneId: string) => projectId && openSceneIn(projectId, documentId, sceneId);
   const projectCreated = (p: Project) => {
     req.projectCreated(p);
     setMode("start");
@@ -216,10 +237,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     req.replaceScene(s);
     req.loadScenes(sceneKey(s));
   };
-  const nextKey = scene ? queue[queue.indexOf(sceneKey(scene)) + 1] ?? null : null;
-
   const ref: SceneRef | null = projectId && doc && scene ? { projectId, doc, scene } : null;
-  const step = cand ? 2 : result ? 1 : 0;
 
   return (
     <div className="ox-root">
@@ -239,14 +257,30 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
       <SettingsDialog open={dialog === "settings"} onClose={() => { setDialog(null); loadTools(); }} preferences={prefs} onPreferences={onPrefs} />
       {page === "workbench" && mode === "start" && (
         <StartPage projectId={projectId} docs={req.docs} library={library} onSearch={startSearch} onOpenDoc={enterWorkflow}
-          onImported={(ids) => { if (projectId) req.loadDocs(projectId, ids[ids.length - 1]); setMode("pdf"); }} />
+          onImported={(ids) => {
+            if (projectId) req.loadDocs(projectId, ids[ids.length - 1]);
+            setBindDocs(ids.slice(-1));
+            setBindFocus(null);
+            setMode("pdf");
+          }} />
       )}
       {page === "workbench" && mode === "search" && (
         <SearchPage search={textSearch} library={library} from={searchFrom} esmini={esmini} onBack={goHome}
           onSettings={() => setDialog("settings")} onLibraryChanged={libraryChanged} />
       )}
-      {page === "workbench" && mode === "pdf" && (<>
-      <StepBar active={step} projectId={projectId} docs={req.docs} docId={docId} onDoc={req.chooseDoc} onAllDecisions={() => setPage("overview")} />
+      {page === "workbench" && mode === "pdf" && projectId && (
+        <BindingWorkspace projectId={projectId} docs={req.docs} picked={bindDocs} onPicked={(ids) => { setBindDocs(ids); setBindFocus(null); }}
+          focus={bindFocus} esmini={esmini} onSettings={() => setDialog("settings")}
+          onDocsChanged={(select) => req.loadDocs(projectId, select)} onManual={enterManual} />
+      )}
+      {page === "workbench" && mode === "manual" && (<>
+      <nav className="ox-steps manual-bar">
+        <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={backToTable}>{t("返回复用评估", "Back to the assessment")}</Button>
+        <span className="muted">
+          {t("手动检索：在资产库中检索并查看规则逐项比对；选定素材后，点击右下角“采用为本条款的复用素材”。",
+            "Manual search: search the library and see the rule-by-rule comparison; pick a candidate and press \"Adopt for this clause\".")}
+        </span>
+      </nav>
       <main className="ox-main">
         <RequirementsPanel
           projectId={projectId}
@@ -260,7 +294,6 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
           scene={scene}
           selectedKey={req.selected}
           onPick={pickScene}
-          onQueue={setQueue}
           tab={leftTab}
           onTab={setLeftTab}
           onSceneChanged={sceneChanged}
@@ -300,8 +333,7 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
           query={match.query}
           lang={lang}
           onReviewFacts={() => setLeftTab("facts")}
-          onSaved={() => scene && req.loadScenes(sceneKey(scene))}
-          onNext={nextKey ? () => pickScene(nextKey) : undefined}
+          onBound={backToTable}
         />
       </main>
       </>)}

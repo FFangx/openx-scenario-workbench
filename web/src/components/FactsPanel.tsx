@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Alert, App, Button, Collapse, Modal, Popconfirm, Table, Tag, Tooltip } from "antd";
-import { CheckCircleOutlined, EditOutlined, HistoryOutlined } from "@ant-design/icons";
+import { Alert, App, Button, Collapse, Modal, Table, Tag, Tooltip } from "antd";
+import { EditOutlined, HistoryOutlined } from "@ant-design/icons";
 import { api, urls, type FieldEvidence, type Revision, type Scene, type SceneStructure } from "../api";
 import { useT } from "../i18n";
 import { valueLabel } from "../vocab";
@@ -56,7 +56,6 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
   const { message } = App.useApp();
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState<Revision[] | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const value = (item: unknown): React.ReactNode => {
     if (item == null || (typeof item === "string" && UNKNOWN.has(item)) || (Array.isArray(item) && !item.length)
@@ -103,18 +102,6 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
     return found && urls.page(projectId, scene.document_id, found.page, 360, found.clip);
   };
 
-  const publish = async () => {
-    setBusy(true);
-    try {
-      await api.publish(projectId, scene.document_id, scene.scene_id, scene.revision);
-      message.success(t("已保存到全局需求场景库，可在资产管理中查看。", "Saved to the shared requirement library in Asset management."));
-      onChanged({ ...scene, published: true, queue_status: scene.queue_status === "assessed" ? "assessed" : "confirmed" });
-    } catch (e) {
-      message.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
   const openHistory = () => api.revisions(projectId, scene.document_id, scene.scene_id).then(setHistory).catch((e: Error) => message.error(e.message));
 
   return (
@@ -123,7 +110,6 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
       <div className="facts-head">
         <span className="sec-title">{t("已保存的需求事实", "Saved requirement facts")}</span>
         <span className="muted">{t(`修订 ${scene.revision}`, `Revision ${scene.revision}`)}</span>
-        <Tag className={`mtag ${scene.published ? "direct" : "review"}`}>{scene.published ? t("已确认入库", "Published") : t("待确认", "Not published")}</Tag>
       </div>
       {scene.preferred_text && <p className="facts-text">{scene.preferred_text}</p>}
       <table className="fact-sheet">
@@ -157,21 +143,9 @@ export function FactsPanel({ projectId, scene, onChanged }: { projectId: string;
 
       <div className="facts-actions">
         <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>{t("编辑事实", "Edit facts")}</Button>
-        <Popconfirm
-          title={t("确认此修订并入库？", "Confirm and publish this revision?")}
-          description={t("入库的是已保存的修订；未保存的编辑不会包含在内。", "The saved revision is published; unsaved edits are not included.")}
-          onConfirm={publish} okText={t("确认入库", "Publish")} cancelText={t("取消", "Cancel")} disabled={scene.published}
-        >
-          <Button icon={<CheckCircleOutlined />} disabled={scene.published} loading={busy}>
-            {scene.published ? t("当前修订已入库", "Revision published") : t("确认并入库", "Confirm and publish")}
-          </Button>
-        </Popconfirm>
         {scene.revision > 1 && <Button icon={<HistoryOutlined />} onClick={openHistory}>{t("修订历史", "Revision history")}</Button>}
       </div>
-      <p className="muted facts-note">
-        {scene.published ? t("当前修订已确认入库。", "The current revision is published.")
-          : t("保存事实和确认入库是两个步骤；检索和匹配使用已保存的事实。", "Saving facts and publishing are separate steps; matching uses the saved facts.")}
-      </p>
+      <p className="muted facts-note">{t("候选检索和复用建议均基于已保存的需求事实；修改后，已确认的结论将标为“待重新确认”。", "Candidate search and reuse suggestions use the saved facts; editing them marks a confirmed conclusion for reconfirmation.")}</p>
       <Collapse size="small" ghost items={[{
         key: "raw",
         label: t("结构与分类（原始记录）", "Structure and classification (raw)"),

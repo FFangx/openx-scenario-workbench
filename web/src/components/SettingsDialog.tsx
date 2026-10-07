@@ -41,8 +41,12 @@ export function SettingsDialog({ open, onClose, preferences, onPreferences }: Pr
               children: <ServiceTab settings={settings} onPreview={(preview) => setSettings({ ...settings, preview })} onOpen={openFolder}
                 preferences={preferences} onPreferences={onPreferences} />,
             },
-            { key: "schemas", label: t("文件标准", "File standards"), children: <SchemaTab /> },
-            { key: "display", label: t("显示与检索", "Display & search"), children: <DisplayTab preferences={preferences} onChange={onPreferences} /> },
+            { key: "display", label: t("显示", "Display"), children: <DisplayTab preferences={preferences} onChange={onPreferences} /> },
+            {
+              key: "advanced",
+              label: t("高级", "Advanced"),
+              children: <><RetrievalChoice preferences={preferences} onChange={onPreferences} /><h4 className="settings-h">{t("文件标准", "File standards")}</h4><SchemaTab /></>,
+            },
           ]}
         />
       )}
@@ -275,7 +279,16 @@ function DisplayTab({ preferences, onChange }: { preferences: Preferences; onCha
         <Radio.Group optionType="button" value={preferences.show_file_names} onChange={(e) => onChange({ show_file_names: e.target.value as boolean })}
           options={[{ value: false, label: t("场景名和地图名", "Scenario and map names") }, { value: true, label: t("文件名", "File names") }]} />
       </Form.Item>
-      <Form.Item label={t("文本检索后端", "Text retrieval backend")} extra={t("更改后会重新检索当前场景。", "Changing it re-runs the current search.")}>
+    </Form>
+  );
+}
+
+/** How the library is searched for candidates; changing it re-ranks. */
+function RetrievalChoice({ preferences, onChange }: { preferences: Preferences; onChange: (p: Partial<Preferences>) => void }) {
+  const { t } = useT();
+  return (
+    <Form layout="vertical" className="settings-form">
+      <Form.Item label={t("候选检索后端", "Candidate retrieval backend")} extra={t("复用建议与手动检索均由它召回候选；更改后将重新检索。", "Reuse suggestions and manual search both recall candidates with it; changing it searches again.")}>
         <Radio.Group value={preferences.encoder} onChange={(e) => onChange({ encoder: e.target.value as Encoder })}>
           <Space orientation="vertical">
             <Radio value="bge">{t("BGE-M3 语义检索（需安装 semantic 依赖）", "BGE-M3 semantic retrieval (semantic extra required)")}</Radio>

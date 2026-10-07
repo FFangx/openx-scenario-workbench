@@ -341,3 +341,28 @@ def test_an_asset_lists_its_clauses_and_coverage_counts_every_pdf(demo):
              for item in row["binding"]["assets"]}
     assert coverage["bound_asset_count"] == len(bound)
     assert len(coverage["unused_assets"]) == coverage["asset_count"] - len(bound) == 6 - len(bound)
+
+
+def test_the_binding_table_exports_as_csv_and_html(demo):
+    client, base, _, _ = demo
+    _, view = suggested(client, base)
+    rows = view["scenes"]
+    client.put(base.scene(rows[0]), json={"status": "modify", "changes": "把目标车改成静止",
+                                          "assets": [{"asset_id": item["asset_id"], "version_id": item["version_id"]}
+                                                     for item in rows[0]["suggestion"]["candidates"][:2]]})
+    client.put(base.scene(rows[1]), json={"status": "none"})
+    url = base.url + "/bindings/export"
+    response = client.get(url, params={"document_ids": base.documents, "format": "csv"})
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/csv")
+    assert response.content.startswith("\ufeff".encode())  # a spreadsheet reads it as UTF-8
+    lines = response.content.decode("utf-8-sig").splitlines()
+    assert lines[0].startswith("PDF,条款,条款标题,复用结论,首选复用素材") and len(lines) == 1 + len(rows)
+    first, second, third = lines[1:4]
+    assert ",修改复用," in first and "把目标车改成静止" in first and ",人工指定," in first
+    assert ",不适用," in second
+    assert ",待确认," in third and "（直接复用）" in third and third.endswith(",一致 3/3")  # the suggestion while unconfirmed
+
+    english = client.get(url, params={"document_ids": base.documents, "format": "html", "lang": "en"})
+    assert english.status_code == 200 and english.headers["content-type"].startswith("text/html")
+    assert "Clause reuse assessment" in english.text and "To confirm" in english.text and "Consistent 3/3" in english.text
+    assert "filename*=UTF-8''" in english.headers["content-disposition"]

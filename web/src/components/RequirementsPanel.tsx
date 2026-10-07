@@ -4,7 +4,6 @@ import { DownOutlined, EllipsisOutlined, ExportOutlined, FullscreenOutlined, Sea
 import { urls, type PdfDocument, type Scene } from "../api";
 import type { LeftTab, Scope } from "../App";
 import { useT } from "../i18n";
-import { BatchDialog } from "./BatchDialog";
 import { ExtractionDialog } from "./ExtractionDialog";
 import { FactsPanel } from "./FactsPanel";
 import { ImportPdfDialog } from "./ImportPdfDialog";
@@ -22,7 +21,6 @@ interface Props {
   scene: Scene | null;
   selectedKey: string | null;
   onPick: (key: string) => void;
-  onQueue: (keys: string[]) => void;
   tab: LeftTab;
   onTab: (t: LeftTab) => void;
   onSceneChanged: (s: Scene) => void;
@@ -40,7 +38,7 @@ export function RequirementsPanel(p: Props) {
   const [sort, setSort] = useState<"section" | "page">("section");
   const [find, setFind] = useState("");
   const [fn, setFn] = useState(ALL);
-  const [dialog, setDialog] = useState<"import" | "extraction" | "batch" | "reextract" | null>(null);
+  const [dialog, setDialog] = useState<"import" | "extraction" | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const docName = useMemo(() => new Map(p.docs.map((d) => [d.document_id, d.filename])), [p.docs]);
 
@@ -55,8 +53,6 @@ export function RequirementsPanel(p: Props) {
   }, [scenes, sort, find, fn, p.scope]);
   const number = useMemo(() => new Map(scenes.map((s, i) => [keyOf(s), i + 1])), [scenes]);
 
-  const { onQueue } = p;
-  useEffect(() => onQueue(ordered.map(keyOf)), [ordered, onQueue]);
   useEffect(() => {
     setFind("");
     setFn(ALL);
@@ -136,11 +132,10 @@ export function RequirementsPanel(p: Props) {
       { key: "import", label: t("导入 PDF…", "Import PDFs…") },
       { type: "divider" as const },
       { key: "open", label: t("打开 PDF", "Open PDF"), disabled: !doc },
-      { key: "batch", label: t("整份 PDF 匹配与汇总…", "Match entire PDFs…"), disabled: !p.docs.length },
       { key: "extraction", label: t("解析与校验记录…", "Extraction record…"), disabled: !doc || p.scope === "all" },
     ],
     onClick: ({ key }: { key: string }) =>
-      key === "open" ? projectId && doc && window.open(urls.pdf(projectId, doc.document_id), "_blank") : setDialog(key as "import" | "batch" | "extraction"),
+      key === "open" ? projectId && doc && window.open(urls.pdf(projectId, doc.document_id), "_blank") : setDialog(key as "import" | "extraction"),
   };
 
   return (
@@ -227,16 +222,12 @@ export function RequirementsPanel(p: Props) {
         <ExtractionDialog open={dialog === "extraction"} projectId={projectId} doc={doc} onClose={() => setDialog(null)}
           onReextracted={(ids) => p.onDocsChanged(ids[0])} />
       )}
-      {projectId && p.docs.length > 0 && (
-        <BatchDialog open={dialog === "batch"} projectId={projectId} docs={p.docs}
-          initial={p.scope === "all" || !doc ? p.docs.map((d) => d.document_id) : [doc.document_id]} onClose={() => setDialog(null)} />
-      )}
     </section>
   );
 }
 
 /** The cited clause on its source page; multi-clause and multi-page evidence can be stepped through. */
-function Evidence({ projectId, scene }: { projectId: string | null; scene: Scene | null }) {
+export function Evidence({ projectId, scene }: { projectId: string | null; scene: Scene | null }) {
   const { t } = useT();
   const [clause, setClause] = useState(0);
   const [page, setPage] = useState<number | null>(null);

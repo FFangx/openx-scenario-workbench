@@ -102,8 +102,8 @@ class BindingStore:
         if status not in STATUSES or source not in SOURCES:
             raise ValueError("Unknown binding status or source.")
         if (status == "none") != (not assets):
-            raise ValueError("绑定“没有素材”时不能选素材，其余必须至少选一个 / "
-                             "Select assets unless marking the scene as having none.")
+            raise ValueError("结论为“不适用”时不能选择素材，其余结论至少选择一个素材 / "
+                             "Select assets unless no asset is applicable.")
         ids = [item["version"].asset_id for item in assets]
         if len(set(ids)) != len(ids):
             raise ValueError("Bind each asset once.")

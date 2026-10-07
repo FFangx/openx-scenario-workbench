@@ -26,11 +26,32 @@ try {
   // Expected refusals (400) are shown in the UI; anything else failing to load is an error.
   p.on("response", (r) => r.status() >= 400 && r.status() !== 400 && errors.push(`${r.status()} ${new URL(r.url()).pathname}`));
   const rows = () => p.locator(".cand-table tbody tr.ant-table-row");
+  const bindRows = () => p.locator(".bind-table tbody tr.ant-table-row");
+  const counts = () => p.locator(".bind-list .bind-counts");
+  const tool = (label) => p.locator(".bind-toolbar .ant-btn").filter({ hasText: label });
   const idle = async () => { await p.waitForFunction(() => !document.querySelector(".cand-table .ant-spin-spinning"), null, { timeout: 120000 }); await p.waitForTimeout(150); };
   const total = () => p.locator(".cand-head .n").innerText();
   const closeModal = async () => {
     await p.locator(".ant-modal-wrap:visible .ant-modal-close").first().click();
     await p.locator(".ant-modal-wrap:visible").first().waitFor({ state: "hidden" });
+  };
+  const project = demo.seed.project_id;
+  const allDocs = async () => (await p.request.get(`${BASE}/api/projects/${project}/documents`)).json();
+  const view = async () => {
+    const docs = await allDocs();
+    return (await p.request.get(`${BASE}/api/projects/${project}/bindings?${docs.map((d) => `document_ids=${d.document_id}`).join("&")}`)).json();
+  };
+  /** Back to the binding table from finding by hand. */
+  const backToTable = async () => {
+    await p.locator(".manual-bar .ant-btn").click();
+    await bindRows().first().waitFor();
+  };
+  /** Find an asset by hand for the clause in this row of the binding table. */
+  const byHand = async (row) => {
+    await bindRows().nth(row).click();
+    await p.locator(".bind-head .ant-btn").filter({ hasText: "Search manually" }).click();
+    await rows().first().waitFor({ timeout: 120000 });
+    await idle();
   };
 
   await p.goto(BASE + "/", { waitUntil: "networkidle" });
@@ -38,14 +59,112 @@ try {
   await p.locator(".start-doc").first().waitFor();
   check("the workbench opens on the start page", (await p.locator(".start-search input").count()) === 1 && (await p.locator(".start-doc").count()) === 2
     && (await p.locator(".ox-steps").count()) === 0);
-  await p.locator(".start-doc").first().click();
-  await rows().first().waitFor({ timeout: 120000 });
-  await idle();
-  check("scenes load from API", (await p.locator(".scene").count()) === 4, `${await p.locator(".scene").count()} scenes`);
-  check("candidates load from API", (await rows().count()) === 6, `${await rows().count()} rows`);
-  check("evidence shows source text", (await p.locator(".evi .src").count()) > 0);
-  check("the step track marks the steps already done", (await p.locator(".ox-step.done").count()) === 2 && (await p.locator(".ox-step.on").innerText()).includes("Assess reuse"));
   check("interface follows the saved English preference", (await p.locator(".ox-nav button.on").innerText()) === "Workbench");
+
+  // a PDF opens on its binding table: every clause, nothing suggested or confirmed yet
+  await p.locator(".start-doc").first().click();
+  await bindRows().first().waitFor({ timeout: 60000 });
+  check("a PDF opens on its binding table", (await bindRows().count()) === 4 && (await bindRows().filter({ hasText: "No suggestion yet" }).count()) === 4);
+  check("the step track waits for the model's suggestions", (await p.locator(".ox-step.done").count()) === 1 && (await p.locator(".ox-step.on").innerText()).includes("Generate suggestions"));
+  await p.locator(".bind-detail .evi .src").first().waitFor();
+  check("the selected clause shows its source text", (await p.locator(".bind-detail .bind-title").innerText()).includes(await bindRows().first().locator("td").first().innerText()));
+
+  // the model suggests assets for every clause; a person confirms
+  await tool("Generate suggestions").click();
+  await p.locator(".bind-list .ant-alert-error").filter({ hasText: "Configure a model" }).waitFor();
+  check("suggesting without a model says what is missing", true);
+  const fake = await startFakeModel();
+  await p.request.put(`${BASE}/api/settings/model`, { data: { base_url: fake.url, model: "fake-judge", api_key: "test-key", thinking: false } });
+  await tool("Generate suggestions").click();
+  await p.locator(".bind-table .mtag.steady").first().waitFor({ timeout: 60000 });
+  await p.waitForFunction(() => document.querySelectorAll(".bind-table tr.ant-table-row .mtag.direct").length === 4, null, { timeout: 60000 });
+  check("the model's suggestion shows on every clause", fake.calls() === 12, `${fake.calls()} calls`);
+  check("assessments that agree are consistent, the clause whose assessments disagree is marked inconsistent",
+    (await bindRows().filter({ hasText: "Consistent 3/3" }).count()) === 3 && (await bindRows().filter({ hasText: "Inconsistent 2/3" }).count()) === 1);
+  check("a later suggestion clears the earlier error", (await p.locator(".bind-list .ant-alert-error").count()) === 0);
+  check("the step track moves on to confirming", (await p.locator(".ox-step.on").innerText()).includes("Confirm reuse"));
+  await p.screenshot({ path: path.join(OUT, "binding-suggestions.png") });
+  await tool("Adopt consistent").click();
+  await counts().filter({ hasText: "3 / 4 confirmed" }).waitFor();
+  check("adopting all suggestions leaves the inconsistent clause to a person", (await bindRows().filter({ hasText: "Inconsistent" }).count()) === 1
+    && (await p.locator(".bind-table .bind-confirmed").count()) === 3);
+  await bindRows().filter({ hasText: "Inconsistent" }).locator(".bind-actions .ant-btn").filter({ hasText: /^Adopt$/ }).click();
+  await counts().filter({ hasText: "4 / 4 confirmed" }).waitFor();
+  check("adopted conclusions keep the level and carry the confirmed mark", (await bindRows().filter({ hasText: "Direct reuse" }).count()) === 4
+    && (await p.locator(".bind-table .bind-confirmed").count()) === 4 && (await bindRows().filter({ hasText: "Consistent" }).count()) === 0);
+  check("the step track ends at exporting once every clause is confirmed", (await p.locator(".ox-step.on").innerText()).includes("Export assessment"));
+  await bindRows().first().click();
+  const editor = p.locator(".bind-detail .bind-editor");
+  await editor.locator(".bind-cand.on").first().waitFor();
+  check("the detail shows the bound group with the model's reasons", (await editor.locator(".bind-cand.on").count()) === 2
+    && (await editor.locator(".bind-cand.on .why").first().innerText()).includes("authored reason"));
+  await p.locator(".bind-preview .player").waitFor();
+  check("the preferred asset can be played next to its road", (await p.locator(".bind-preview .road-drawing, .bind-preview .img-empty").count()) >= 1);
+  await p.screenshot({ path: path.join(OUT, "bindings.png") });
+  await editor.locator(".bind-form .ant-radio-wrapper").filter({ hasText: "Modify and reuse" }).click();
+  await editor.locator("textarea").fill("Slow the target down");
+  await editor.locator(".ant-btn-primary").filter({ hasText: "Update" }).click();
+  await bindRows().first().filter({ hasText: "Modify and reuse" }).waitFor();
+  const bound = (await view()).scenes.find((s) => s.binding?.status === "modify");
+  check("a person's change is stored as their own choice", bound?.binding.source === "manual" && bound.binding.changes === "Slow the target down");
+  await p.request.delete(`${BASE}/api/settings/model/key`);
+  fake.stop();
+
+  // one export of the whole table
+  await p.locator(".bind-export").click();
+  const csvHref = await p.locator(".ant-dropdown:visible a").first().getAttribute("href");
+  const htmlHref = await p.locator(".ant-dropdown:visible a").nth(1).getAttribute("href");
+  await p.keyboard.press("Escape");
+  const csv = await p.request.get(BASE + csvHref);
+  const csvText = (await csv.body()).toString("utf8");
+  check("the table exports as CSV a spreadsheet opens", csv.ok() && csvText.startsWith("\ufeffPDF,Clause,Title,Reuse conclusion") && csvText.includes("Slow the target down")
+    && csvText.split("\r\n").filter(Boolean).length === 5);
+  const tableHtml = await p.request.get(BASE + htmlHref);
+  check("the table exports as a web page", tableHtml.ok() && (await tableHtml.text()).includes("Clause reuse assessment"));
+
+  // several PDFs in one table; the project files list switches back to one
+  await p.locator(".bind-docs .ant-select").click();
+  await p.locator(".ant-select-dropdown:visible .ant-select-item-option:not(.ant-select-item-option-selected)").first().click();
+  await p.locator(".bind-list .ph").click();
+  await counts().filter({ hasText: "4 / 8 confirmed" }).waitFor();
+  const docNames = await bindRows().locator("td:first-child").allInnerTexts();
+  check("two PDFs show in one table naming each row's PDF", docNames.length === 8 && new Set(docNames).size === 2, docNames.join(", "));
+  await p.locator(".ox-steps .tools button").filter({ hasText: "Project files" }).click();
+  await p.locator(".file-row").first().waitFor();
+  const links = await p.locator(".file-row a[download]").count();
+  check("Project files lists PDFs with downloads", (await p.locator(".file-row").count()) === 2 && links === 2, `${links} links`);
+  await p.locator(".file-row button").first().click();
+  await counts().filter({ hasText: "4 / 4 confirmed" }).waitFor();
+  check("choosing a PDF in Project files shows its clauses only", (await bindRows().count()) === 4);
+  await p.locator(".ox-steps .tools button").filter({ hasText: "Project files" }).click();
+  await p.locator(".ant-popover:visible").waitFor({ state: "hidden" });
+
+  // extraction record of the rule-extracted demo PDF
+  await p.locator(".bind-docs .more").click();
+  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "Extraction record" }).click();
+  await p.locator(".ant-modal:visible .ant-descriptions").waitFor();
+  check("extraction record offers re-extraction for an older engine", await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Extract scenes again" }).isVisible());
+  await closeModal();
+
+  // PDF import runs as a job; without a configured model it fails cleanly and keeps the project intact
+  await p.locator(".bind-docs .more").click();
+  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "Import PDFs" }).click();
+  const demoDocs = await allDocs();
+  const pdfBytes = await (await p.request.get(`${BASE}/api/projects/${project}/documents/${demoDocs[0].document_id}/file`)).body();
+  await p.locator(".ant-modal:visible input[type=file]").setInputFiles({ name: "authored-protocol.pdf", mimeType: "application/pdf", buffer: pdfBytes });
+  await p.locator(".ant-modal:visible .ant-btn-primary").filter({ hasText: "Import PDFs" }).click();
+  await p.locator(".ant-modal:visible .job .ant-alert-error").waitFor({ timeout: 60000 });
+  check("PDF import without a model reports the failure", (await p.locator(".ant-modal:visible .job-head b").innerText()) === "Failed", await p.locator(".ant-modal:visible .job .ant-alert-error").innerText());
+  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Done" }).click();
+  check("a failed import adds no document", (await allDocs()).length === 2);
+
+  // finding an asset by hand: the rule-based search of one clause
+  const clause = await bindRows().nth(1).locator("td").first().innerText();
+  await byHand(1);
+  check("finding by hand opens the clause in the rule-based search", (await p.locator(".manual-bar").count()) === 1
+    && clause.includes(await p.locator(".scene.sel .t").innerText()) && (await rows().count()) === 6, `${await rows().count()} rows`);
+  check("scenes load from API", (await p.locator(".scene").count()) === 4, `${await p.locator(".scene").count()} scenes`);
+  check("evidence shows source text", (await p.locator(".evi .src").count()) > 0);
 
   // scene -> query + new search + evidence
   const firstTop = await p.locator(".decision .big").innerText();
@@ -84,20 +203,6 @@ try {
   await p.locator(".cand-head .ant-select").click();
   await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: "All candidates" }).click();
 
-  // exports
-  let [dl] = await Promise.all([p.waitForEvent("download", { timeout: 60000 }), p.locator(".actions .ant-btn-primary").first().click()]);
-  const jp = path.join(OUT, dl.suggestedFilename()); await dl.saveAs(jp);
-  const trace = JSON.parse(fs.readFileSync(jp, "utf8"));
-  check("JSON export is the backend trace", !!trace.source && !!trace.candidate?.version_id && !!trace.reuse?.level, dl.suggestedFilename());
-  await p.locator(".actions .ant-space-compact .ant-btn").nth(1).click();
-  [dl] = await Promise.all([p.waitForEvent("download"), p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "CSV" }).click()]);
-  const cp = path.join(OUT, dl.suggestedFilename()); await dl.saveAs(cp);
-  check("CSV export has header + difference rows", fs.readFileSync(cp, "utf8").startsWith("field,requirement,candidate,status,action"));
-  await p.locator(".actions .ant-space-compact .ant-btn").nth(1).click();
-  [dl] = await Promise.all([p.waitForEvent("download"), p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "HTML" }).click()]);
-  const hp = path.join(OUT, dl.suggestedFilename()); await dl.saveAs(hp);
-  check("HTML export is the assessment report", fs.readFileSync(hp, "utf8").includes("OpenX reuse trace"), dl.suggestedFilename());
-
   // files and evidence behind the selected candidate
   const menu = async (label) => {
     await p.locator(".sel-item .top .ant-btn").click();
@@ -120,23 +225,6 @@ try {
   await p.locator(".ant-modal:visible .explanation li").first().waitFor();
   check("structural explanation cites evidence", /\[P1/.test(await p.locator(".ant-modal:visible .explanation li").first().innerText()));
   await closeModal();
-  const traced = await p.locator(".actions .ant-btn-primary").first();
-  [dl] = await Promise.all([p.waitForEvent("download"), traced.click()]);
-  const ep = path.join(OUT, "explained.json"); await dl.saveAs(ep);
-  check("the explanation travels with the export", JSON.parse(fs.readFileSync(ep, "utf8")).explanation?.method === "structural");
-
-  // free text search: no requirement, so similar assets only, on its own page
-  const sceneQuery = await p.locator(".search-row input").inputValue();
-  await p.locator(".scene-chip .ant-tag-close-icon").click();
-  await p.locator(".sresults-bar input").fill("pedestrian crossing the road");
-  await p.locator(".sresults-bar .ant-btn-primary").click();
-  await p.locator(".rcard").first().waitFor();
-  check("free text search lists similar assets", (await p.locator(".rcard").count()) > 0, `${await p.locator(".rcard").count()} cards`);
-  check("free text search makes no reuse decision", (await p.locator(".decision").count()) === 0 && (await p.locator(".actions").count()) === 0);
-  await p.locator(".sresults-bar button[aria-label='Back to start']").click();
-  await p.locator(".start-doc").first().click();
-  await idle();
-  check("back in the PDF workflow the requirement is still selected", (await p.locator(".scene-chip").count()) === 1 && (await p.locator(".search-row input").inputValue()) === sceneQuery, sceneQuery);
 
   // file links resolve
   const xosc = await p.locator(".pair a").first().getAttribute("href");
@@ -145,72 +233,6 @@ try {
   const page = await p.locator(".evi .bd > img").getAttribute("src");
   const r2 = await p.request.get(BASE + page);
   check("evidence page renders from the PDF", r2.ok() && r2.headers()["content-type"] === "image/png");
-
-  // a "Needs review" candidate is saved only after each review item is confirmed with a reason
-  await p.locator(".scene").first().click();
-  await idle();
-  await rows().filter({ has: p.locator(".mtag.review") }).first().click();
-  await p.locator(".actions > .ant-btn").click();
-  const signoff = p.locator(".ant-modal:visible");
-  await signoff.locator(".signoff-list li").first().waitFor();
-  const items = await signoff.locator(".signoff-list li").count();
-  const confirm = signoff.locator(".ant-btn-primary");
-  const blockedWithoutReasons = await confirm.isDisabled();
-  for (let i = 0; i < items; i++) {
-    const item = signoff.locator(".signoff-list li").nth(i);
-    await item.locator(".ant-checkbox-input").check();
-    await item.locator("textarea").fill("Checked against the source text");
-  }
-  check("review sign-off needs every item confirmed with a reason", blockedWithoutReasons && !(await confirm.isDisabled()), `${items} items`);
-  await confirm.click();
-  await p.locator(".ant-message-success").first().waitFor({ timeout: 30000 });
-  await signoff.waitFor({ state: "hidden" });
-  check("a signed-off review decision is saved", (await p.locator(".actions > .ant-btn").innerText()).includes("Review next requirement"));
-
-  // save a decision on a "Modify and reuse" candidate, then find it under Recent activity
-  const modify = rows().filter({ has: p.locator(".mtag.modify") }).first();
-  await modify.click();
-  await p.locator(".actions > .ant-btn").click();
-  await p.locator(".ant-message-success").waitFor({ timeout: 30000 });
-  await p.waitForTimeout(400);
-  check("saved scene shows as assessed in the queue", (await p.locator(".scene.sel .c").innerText()) === "Assessed");
-  check("after saving, the next requirement is one click away", (await p.locator(".actions > .ant-btn").innerText()).includes("Review next requirement"));
-  await p.locator(".ox-steps .tools button").filter({ hasText: "Recent activity" }).click();
-  await p.locator(".pop-history .row").first().waitFor();
-  const savedScene = await p.locator(".scene.sel .t").innerText();
-  check("saved decision appears under Recent activity", (await p.locator(".pop-history .row b").first().innerText()) === savedScene);
-
-  // overview: library counts, the saved decision, its downloads, and the way back to the requirement
-  await p.locator(".pop-history .ant-btn-link").click();
-  await p.locator(".ov-detail").waitFor();
-  check("View all decisions opens Overview", (await p.locator(".ox-nav button.on").innerText()) === "Overview");
-  check("Overview counts the demo library", (await p.locator(".metric b").first().innerText()) === "6" && (await p.locator(".ov-library tbody tr.ant-table-row").count()) === 6);
-  check("Overview lists the saved decision", (await p.locator(".ov-reports tbody tr.row-active").innerText()).includes(savedScene));
-  const html = await p.request.get(BASE + (await p.locator(".ov-actions a").nth(1).getAttribute("href")));
-  check("saved decision downloads as an HTML report", html.ok() && (await html.text()).includes("OpenX reuse trace"));
-  await p.locator(".ox-nav button").filter({ hasText: "Workbench" }).click();
-  await p.locator(".scene").nth(1).click();
-  await idle();
-  await p.locator(".ox-nav button").filter({ hasText: "Overview" }).click();
-  await p.locator(".ov-detail").waitFor();
-  await p.locator(".ov-actions .ant-btn").filter({ hasText: "Continue reviewing" }).click();
-  await idle();
-  check("Continue reviewing opens the requirement facts", (await p.locator(".left-tabs .ant-tabs-tab-active").innerText()) === "Requirement facts");
-  await p.locator(".left-tabs .ant-tabs-tab").filter({ hasText: "Scenes" }).click();
-  check("Continue reviewing reopens the saved requirement", (await p.locator(".scene.sel .t").innerText()) === savedScene);
-
-  // project files list both PDFs with download links
-  await p.locator(".ox-steps .tools button").filter({ hasText: "Project files" }).click();
-  await p.locator(".file-row").first().waitFor();
-  const links = await p.locator(".file-row a[download]").count();
-  check("Project files lists PDFs with downloads", (await p.locator(".file-row").count()) === 2 && links === 2, `${links} links`);
-  const before = await p.locator(".scene .t").first().innerText();
-  await p.locator(".file-row:not(.on) button").click();
-  await p.waitForFunction((t) => document.querySelector(".scene .t")?.textContent !== t, before);
-  await idle();
-  check("choosing another PDF loads its scenes", (await p.locator(".scene").count()) === 4, `${before} → ${await p.locator(".scene .t").first().innerText()}`);
-  await p.locator(".ox-steps .tools button").filter({ hasText: "Project files" }).click();
-  await p.locator(".ant-popover:visible").waitFor({ state: "hidden" });
 
   // queue tools: scope over all PDFs, text filter
   await p.locator(".pdfcard .doc-switch").click();
@@ -221,16 +243,31 @@ try {
   check("scene filter narrows the queue", (await p.locator(".scene").count()) === 1 && (await p.locator(".left-tabs .ant-tabs-tab").first().innerText()) === "Scenes (1/8)");
   await p.getByRole("textbox", { name: "Find a scene" }).fill("");
   await p.locator(".pdfcard .doc-switch").click();
-  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "demo-aeb-protocol.pdf" }).click();
+  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "demo-aeb-protocol-zh.pdf" }).click();
   await p.waitForFunction(() => document.querySelectorAll(".scene").length === 4);
 
-  // requirement facts: edit a typed value, save a revision, publish it
-  await p.locator(".scene").nth(1).click();
+  // binding a candidate found by hand stores it on the clause and returns to the table
+  await p.locator(".scene").nth(2).click();
   await idle();
+  const handScene = await p.locator(".scene.sel .t").innerText();
+  const modify = rows().filter({ has: p.locator(".mtag.modify") }).first();
+  await modify.click();
+  const handAsset = await p.locator(".sel-item .name").getAttribute("title");
+  await p.locator(".actions .ant-btn-primary").filter({ hasText: "Adopt for this clause" }).click();
+  await p.locator(".ant-message-success").filter({ hasText: "Adopted for this clause" }).waitFor({ timeout: 30000 });
+  await bindRows().first().waitFor();
+  const byHandRow = (await view()).scenes.find((s) => s.title === handScene);
+  check("binding a candidate found by hand returns to the table with it", (await p.locator(".bind-table .row-active").innerText()).includes(handScene)
+    && byHandRow?.binding?.source === "manual" && byHandRow.binding.status === "modify" && byHandRow.binding.changes.length > 0
+    && byHandRow.binding.assets[0].title === handAsset, `${handScene} → ${handAsset}: ${JSON.stringify(byHandRow?.binding ?? null).slice(0, 300)}`);
+
+  // requirement facts: edit a typed value, save a revision; the confirmed binding asks for a recheck
+  await byHand(1);
   await p.locator(".left-tabs .ant-tabs-tab").filter({ hasText: "Requirement facts" }).click();
   await p.locator(".fact-sheet").first().waitFor();
   check("facts tab shows the typed requirement", (await p.locator(".fact-sheet").first().innerText()).includes("AEB"));
   const revision = Number((await p.locator(".facts-head .muted").innerText()).replace(/\D+/g, ""));
+  const factScene = await p.locator(".facts-title").innerText();
   await p.locator(".facts-actions .ant-btn").filter({ hasText: "Edit facts" }).click();
   const speed = p.locator(".ant-drawer .ant-form-item").filter({ hasText: "Ego speed" }).locator("input");
   await speed.fill("42");
@@ -239,101 +276,12 @@ try {
   await idle();
   check("saving facts creates the next revision", (await p.locator(".facts-head .muted").innerText()) === `Revision ${revision + 1}`);
   check("the new revision holds the edited value", (await p.locator(".fact-sheet").first().innerText()).includes("42"));
-  check("the queue shows the new revision", (await p.locator(".scene.sel .p").innerText()).includes(`v${revision + 1}`));
-  await p.locator(".facts-actions .ant-btn").filter({ hasText: "Confirm and publish" }).click();
-  await p.locator(".ant-popconfirm .ant-btn-primary").click();
-  await p.locator(".facts-actions .ant-btn").filter({ hasText: "Revision published" }).waitFor();
-  check("publishing confirms the revision in the queue", (await p.locator(".scene.sel .c").innerText()) === "Confirmed");
+  check("requirement facts no longer publish to a separate library", (await p.locator(".facts-actions .ant-btn").filter({ hasText: "publish" }).count()) === 0);
   await p.locator(".facts-actions .ant-btn").filter({ hasText: "Revision history" }).click();
   await p.locator(".ant-modal:visible tbody tr.ant-table-row").first().waitFor();
   check("revision history lists every revision", (await p.locator(".ant-modal:visible tbody tr.ant-table-row").count()) === revision + 1);
   await closeModal();
   await p.locator(".left-tabs .ant-tabs-tab").filter({ hasText: "Scenes" }).click();
-
-  // whole-PDF matching and its summary
-  await p.locator(".pdfcard .more").click();
-  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "Match entire PDF" }).click();
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Match all scenes" }).click();
-  await p.locator(".ant-modal:visible .batch-table tbody tr.ant-table-row").first().waitFor({ timeout: 120000 });
-  check("whole-PDF matching assesses every scene", (await p.locator(".ant-modal:visible .batch-table tbody tr.ant-table-row").count()) === 4);
-  const batchHtml = await p.request.get(BASE + (await p.locator(".ant-modal:visible a.ant-btn").nth(1).getAttribute("href")));
-  check("the summary downloads as HTML", batchHtml.ok() && (await batchHtml.text()).includes("OpenX document assessment"));
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Save summary report" }).click();
-  await p.locator(".ant-message-success").filter({ hasText: "Summary saved" }).waitFor();
-  check("the summary is saved as a report", (await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/reports`)).json()).some((r) => r.kind === "batch"));
-
-  // requirement <-> asset bindings: the model suggests a group per scene, a person confirms
-  await p.locator(".ant-modal:visible .ant-tabs-tab").filter({ hasText: "Bind assets" }).click();
-  const bindRows = () => p.locator(".ant-modal:visible .bind-table tbody tr.ant-table-row");
-  await bindRows().first().waitFor();
-  check("binding lists every scene, none confirmed", (await bindRows().count()) === 4 && (await bindRows().filter({ hasText: "Not confirmed" }).count()) === 4);
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Suggest bindings" }).click();
-  await p.locator(".ant-modal:visible .ant-alert-error").filter({ hasText: "Configure a model" }).waitFor();
-  check("suggesting without a model says what is missing", true);
-  const fake = await startFakeModel();
-  await p.request.put(`${BASE}/api/settings/model`, { data: { base_url: fake.url, model: "fake-judge", api_key: "test-key", thinking: false } });
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Suggest bindings" }).click();
-  await p.locator(".ant-modal:visible .bind-table .mtag.direct").first().waitFor({ timeout: 60000 });
-  check("the model's suggestion shows on every scene", (await p.locator(".ant-modal:visible .bind-table tr.ant-table-row .mtag.direct").count()) === 4 && fake.calls() === 12, `${fake.calls()} calls`);
-  check("readings that agree are settled, the scene whose readings disagree asks for a look",
-    (await bindRows().filter({ hasText: "Settled" }).count()) === 3 && (await bindRows().filter({ hasText: "Take a look" }).count()) === 1);
-  check("a later suggestion clears the earlier error", (await p.locator(".ant-modal:visible .ant-alert-error").count()) === 0);
-  await p.screenshot({ path: path.join(OUT, "binding-suggestions.png") });
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Accept every" }).click();
-  await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "3 / 4 confirmed" }).waitFor();
-  check("accepting every suggestion leaves the unsettled scene to a person", (await bindRows().filter({ hasText: "Not confirmed" }).count()) === 1);
-  await bindRows().filter({ hasText: "Take a look" }).locator(".bind-actions .ant-btn").filter({ hasText: /^Accept$/ }).click();
-  await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "4 / 4 confirmed" }).waitFor();
-  check("accepting the suggestions binds every scene", (await bindRows().filter({ hasText: "Use as is" }).count()) === 4);
-  await bindRows().first().click();
-  const editor = p.locator(".ant-modal:visible .bind-editor").first();
-  await editor.waitFor();
-  check("the editor shows the suggested group with the model's reasons", (await editor.locator(".bind-cand.on").count()) === 2
-    && (await editor.locator(".bind-cand.on .why").first().innerText()).includes("authored reason"));
-  await p.screenshot({ path: path.join(OUT, "bindings.png") });
-  await editor.locator(".bind-form .ant-radio-wrapper").filter({ hasText: "Change first" }).click();
-  await editor.locator("textarea").fill("Slow the target down");
-  await editor.locator(".ant-btn-primary").filter({ hasText: "Update binding" }).click();
-  await bindRows().first().filter({ hasText: "Change first" }).waitFor();
-  const docs = await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents`)).json();
-  const bound = (await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/bindings?${docs.map((d) => `document_ids=${d.document_id}`).join("&")}`)).json())
-    .scenes.find((s) => s.binding?.status === "modify");
-  check("a person's change is stored as their own choice", bound?.binding.source === "manual" && bound.binding.changes === "Slow the target down");
-  await p.request.delete(`${BASE}/api/settings/model/key`);
-  fake.stop();
-
-  // several PDFs matched and bound together in one table
-  await p.locator(".ant-modal:visible .batch-docs .ant-select").click();
-  await p.locator(".ant-select-dropdown:visible .ant-select-item-option:not(.ant-select-item-option-selected)").first().click();
-  await p.locator(".ant-modal:visible .ant-modal-title").click();
-  await p.locator(".ant-modal:visible .ant-tabs-tab").filter({ hasText: "Reuse verdicts" }).click();
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Match all scenes" }).click();
-  await p.locator(".ant-modal:visible .batch-table:not(.bind-table) tbody tr.ant-table-row").nth(4).waitFor({ timeout: 120000 });
-  const groupNames = await p.locator(".ant-modal:visible .batch-table:not(.bind-table) tbody tr.ant-table-row td:nth-child(2)").allInnerTexts();
-  check("two PDFs are matched in one table naming each row's PDF", groupNames.length === 8 && new Set(groupNames).size === 2, groupNames.join(", "));
-  await p.locator(".ant-modal:visible .ant-tabs-tab").filter({ hasText: "Bind assets" }).click();
-  await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "4 / 8 confirmed" }).waitFor();
-  check("the binding table lists both PDFs' scenes", (await bindRows().count()) === 8);
-  await closeModal();
-
-  // extraction record of the rule-extracted demo PDF
-  await p.locator(".pdfcard .more").click();
-  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "Extraction record" }).click();
-  await p.locator(".ant-modal:visible .ant-descriptions").waitFor();
-  check("extraction record offers re-extraction for an older engine", await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Extract scenes again" }).isVisible());
-  await closeModal();
-
-  // PDF import runs as a job; without a configured model it fails cleanly and keeps the project intact
-  await p.locator(".pdfcard .more").click();
-  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "Import PDFs" }).click();
-  const demoDocs = await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents`)).json();
-  const pdfBytes = await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents/${demoDocs[0].document_id}/file`)).body();
-  await p.locator(".ant-modal:visible input[type=file]").setInputFiles({ name: "authored-protocol.pdf", mimeType: "application/pdf", buffer: pdfBytes });
-  await p.locator(".ant-modal:visible .ant-btn-primary").filter({ hasText: "Import PDFs" }).click();
-  await p.locator(".ant-modal:visible .job .ant-alert-error").waitFor({ timeout: 60000 });
-  check("PDF import without a model reports the failure", (await p.locator(".ant-modal:visible .job-head b").innerText()) === "Failed", await p.locator(".ant-modal:visible .job .ant-alert-error").innerText());
-  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Done" }).click();
-  check("a failed import adds no document", (await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents`)).json()).length === 2);
 
   // esmini: capture a real frame when esmini is installed on this machine; otherwise the controls say why
   await rows().first().click();
@@ -356,14 +304,10 @@ try {
   check("中文 relabels the interface", (await p.locator(".ox-nav button.on").innerText()) === "工作台");
   const zh = await p.locator(".facts-t tbody td").first().innerText();
   check("中文 shows Chinese assessment vocabulary", /[一-鿿]/.test(zh), zh);
-  await p.reload({ waitUntil: "networkidle" });
-  check("language preference survives a reload", (await p.locator(".ox-nav button.on").innerText()) === "工作台");
-  await p.locator(".start-doc").first().click();
-  await idle();
   await p.locator(".lang button").filter({ hasText: "EN" }).click();
   await idle();
 
-  // settings: model, local service, display
+  // settings: model, local service, display, advanced
   await p.locator('button[aria-label="Settings"]').click();
   await p.locator(".settings-form").first().waitFor();
   check("settings show no saved key in the demo", (await p.locator('.settings-form input[type="password"]').getAttribute("placeholder")) === "Enter API key");
@@ -374,6 +318,9 @@ try {
   check("the setting to make previews after an import is saved", (await (await p.request.get(BASE + "/api/settings")).json()).preferences.auto_preview === true);
   await p.locator(".switch-row .ant-switch").click();
   await p.waitForTimeout(300);
+  await p.locator(".settings-tabs .ant-tabs-tab").filter({ hasText: "Advanced" }).click();
+  check("the retrieval backend and file standards sit under Advanced", (await p.locator(".ant-modal:visible .ant-radio-wrapper").filter({ hasText: "Lightweight offline retrieval" }).count()) === 1
+    && (await p.locator(".ant-modal:visible .settings-h").filter({ hasText: "File standards" }).count()) === 1);
   await p.locator(".settings-tabs .ant-tabs-tab").filter({ hasText: "Display" }).click();
   await p.locator(".ant-radio-button-wrapper").filter({ hasText: "Dark" }).click();
   await p.waitForTimeout(300);
@@ -392,11 +339,29 @@ try {
   const saved = await (await p.request.get(BASE + "/api/settings")).json();
   check("appearance is saved on the server", saved.preferences.appearance === "dark");
 
-  // asset management: table, labels, deletion guard, deletion, import, requirement library
+  // back on the table, the edited clause asks for a recheck; a reload keeps the language and opens the start page
+  await backToTable();
+  check("editing a clause's facts marks its binding for a recheck", (await bindRows().filter({ hasText: factScene.replace(/^\S+\s/, "") }).filter({ hasText: "Reconfirm" }).count()) === 1, factScene);
+  await p.locator(".lang button").filter({ hasText: "中文" }).click();
+  await p.reload({ waitUntil: "networkidle" });
+  check("language preference survives a reload", (await p.locator(".ox-nav button.on").innerText()) === "工作台" && (await p.locator(".start-doc").count()) === 2);
+  await p.locator(".lang button").filter({ hasText: "EN" }).click();
+
+  // free text search: no requirement, so similar assets only, on its own page
+  await p.locator(".start-search input").fill("pedestrian crossing the road");
+  await p.locator(".start-search .ant-btn-primary").click();
+  await p.locator(".rcard").first().waitFor();
+  check("free text search lists similar assets", (await p.locator(".rcard").count()) > 0, `${await p.locator(".rcard").count()} cards`);
+  check("free text search makes no reuse decision", (await p.locator(".decision").count()) === 0 && (await p.locator(".actions").count()) === 0);
+  await p.locator(".sresults-bar button[aria-label='Back to start']").click();
+  await p.locator(".start-doc").first().waitFor();
+
+  // asset management: table, labels, deletion guard, deletion, import
   await p.locator(".ox-nav button").filter({ hasText: "Asset management" }).click();
   const assetRows = () => p.locator(".asset-table tbody tr.ant-table-row");
   await assetRows().first().waitFor();
   check("asset table lists the latest versions", (await assetRows().count()) === 6, `${await assetRows().count()} rows`);
+  check("asset management is one list without a requirement library", (await p.locator(".assets-tabs").count()) === 0);
   await p.locator(".assets-page .ph .ant-btn").filter({ hasText: "Make previews" }).click();
   await p.locator(".preview-strip .job-summary b").filter({ hasText: /Previews (made|stopped|failed)/ }).waitFor({ timeout: 180000 });
   const previewRun = (await (await p.request.get(`${BASE}/api/jobs?kind=preview_batch`)).json())[0];
@@ -405,20 +370,17 @@ try {
   await assetRows().filter({ hasText: "Opaque 003" }).click();
   await p.locator(".asset-detail .road-drawing").waitFor();
   check("an asset shows its road from above", await p.locator(".asset-detail .road-drawing").evaluate((img) => img.complete && img.naturalWidth > 0));
-  await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Classification" }).click();
+  await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Source" }).click();
+  await p.locator(".asset-detail .ant-collapse-header").filter({ hasText: "Classification" }).click();
   await p.locator(".asset-detail .ant-form-item").filter({ hasText: "Road type" }).locator(".ant-select").click();
   await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: /^Curve$/ }).click();
   await p.locator(".asset-detail .ant-btn-primary").filter({ hasText: "Save and confirm" }).click();
   await p.locator(".ant-message-success").filter({ hasText: "Classification confirmed" }).waitFor();
   await p.waitForTimeout(400);
-  check("confirmed labels show in the table", (await assetRows().filter({ hasText: "Opaque 003" }).innerText()).includes("Curve"));
+  check("labels set under Source show in the table", (await assetRows().filter({ hasText: "Opaque 003" }).innerText()).includes("Curve"));
   const facets = (await (await p.request.get(`${BASE}/api/library`)).json()).facets.label_road_type;
   check("confirmed labels reach the search facets", facets.includes("弯道"), facets.join(", "));
 
-  const savedAsset = trace.candidate.title;
-  await assetRows().filter({ hasText: savedAsset }).click();
-  await p.locator(".asset-detail-head").filter({ hasText: savedAsset }).waitFor();
-  check("a version used by a saved decision cannot be deleted", await p.locator(".asset-detail-head .ant-btn-dangerous").isDisabled());
   await p.locator(".assets-page .ph .ant-btn-primary").click();
   const fixtures = path.join(WEB, "..", "tests", "fixtures");
   await p.locator(".ant-modal:visible input[type=file]").setInputFiles([path.join(fixtures, "minimal.xosc"), path.join(fixtures, "minimal.xodr")]);
@@ -437,35 +399,29 @@ try {
   await p.waitForTimeout(400);
   check("an unreferenced version is deleted", (await assetRows().count()) === 6);
 
-  // an asset lists the requirement clauses bound to it
+  // an asset lists the requirement clauses bound to it, and opening one returns to its row in the table
   const boundTitle = bound.binding.assets.find((a) => a.preferred).title;
-  await assetRows().filter({ hasText: boundTitle }).click();
+  await assetRows().filter({ hasText: boundTitle }).first().click();
   await p.locator(".asset-detail-head").filter({ hasText: boundTitle }).waitFor();
-  await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Requirements" }).click();
+  await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Clauses" }).click();
   await p.locator(".asset-detail .bind-clauses tbody tr.ant-table-row").first().waitFor();
   check("an asset lists the requirement clauses bound to it", (await p.locator(".asset-detail .bind-clauses tbody tr.ant-table-row").filter({ hasText: bound.title }).count()) === 1
-    && (await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: /Requirements \(\d+\)/ }).count()) === 1);
+    && (await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: /Clauses \(\d+\)/ }).count()) === 1);
   check("a bound version cannot be deleted", await p.locator(".asset-detail-head .ant-btn-dangerous").isDisabled());
+  await p.locator(".asset-detail .bind-clauses tbody tr.ant-table-row").filter({ hasText: bound.title }).click();
+  await bindRows().first().waitFor();
+  await p.waitForTimeout(400);
+  check("opening a bound clause shows its row in the table", (await p.locator(".ox-nav button.on").innerText()) === "Workbench"
+    && (await p.locator(".bind-table .row-active").innerText()).includes(bound.title));
 
-  await p.locator(".assets-tabs .ant-tabs-tab").filter({ hasText: "PDF requirement library" }).click();
-  const requirementRows = p.locator(".req-library tbody tr.ant-table-row");
-  await requirementRows.first().waitFor();
-  check("published requirement is in the library", (await requirementRows.count()) === 1);
-  await requirementRows.first().click();
-  const publishedTitle = await p.locator(".asset-detail-head .name").innerText();
-  await p.locator(".asset-detail .ant-btn").filter({ hasText: "Open source document" }).click();
-  await idle();
-  check("Open source document returns to the requirement facts", (await p.locator(".ox-nav button.on").innerText()) === "Workbench"
-    && (await p.locator(".left-tabs .ant-tabs-tab-active").innerText()) === "Requirement facts"
-    && (await p.locator(".facts-title").innerText()).endsWith(publishedTitle), publishedTitle);
-
-  // overview: how the project's PDFs are covered by confirmed bindings
+  // overview: how the project's PDFs are covered by confirmed bindings, then the library in numbers
   await p.locator(".ox-nav button").filter({ hasText: "Overview" }).click();
   await p.locator(".ov-coverage .cov-head").first().waitFor();
   const heads = await p.locator(".ov-coverage .cov-head").allInnerTexts();
   check("Overview shows each PDF's binding coverage", heads.length === 2
-    && heads.some((h) => h.includes("4 clauses · 4 with assets · 0 with none · 0 not confirmed")) && heads.some((h) => h.includes("4 not confirmed")), heads.join(" | "));
-  check("Overview counts the assets no clause uses", /Assets no clause uses: \d \/ 6/.test(await p.locator(".ov-coverage").innerText()));
+    && heads.some((h) => h.includes("4 clauses · 4 reusable · 0 not applicable · 0 to confirm")) && heads.some((h) => h.includes("4 to confirm")), heads.join(" | "));
+  check("Overview counts the assets no clause uses", /Assets no clause adopts: \d \/ 6/.test(await p.locator(".ov-coverage").innerText()));
+  check("Overview counts the demo library", (await p.locator(".metric b").first().innerText()) === "6" && (await p.locator(".ov-reports, .ov-decisions").count()) === 0);
   await p.screenshot({ path: path.join(OUT, "coverage.png") });
 
   // new project starts empty and becomes current
@@ -476,7 +432,7 @@ try {
   await p.locator(".ant-message-success").filter({ hasText: "Verify project" }).waitFor();
   await p.waitForTimeout(400);
   check("new project becomes current and starts empty",
-    (await p.locator(".hbtn b").first().innerText()) === "Verify project" && (await p.locator(".scene").count()) === 0);
+    (await p.locator(".hbtn b").first().innerText()) === "Verify project" && (await p.locator(".start-doc").count()) === 0);
 
   check("no runtime errors", errors.length === 0, errors.join(" | "));
 } catch (error) {

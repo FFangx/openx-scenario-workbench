@@ -10,11 +10,13 @@ confirms a row, and "accept all" leaves the scenes whose readings disagree to a 
 from __future__ import annotations
 
 from typing import Any, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from . import jobs, matching
+from . import binding_export, jobs, matching
 from .api_common import _catalog, _index, _store
 from .api_schemas import AssetBinding, BindingCoverage, GroupBindings, Job, SceneBinding, documented
 from .asset_store import AssetStore
@@ -145,6 +147,24 @@ def bindings(project_id: str, document_ids: list[str] = Query(description="The P
     return _view(Group(project_id, document_ids))
 
 
+@router.get("/projects/{project_id}/bindings/export", response_class=Response)
+def export(project_id: str, document_ids: list[str] = Query(description="The PDFs exported together, in this order."),
+           format: Literal["csv", "html"] = "csv", lang: Literal["zh", "en"] = "zh") -> Response:
+    """The reuse assessment of the selected PDFs as a file: every clause with the assets confirmed for reuse, or
+    the model's suggestion while none is confirmed. CSV opens in a spreadsheet; HTML reads in a browser."""
+    group = Group(project_id, document_ids)
+    lines = binding_export.table(_rows(group, group.scenes), lang)
+    stem = group.documents[0].filename.rsplit(".", 1)[0] + (f"+{len(group.documents) - 1}" if len(group.documents) > 1 else "")
+    name = f"{stem}-reuse-assessment.{format}"
+    if format == "csv":
+        content, media = binding_export.to_csv(lines), "text/csv; charset=utf-8"
+    else:
+        content = binding_export.to_html(lines, [item.filename for item in group.documents], lang)
+        media = "text/html; charset=utf-8"
+    return Response(content, media_type=media,
+                    headers={"Content-Disposition": f"attachment; filename=\"reuse-assessment.{format}\"; filename*=UTF-8''{quote(name)}"})
+
+
 class SceneRef(BaseModel):
     document_id: str
     scene_id: str
@@ -164,10 +184,10 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
     group = Group(project_id, request.document_ids)
     scenes = group.select(request.scenes)
     if not scenes or not group.pdf.assets.latest():
-        raise ValueError("绑定建议需要资产和场景 / Suggestions need assets and scenes.")
+        raise ValueError("生成复用建议需要资产和条款 / Suggestions need assets and clauses.")
     client = ModelClient()
     if not client.config.api_key:
-        raise ValueError("绑定建议需要模型。请先在设置中填写 Key / Configure a model in Settings first.")
+        raise ValueError("生成复用建议需要配置模型。请先在设置中填写 Key / Configure a model in Settings first.")
     encoder = request.encoder or matching.preferred_encoder()
     if encoder not in matching.ENCODERS:
         raise ValueError("Unknown encoder.")
@@ -294,7 +314,7 @@ def accept(project_id: str, request: AcceptRequest) -> dict[str, Any]:
         proposal = _proposal(suggestion, scene, latest)
         if proposal is None:
             if request.scenes is not None:
-                raise ValueError(f"{scene.package.title}: 建议已过期或失败，请重新建议 / "
+                raise ValueError(f"{scene.package.title}: 建议已失效或未得到有效结果，请重新生成建议 / "
                                  "The suggestion is outdated or failed; ask again.")
             continue
         status, chosen, preferred = proposal

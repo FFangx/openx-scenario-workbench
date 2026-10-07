@@ -188,6 +188,8 @@ export const urls = {
   classification: (v: VersionRef) => `/api/assets/${v.asset_id}/versions/${v.version_id}/classification/download`,
   standardExport: (v: VersionRef) => `/api/assets/${v.asset_id}/versions/${v.version_id}/standard-export/download`,
   requirement: (libraryId: string) => `/api/requirements/${libraryId}/download`,
+  bindingsExport: (pid: string, dids: string[], format: "csv" | "html", lang: Lang) =>
+    `/api/projects/${pid}/bindings/export?${dids.map((d) => `document_ids=${encodeURIComponent(d)}`).join("&")}&format=${format}&lang=${lang}`,
   batch: (pid: string, signature: string, format: "json" | "html", lang: Lang) =>
     `/api/projects/${pid}/batch/${signature}/download?format=${format}&lang=${lang}`,
   file: (c: VersionRef, role: "scenario" | "road") => `/api/assets/${c.asset_id}/versions/${c.version_id}/files/${role}`,

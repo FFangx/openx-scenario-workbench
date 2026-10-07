@@ -5,13 +5,12 @@ import {
   DownloadOutlined,
   DownOutlined,
   FolderOutlined,
-  HistoryOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { api, levelLabel, urls, type Lang, type PdfDocument, type Project, type Report } from "../api";
-import { dateTime, useT } from "../i18n";
+import { api, urls, type Lang, type PdfDocument, type Project } from "../api";
+import { useT } from "../i18n";
 
 export type Page = "workbench" | "overview" | "assets";
 
@@ -132,7 +131,7 @@ function NewProject({ open, onClose, onCreated }: { open: boolean; onClose: () =
       confirmLoading={busy}
       destroyOnHidden
     >
-      <p className="muted">{t("项目保存 PDF、场景修订和复用决策；资产库由所有项目共用。", "A project keeps PDFs, scene revisions and reuse decisions. The asset library is shared by all projects.")}</p>
+      <p className="muted">{t("项目保存 PDF 及需求事实修订；资产库与复用评估结论由所有项目共用。", "A project keeps PDFs and fact revisions. The asset library and the reuse conclusions are shared by all projects.")}</p>
       <Form form={form} layout="vertical" onFinish={submit} preserve={false}>
         <Form.Item
           name="name"
@@ -147,35 +146,30 @@ function NewProject({ open, onClose, onCreated }: { open: boolean; onClose: () =
 }
 
 interface StepBarProps {
+  /** The step in progress; earlier steps show as done. */
   active: number;
   projectId: string | null;
   docs: PdfDocument[];
-  docId: string | null;
+  /** PDFs shown now, marked in the project files list. */
+  current: string[];
   onDoc: (id: string) => void;
-  onAllDecisions: () => void;
 }
 
-export function StepBar({ active, projectId, docs, docId, onDoc, onAllDecisions }: StepBarProps) {
-  const { t, lang } = useT();
-  const [reports, setReports] = useState<Report[] | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+/** Where the PDF's reuse assessment stands: imported, suggested by the model, confirmed, exported. */
+export function StepBar({ active, projectId, docs, current, onDoc }: StepBarProps) {
+  const { t } = useT();
   // Links start empty and fill up to the active step after the first paint, so entering the workflow animates them.
   const [filled, setFilled] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-  const steps = [t("从 PDF 提取", "Extract from PDF"), t("检索资产库", "Search asset library"), t("评估复用", "Assess reuse"), t("导出与追溯", "Export & trace")];
-
-  const openHistory = (open: boolean) => {
-    setHistoryOpen(open);
-    if (open && projectId) api.reports(projectId).then(setReports).catch(() => setReports([]));
-  };
+  const steps = [t("导入 PDF", "Import PDF"), t("生成复用建议", "Generate suggestions"), t("确认复用结论", "Confirm reuse"), t("导出评估表", "Export assessment")];
 
   const files = docs.length ? (
     <div className="pop-list">
       {docs.map((d) => (
-        <div key={d.document_id} className={`file-row${d.document_id === docId ? " on" : ""}`}>
+        <div key={d.document_id} className={`file-row${current.includes(d.document_id) ? " on" : ""}`}>
           <button onClick={() => onDoc(d.document_id)}>
             <b>{d.filename}</b>
             <span>
@@ -196,28 +190,6 @@ export function StepBar({ active, projectId, docs, docId, onDoc, onAllDecisions 
     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("当前项目还没有 PDF", "No PDFs in this project yet")} />
   );
 
-  const activity = (
-    <div className="pop-history">
-      {reports === null ? (
-        <div className="muted">{t("加载中…", "Loading…")}</div>
-      ) : reports.length ? (
-        <div className="pop-list">
-          {reports.slice(0, 5).map((r) => (
-            <div key={r.report_id} className="row">
-              <b>{r.scene.title ?? t("整份 PDF 汇总", "Document summary")}</b>
-              <span>{r.level ? levelLabel(r.level, lang) : "—"} · {t("保存于", "saved")} {dateTime(r.saved_at)}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("尚无已保存的决策", "No saved decisions yet")} />
-      )}
-      <Button type="link" size="small" onClick={() => { setHistoryOpen(false); onAllDecisions(); }}>
-        {t("查看全部决策", "View all decisions")}
-      </Button>
-    </div>
-  );
-
   return (
     <nav className="ox-steps">
       {steps.map((s, i) => (
@@ -233,13 +205,6 @@ export function StepBar({ active, projectId, docs, docId, onDoc, onAllDecisions 
         <Popover title={t("项目文件", "Project files")} content={files} trigger="click" placement="bottomRight">
           <button>
             <FolderOutlined /> {t("项目文件", "Project files")}
-          </button>
-        </Popover>
-        <i />
-        <Popover title={t("最近的复用决策", "Recent reuse decisions")} content={activity} trigger="click" placement="bottomRight"
-          open={historyOpen} onOpenChange={openHistory}>
-          <button>
-            <HistoryOutlined /> {t("最近记录", "Recent activity")}
           </button>
         </Popover>
       </div>

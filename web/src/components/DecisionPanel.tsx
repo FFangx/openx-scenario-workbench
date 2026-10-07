@@ -1,27 +1,23 @@
-import { useEffect, useState } from "react";
-import { App, Button, Dropdown, Empty, Space, Spin, Tooltip } from "antd";
+import { useState } from "react";
+import { App, Button, Dropdown, Empty, Spin, Tooltip } from "antd";
 import {
-  ArrowRightOutlined,
   CheckCircleFilled,
-  CheckOutlined,
   CodeOutlined,
   FileSearchOutlined,
   CloseCircleFilled,
   DownOutlined,
-  DownloadOutlined,
   ExclamationCircleFilled,
   LinkOutlined,
   QuestionCircleFilled,
   SafetyCertificateOutlined,
-  SaveOutlined,
 } from "@ant-design/icons";
-import { api, basename, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang, type ReviewItem } from "../api";
+import { api, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang } from "../api";
 import { useT } from "../i18n";
 import { useNames } from "../names";
 import { valueLabel } from "../vocab";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
-import { ExplanationDialog, ReviewSignoffDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
+import { ExplanationDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
 
 const SUB: Record<string, [string, string]> = {
   direct: ["候选场景无需修改即可复用。", "The candidate scenario can be reused without modification."],
@@ -50,15 +46,6 @@ const STATUS = (d: Difference, lang: Lang) =>
       ? { label: lang === "zh" ? "阻断" : "Blocking", cls: "bad", icon: <CloseCircleFilled /> }
       : { label: lang === "zh" ? "需修改" : "Change", cls: "warn", icon: <ExclamationCircleFilled /> };
 
-function download(name: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: name });
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-const csvCell = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
-
 interface Props {
   sceneRef: SceneRef | null;
   cand: Candidate | null;
@@ -66,29 +53,23 @@ interface Props {
   query: string;
   lang: Lang;
   onReviewFacts: () => void;
-  onSaved: () => void;
-  onNext?: () => void;
+  /** The candidate was bound to the scene's clause. */
+  onBound: () => void;
 }
 
-export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReviewFacts, onSaved, onNext }: Props) {
+/** The rule comparison of one candidate, kept for finding an asset by hand; binding it replaces the clause's binding. */
+export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReviewFacts, onBound }: Props) {
   const { message } = App.useApp();
   const { t } = useT();
   const names = useNames();
   const [busy, setBusy] = useState(false);
-  const [dialog, setDialog] = useState<"files" | "checks" | "explain" | "signoff" | null>(null);
-  const [explanationId, setExplanationId] = useState<string | undefined>();
-  const [saved, setSaved] = useState(false);
-  const identity = `${sceneRef?.scene.document_id}/${sceneRef?.scene.scene_id}@${sceneRef?.scene.revision}:${cand?.asset_id}/${cand?.version_id}:${lang}`;
-  useEffect(() => {
-    setExplanationId(undefined);
-    setSaved(false);
-  }, [identity]);
+  const [dialog, setDialog] = useState<"files" | "checks" | "explain" | null>(null);
 
   if (!cand) {
     return (
       <section className="panel decide">
         <div className="ph">
-          <span className="n">3</span>{t("复用决策与追溯", "Reuse decision and traceability")}
+          <span className="n">3</span>{t("规则比对", "Rule comparison")}
         </div>
         <div className="box decide-empty">
           {searching ? <Spin /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("检索并选择候选后显示复用评估", "Search and pick a candidate to see the reuse assessment")} />}
@@ -110,32 +91,21 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
     lang,
     asset_id: cand.asset_id,
     version_id: cand.version_id ?? "",
-    explanation_id: explanationId,
   };
-  const stem = `reuse_${scene?.section_id || "search"}_${basename(cand.xosc).replace(/\.xosc$/i, "")}`;
 
-  const exportAs = async (fmt: "json" | "csv" | "html") => {
-    if (fmt === "html") {
-      setBusy(true);
-      try {
-        download(`${stem}.html`, await api.traceReport(request), "text/html");
-      } catch (e) {
-        message.error((e as Error).message);
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    if (fmt === "csv") {
-      const lines = [["field", "requirement", "candidate", "status", "action"].join(",")].concat(
-        cand.differences.map((d) => [categoryLabel(d, lang), d.requested_label, d.candidate_label, STATUS(d, lang).label, d.action].map(csvCell).join(",")),
-      );
-      download(`${stem}.csv`, lines.join("\n"), "text/csv");
-      return;
-    }
+  /** A candidate without differences is used as is; otherwise its differences become what to change. */
+  const bind = async () => {
+    if (!sceneRef || !cand.version_id) return;
     setBusy(true);
     try {
-      download(`${stem}.json`, JSON.stringify(await api.trace(request), null, 2), "application/json");
+      const changes = cand.level === "direct" ? "" : cand.differences.filter((d) => d.tier !== "note" && d.tier !== "figure")
+        .map(say).join(lang === "zh" ? "；" : "; ").slice(0, 2000);
+      await api.confirmBinding(sceneRef.projectId, { document_id: sceneRef.scene.document_id, scene_id: sceneRef.scene.scene_id }, {
+        status: cand.level === "direct" ? "same" : "modify", assets: [{ asset_id: cand.asset_id, version_id: cand.version_id }],
+        preferred: cand.asset_id, changes,
+      });
+      message.success(t("已采用为本条款的复用素材。", "Adopted for this clause."));
+      onBound();
     } catch (e) {
       message.error((e as Error).message);
     } finally {
@@ -143,26 +113,8 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
     }
   };
 
-  const describe = (item: ReviewItem) =>
-    item.difference !== null ? say(cand.differences[item.difference]) : t("文件标准检查未通过或未完成", "File standard checks did not pass or could not run");
-
-  const save = async (confirmations?: { item: string; reason: string }[]) => {
-    setBusy(true);
-    try {
-      await api.saveDecision({ ...request, confirmations });
-      setDialog(null);
-      message.success(t("决策已保存到当前项目，并固定了所选资产版本。", "Decision saved to this project and pinned to the selected asset version."));
-      setSaved(true);
-      onSaved();
-    } catch (e) {
-      message.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveBlocked = !scene
-    ? t("先选择 PDF 场景才能保存决策。", "Select a PDF scene before saving a decision.")
+  const bindBlocked = !scene
+    ? t("请先选择 PDF 条款。", "Select a PDF clause first.")
     : !cand.version_id
         ? t("此资产没有已保存的版本。", "This asset has no stored version.")
         : null;
@@ -174,7 +126,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
   return (
     <section className="panel decide">
       <div className="ph">
-        <span className="n">3</span>{t("复用决策与追溯", "Reuse decision and traceability")}
+        <span className="n">3</span>{t("规则比对", "Rule comparison")}
       </div>
 
       <div className={`decision ${level.cls}`}>
@@ -344,44 +296,17 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
       </div>
 
       <div className="actions">
-        <Space.Compact>
-          <Button type="primary" size="large" icon={<DownloadOutlined />} loading={busy} onClick={() => exportAs("json")}>
-            {t("导出复用结果", "Export reuse result")}
+        <Tooltip title={bindBlocked ?? t("将该素材设为本条款的首选复用素材（替换已有结论）；存在差异时记为“修改复用”，差异写入修改内容。",
+          "Makes this asset the clause's preferred reused asset, replacing an earlier conclusion; with differences it is recorded as \"Modify and reuse\" with them as the changes.")}>
+          <Button type="primary" size="large" icon={<LinkOutlined />} disabled={!!bindBlocked} loading={busy} onClick={bind}>
+            {t("采用为本条款的复用素材", "Adopt for this clause")}
           </Button>
-          <Dropdown
-            trigger={["click"]}
-            placement="bottomRight"
-            menu={{
-              items: [
-                { key: "json", label: t("导出追溯 JSON", "Export trace as JSON") },
-                { key: "html", label: t("导出 HTML 评估报告", "Export HTML assessment report") },
-                { key: "csv", label: t("导出差异 CSV", "Export differences as CSV") },
-              ],
-              onClick: ({ key }) => exportAs(key as "json" | "csv" | "html"),
-            }}
-          >
-            <Button type="primary" size="large" icon={<DownOutlined />} aria-label={t("更多导出选项", "More export options")} />
-          </Dropdown>
-        </Space.Compact>
-        {saved && onNext ? (
-          <Button size="large" icon={<ArrowRightOutlined />} onClick={onNext}>
-            {t("继续下一条需求", "Review next requirement")}
-          </Button>
-        ) : (
-          <Tooltip title={saveBlocked ?? (saved ? t("已保存；再次保存会生成新的记录。", "Saved; saving again creates another record.") : null)}>
-            <Button size="large" icon={saved ? <CheckOutlined /> : <SaveOutlined />} disabled={!!saveBlocked || busy}
-              onClick={() => (cand.level === "review" ? setDialog("signoff") : save())}>
-              {saved ? t("已保存", "Saved") : cand.level === "review" ? t("复核并保存", "Review and save") : t("保存决策", "Save decision")}
-            </Button>
-          </Tooltip>
-        )}
+        </Tooltip>
       </div>
       <SourceFilesDialog cand={cand} open={dialog === "files"} onClose={() => setDialog(null)} />
       <StandardChecksDialog cand={cand} open={dialog === "checks"} onClose={() => setDialog(null)} />
-      <ReviewSignoffDialog cand={cand} open={dialog === "signoff"} busy={busy} describe={describe} onClose={() => setDialog(null)} onConfirm={save} />
       {scene && (
-        <ExplanationDialog request={{ ...request, explanation_id: undefined }} open={dialog === "explain"} onClose={() => setDialog(null)}
-          onExplained={setExplanationId} />
+        <ExplanationDialog request={request} open={dialog === "explain"} onClose={() => setDialog(null)} onExplained={() => undefined} />
       )}
     </section>
   );

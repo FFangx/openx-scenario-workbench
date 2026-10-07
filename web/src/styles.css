@@ -387,7 +387,7 @@ a { color: var(--link); }
 .ox-page { flex: 1; min-height: 0; display: grid; gap: 7px; padding: 5px 4px; }
 .ox-page > .panel { padding: 12px 14px 14px; gap: 10px; overflow: auto; }
 .ox-page .ph { padding: 0; }
-.overview { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+.overview { grid-template-columns: minmax(0, 1fr); grid-auto-rows: min-content; overflow-y: auto; }
 .ov-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .metric { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--soft); }
@@ -408,18 +408,17 @@ a { color: var(--link); }
 .batch-table .ant-table-tbody > tr > td { vertical-align: top; }
 .batch-cand { display: flex; align-items: center; gap: 6px; min-width: 0; line-height: 20px; }
 .batch-cand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.batch-tabs .ant-tabs-nav { margin-bottom: 10px; }
 .batch-docs { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; font-size: 12.5px; }
 .batch-docs .ant-select { flex: 1; min-width: 0; }
 .bind-table .ant-table-tbody > tr.ant-table-row { cursor: pointer; }
-.bind-table .ant-table-expanded-row > td { background: var(--soft) !important; }
 .bind-status { display: inline-flex; gap: 4px; }
 .bind-actions { display: inline-flex; gap: 2px; }
 .bind-counts { margin-left: auto; font-size: 12px; }
 .bind-editor { display: flex; flex-direction: column; gap: 8px; padding: 2px 4px 4px; font-size: 12.5px; }
 .bind-note { font-size: 12px; }
-.bind-unsettled { color: var(--review-ink); }
-.mtag.steady { background: transparent; color: var(--green-ink); box-shadow: inset 0 0 0 1px var(--green-bg); }
+.bind-unsettled { color: var(--red-ink); }
+.mtag.steady { background: transparent; color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line2); }
+.mtag.unsettled { background: color-mix(in srgb, var(--red-ink) 14%, transparent); color: var(--red-ink); }
 .bind-cands { display: flex; flex-direction: column; gap: 2px; }
 .bind-cand { display: grid; grid-template-columns: 18px 20px auto minmax(0, 1fr) auto auto; align-items: center; column-gap: 6px;
   padding: 3px 6px; border-radius: 4px; border: 1px solid transparent; }
@@ -612,3 +611,32 @@ a { color: var(--link); }
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
 }
+
+/* ---------- the binding table: the main screen of a PDF ---------- */
+.bind-main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.bind-list .bind-counts { margin-left: auto; }
+.bind-docs .pdf-meta { flex: 1; min-width: 0; }
+.bind-docs .ant-select { width: 100%; }
+.bind-lead { font-size: 12px; margin: 0 5px; line-height: 1.55; }
+.bind-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; padding: 0 5px; font-size: 12px; color: var(--muted); }
+.bind-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.bind-legend .mtag.ant-tag { margin: 0; }
+.bind-legend .anticon { font-size: 14px; }
+.bind-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 5px; }
+.bind-find { width: 180px; margin-left: auto; }
+.bind-list .bind-table { flex: 1; min-height: 0; }
+.bind-table .ant-table-tbody > tr.row-active > td { background: var(--blue-bg) !important; }
+.bind-detail { overflow-y: auto; }
+.bind-pane { display: flex; flex-direction: column; gap: 10px; }
+.bind-head { display: flex; align-items: center; gap: 10px; padding: 0 5px; }
+.bind-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bind-detail .evi { flex: none; height: 230px; margin: 0; }
+.bind-preview { display: flex; flex-direction: column; gap: 8px; }
+.bind-preview .card-h .r { max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.bind-preview-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: start; }
+.bind-preview .road-drawing { display: block; width: 100%; border-radius: 4px; background: #20242a; }
+.bind-detail .bind-editor { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.manual-bar { gap: 12px; padding-left: 10px; }
+.manual-bar .muted { font-size: 12px; }
+.bind-confirmed { font-size: 14px; flex: none; }
+.bind-confirmed-at { display: inline-flex; align-items: center; gap: 6px; }

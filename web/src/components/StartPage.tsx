@@ -30,8 +30,8 @@ export function StartPage({ projectId, docs, library, onSearch, onOpenDoc, onImp
       <div className="start-hero">
         <h1>{t("从需求找到可复用的仿真场景", "Find reusable simulation scenarios for a requirement")}</h1>
         <p className="muted">
-          {t("用一句话描述场景检索资产库，或导入测试规程 PDF，逐条评估复用。",
-            "Describe a scenario to search the library, or import a test protocol PDF and assess reuse requirement by requirement.")}
+          {t("用一句话描述场景检索资产库，或导入测试规程 PDF：模型为每个条款推荐可复用素材，经人工确认形成复用评估。",
+            "Describe a scenario to search the library, or import a test protocol PDF: the model recommends reusable assets for every clause, and your confirmation makes the reuse assessment.")}
         </p>
         <div className="start-search">
           <Input size="large" allowClear value={text} onChange={(e) => setText(e.target.value)} onPressEnter={submit}
@@ -42,7 +42,7 @@ export function StartPage({ projectId, docs, library, onSearch, onOpenDoc, onImp
         <div className="start-meta muted">
           {library ? t(`资产库共 ${library.asset_count} 个资产`, `${library.asset_count} assets in the library`) : t("正在连接资产库…", "Connecting to the library…")}
           <span className="dot" />
-          {t("文本检索只给出相似资产，复用结论需要结构化的 PDF 需求。", "Text search finds similar assets; a reuse decision needs a structured PDF requirement.")}
+          {t("文本检索仅返回相似资产；条款级复用评估需从 PDF 开始。", "Text search returns similar assets only; clause-level reuse assessment starts from a PDF.")}
         </div>
       </div>
 

@@ -66,14 +66,14 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
         </div>
         <Popconfirm title={t("删除此版本？", "Delete this version?")} description={t("删除所选版本将移除它的本地记录与文件。", "Deleting removes this version's local record and files.")}
           onConfirm={remove} okText={t("删除", "Delete")} okButtonProps={{ danger: true }} cancelText={t("取消", "Cancel")}>
-          <Tooltip title={detail.references.length ? t("被报告或需求绑定引用的版本不能删除", "Versions a report or a requirement binding refers to cannot be deleted") : busy ? t("导入结束后可删除", "Available after the import finishes") : t("删除此版本", "Delete this version")}>
+          <Tooltip title={detail.references.length ? t("被报告或复用结论引用的版本不能删除", "Versions a report or a reuse conclusion refers to cannot be deleted") : busy ? t("导入结束后可删除", "Available after the import finishes") : t("删除此版本", "Delete this version")}>
             <Button type="text" danger icon={<DeleteOutlined />} disabled={busy || detail.references.length > 0} aria-label={t("删除此版本", "Delete this version")} />
           </Tooltip>
         </Popconfirm>
         <Button type="text" icon={<CloseOutlined />} onClick={onClose} aria-label={t("关闭", "Close")} />
       </div>
       {detail.references.length > 0 && (
-        <Alert type="info" showIcon title={t(`此版本已被 ${detail.references.length} 条报告或需求绑定引用，无法删除。`, `This version is referenced by ${detail.references.length} reports or requirement bindings and cannot be deleted.`)} />
+        <Alert type="info" showIcon title={t(`此版本已被 ${detail.references.length} 条报告或复用结论引用，无法删除。`, `This version is referenced by ${detail.references.length} reports or reuse conclusions and cannot be deleted.`)} />
       )}
       <Tabs
         size="small"
@@ -99,15 +99,13 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                   <img className="road-drawing" src={urls.roadDrawing(version)} alt={t("道路俯视图与参与者起点", "The road from above with where the participants start")} loading="lazy" />
                 )}
                 {v.compatibility_detail && <pre className="json-view">{v.compatibility_detail}</pre>}
-                <Collapse size="small" items={[{ key: "checks", label: t("文件标准检查", "File standard checks"), children: <StandardChecks checks={detail.validation ?? {}} /> }]} />
               </div>
             ),
           },
           {
-            key: "classification",
-            label: t("分类", "Classification"),
-            children: <ClassificationTab key={detail.classification?.saved_at ?? "none"} detail={detail} busy={busy}
-              onChanged={() => { load(); onChanged(); }} onModel={() => onModelClassify(version)} />,
+            key: "clauses",
+            label: clauses === null ? t("关联条款", "Clauses") : t(`关联条款（${clauses}）`, `Clauses (${clauses})`),
+            children: <AssetClauses assetId={v.asset_id} onOpen={onOpenScene} onCount={setClauses} />,
           },
           {
             key: "source",
@@ -129,6 +127,15 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                   <Button icon={<CodeOutlined />} onClick={() => setFiles(true)}>{t("查看源文件", "Inspect source files")}</Button>
                 </div>
                 {detail.standard_export && <StandardExport version={version} busy={busy} />}
+                <Collapse size="small" items={[
+                  {
+                    key: "classification",
+                    label: t("分类（功能、道路、目标）", "Classification (function, road, target)"),
+                    children: <ClassificationTab key={detail.classification?.saved_at ?? "none"} detail={detail} busy={busy}
+                      onChanged={() => { load(); onChanged(); }} onModel={() => onModelClassify(version)} />,
+                  },
+                  { key: "checks", label: t("文件标准检查", "File standard checks"), children: <StandardChecks checks={detail.validation ?? {}} /> },
+                ]} />
                 <Collapse size="small" ghost items={[{
                   key: "raw",
                   label: t("版本原始记录", "Raw version record"),
@@ -136,11 +143,6 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                 }]} />
               </div>
             ),
-          },
-          {
-            key: "clauses",
-            label: clauses === null ? t("对应需求", "Requirements") : t(`对应需求（${clauses}）`, `Requirements (${clauses})`),
-            children: <AssetClauses assetId={v.asset_id} onOpen={onOpenScene} onCount={setClauses} />,
           },
           {
             key: "history",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Collapse, Empty, Input, Select, Spin, Switch, Table, Tabs, Tag, type TableColumnsType } from "antd";
-import { DownloadOutlined, FileTextOutlined, PictureOutlined, RobotOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
-import { api, urls, type AssetRow, type Job, type RequirementRecord, type VersionRef } from "../api";
+import { Alert, Button, Collapse, Empty, Input, Select, Spin, Switch, Table, type TableColumnsType } from "antd";
+import { PictureOutlined, RobotOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
+import { api, type AssetRow, type Job, type VersionRef } from "../api";
 import { dateTime, useT } from "../i18n";
 import { useJob } from "../jobs";
 import { PREVIEW_FAILED, valueLabel } from "../vocab";
@@ -22,11 +22,9 @@ const keyOf = (v: VersionRef) => `${v.asset_id}:${v.version_id}`;
 
 export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }: Props) {
   const { t } = useT();
-  const [tab, setTab] = useState<"assets" | "requirements">("assets");
   const [rows, setRows] = useState<AssetRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<VersionRef | null>(null);
-  const [requirement, setRequirement] = useState<RequirementRecord | null>(null);
   const [importing, setImporting] = useState(false);
   const [pending, setPending] = useState(0);
   const [lastJob, setLastJob] = useState<Job | null>(null);
@@ -77,54 +75,36 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
           <Button type="primary" icon={<UploadOutlined />} onClick={() => setImporting(true)}>{t("导入资产", "Import assets")}</Button>
         </div>
         {error && <Alert type="error" showIcon closable title={error} onClose={() => setError(null)} />}
-        <Tabs
-          className="assets-tabs"
-          activeKey={tab}
-          onChange={(k) => setTab(k as "assets" | "requirements")}
-          items={[
-            {
-              key: "assets",
-              label: t("仿真资产", "Simulation assets"),
-              children: (
-                <>
-                  {job && (
-                    <Collapse size="small" className="job-strip" defaultActiveKey={busy ? ["job"] : []} items={[{
-                      key: "job",
-                      label: <JobSummary job={job} />,
-                      children: <div className="settings-form"><JobProgress job={job} onCancel={cancel} unit={["个场景", "scenarios"]} /><ImportReports job={job} /></div>,
-                      extra: !busy && <Button size="small" type="text" onClick={(e) => { e.stopPropagation(); setJob(null); setLastJob(null); }}>{t("收起", "Dismiss")}</Button>,
-                    }]} />
-                  )}
-                  {previews.job && (
-                    <Collapse size="small" className="job-strip preview-strip" defaultActiveKey={previewing ? ["job"] : []} items={[{
-                      key: "job",
-                      label: <PreviewSummary job={previews.job} />,
-                      children: <div className="settings-form"><JobProgress job={previews.job} onCancel={previews.cancel} unit={["个版本", "versions"]} /></div>,
-                      extra: !previewing && <Button size="small" type="text" onClick={(e) => { e.stopPropagation(); previews.setJob(null); setPreviewJob(null); }}>{t("收起", "Dismiss")}</Button>,
-                    }]} />
-                  )}
-                  {pending > 0 && !busy && (
-                    <div className="pending-strip">
-                      <span>{t(`${pending} 个版本待模型复核分类`, `Versions awaiting model classification: ${pending}`)}</span>
-                      <Button size="small" icon={<RobotOutlined />} onClick={() => modelClassify()}>{t("继续模型分类", "Resume model classification")}</Button>
-                    </div>
-                  )}
-                  {!rows ? <div className="center-pad"><Spin /></div> : (
-                    <AssetTable rows={rows} selected={selected} onSelect={(v) => { setSelected(v); setRequirement(null); }} onImport={() => setImporting(true)} />
-                  )}
-                </>
-              ),
-            },
-            {
-              key: "requirements",
-              label: t("PDF 需求场景库", "PDF requirement library"),
-              children: <RequirementLibrary selected={requirement} onSelect={(r) => { setRequirement(r); setSelected(null); }} />,
-            },
-          ]}
-        />
+        <>
+          {job && (
+            <Collapse size="small" className="job-strip" defaultActiveKey={busy ? ["job"] : []} items={[{
+              key: "job",
+              label: <JobSummary job={job} />,
+              children: <div className="settings-form"><JobProgress job={job} onCancel={cancel} unit={["个场景", "scenarios"]} /><ImportReports job={job} /></div>,
+              extra: !busy && <Button size="small" type="text" onClick={(e) => { e.stopPropagation(); setJob(null); setLastJob(null); }}>{t("收起", "Dismiss")}</Button>,
+            }]} />
+          )}
+          {previews.job && (
+            <Collapse size="small" className="job-strip preview-strip" defaultActiveKey={previewing ? ["job"] : []} items={[{
+              key: "job",
+              label: <PreviewSummary job={previews.job} />,
+              children: <div className="settings-form"><JobProgress job={previews.job} onCancel={previews.cancel} unit={["个版本", "versions"]} /></div>,
+              extra: !previewing && <Button size="small" type="text" onClick={(e) => { e.stopPropagation(); previews.setJob(null); setPreviewJob(null); }}>{t("收起", "Dismiss")}</Button>,
+            }]} />
+          )}
+          {pending > 0 && !busy && (
+            <div className="pending-strip">
+              <span>{t(`${pending} 个版本待模型复核分类`, `Versions awaiting model classification: ${pending}`)}</span>
+              <Button size="small" icon={<RobotOutlined />} onClick={() => modelClassify()}>{t("继续模型分类", "Resume model classification")}</Button>
+            </div>
+          )}
+          {!rows ? <div className="center-pad"><Spin /></div> : (
+            <AssetTable rows={rows} selected={selected} onSelect={setSelected} onImport={() => setImporting(true)} />
+          )}
+        </>
       </section>
       <section className="panel">
-        {tab === "assets" && selected ? (
+        {selected ? (
           <AssetDetail
             version={selected}
             busy={busy}
@@ -137,12 +117,9 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
             onModelClassify={(v) => modelClassify([v])}
             onOpenScene={onOpenScene}
           />
-        ) : tab === "requirements" && requirement ? (
-          <RequirementDetail record={requirement} onOpen={() => onOpenScene(requirement.project_id, requirement.document_id, requirement.scene_id)} />
         ) : (
           <div className="ov-empty">
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={tab === "assets" ? t("在左侧选择一个版本查看详情、预览和分类。", "Select a version on the left to see its details, preview and labels.")
-              : t("在左侧选择一条已入库的需求。", "Select a published requirement on the left.")} />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("在左侧选择一个版本，查看预览、关联条款和来源。", "Select a version on the left to see its preview, the clauses that adopt it and its source.")} />
           </div>
         )}
       </section>
@@ -261,72 +238,6 @@ function AssetTable({ rows, selected, onSelect, onImport }: { rows: AssetRow[]; 
           ),
         }}
       />
-    </div>
-  );
-}
-
-function RequirementLibrary({ selected, onSelect }: { selected: RequirementRecord | null; onSelect: (r: RequirementRecord) => void }) {
-  const { t } = useT();
-  const [records, setRecords] = useState<RequirementRecord[] | null>(null);
-  const [query, setQuery] = useState("");
-  useEffect(() => {
-    api.requirements().then(setRecords).catch(() => setRecords([]));
-  }, []);
-  if (!records) return <div className="center-pad"><Spin /></div>;
-  if (!records.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("在工作台的“需求事实”中核对场景，点击确认入库。", "Review a scene under Requirement facts in the workbench and publish it.")} />;
-  }
-  const q = query.trim().toLocaleLowerCase();
-  const visible = records.filter((r) => !q || `${r.title} ${r.preferred_text}`.toLocaleLowerCase().includes(q));
-  return (
-    <div className="asset-table">
-      <div className="asset-filters">
-        <Input size="small" allowClear prefix={<SearchOutlined />} value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("名称或原文", "Name or source text")} aria-label={t("搜索需求", "Search requirements")} />
-      </div>
-      <div className="muted asset-count">{t(`${visible.length} 条需求`, `${visible.length} requirements`)}</div>
-      <Table<RequirementRecord>
-        className="ov-table ov-reports req-library"
-        size="small"
-        rowKey="library_id"
-        pagination={false}
-        tableLayout="fixed"
-        dataSource={visible}
-        rowClassName={(r) => (r.library_id === selected?.library_id ? "row-active" : "")}
-        onRow={(r) => ({ onClick: () => onSelect(r) })}
-        locale={{ emptyText: t("没有符合搜索条件的需求。", "No requirements match this search.") }}
-        columns={[
-          { title: t("需求场景", "Requirement"), dataIndex: "title", ellipsis: true },
-          { title: t("修订", "Rev."), dataIndex: "revision", width: 60, render: (n: number) => `r${n}` },
-          { title: t("功能", "Function"), key: "f", width: 90, render: (_, r) => String(r.classification.function ?? "—") },
-          { title: t("确认时间", "Confirmed"), dataIndex: "reviewed_at", width: 130, render: dateTime },
-        ]}
-      />
-    </div>
-  );
-}
-
-function RequirementDetail({ record, onOpen }: { record: RequirementRecord; onOpen: () => void }) {
-  const { t } = useT();
-  return (
-    <div className="asset-detail">
-      <div className="asset-detail-head">
-        <div className="sel-name">
-          <div className="name">{record.title}</div>
-          <div className="muted">{t(`已确认修订 ${record.revision} · ${dateTime(record.reviewed_at)}`, `Confirmed revision ${record.revision} · ${dateTime(record.reviewed_at)}`)}</div>
-        </div>
-        <Tag className="mtag direct">{t("已入库", "Published")}</Tag>
-      </div>
-      <p className="facts-text">{record.preferred_text}</p>
-      <Collapse size="small" items={[{
-        key: "s",
-        label: t("分类与结构", "Classification and structure"),
-        children: <pre className="json-view">{JSON.stringify({ classification: record.classification, structure: record.structure }, null, 2)}</pre>,
-      }]} />
-      <div className="settings-actions">
-        <Button icon={<DownloadOutlined />} href={urls.requirement(record.library_id)}>{t("下载场景包", "Download scene package")}</Button>
-        <Button icon={<FileTextOutlined />} onClick={onOpen}>{t("打开源文档", "Open source document")}</Button>
-      </div>
     </div>
   );
 }
