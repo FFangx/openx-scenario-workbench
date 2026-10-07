@@ -26,7 +26,7 @@ from pathlib import Path
 from .catalog import AssetFile, OpenXAsset, build_catalog
 from .checkout import checkout_root
 from .retrieval import OpenXIndex, build_encoder
-from .reuse import LEVELS, change_cost, classify_reuse_level, compare_query_to_asset
+from .reuse import LEVELS, change_cost, classify_reuse_level, compare_query_to_asset, figure_cost
 from .reuse_facts import asset_structure_query
 from .scene_package import ScenePackage, query_structure_text, scene_package_to_query
 
@@ -87,7 +87,8 @@ def rank(index: OpenXIndex | None, assets: list[OpenXAsset], query, ranker: str)
         keyed = []
         for position, asset in enumerate(assets):
             differences = compare_query_to_asset(query, asset, candidate_structure=structures[position])
-            keyed.append(((sum(item.blocking for item in differences), change_cost(differences), position),
+            keyed.append(((sum(item.blocking for item in differences), change_cost(differences),
+                           figure_cost(differences), position),
                           asset.asset_id, classify_reuse_level(differences)))
         return [(asset_id, level) for _, asset_id, level in sorted(keyed)]
     if ranker == "full":

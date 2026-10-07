@@ -48,7 +48,12 @@ It does not introduce a second ingestion, model or indexing stack.
   end condition, which describe the evaluation and are listed but never compared or
   costed. An unverified core fact makes a review; an unverified adjustable fact is
   listed as "confirm when changing" and makes a modification. Unknown categories are
-  core.
+  core. **Figure** (2026-10-07): a fact the requirement's figure shows but its text does
+  not (evidence source "图": a bearing or facing, the ego's turn or lane) is an aid. An
+  asset that shows it ranks ahead of an equal one that does not; one that does not is
+  listed to check against the figure (`COST_FIGURE`) and is neither blocking nor a review.
+  The verdict and the change cost rest on the text; figure checks order candidates of
+  equal change cost. A person's edit of the fact drops its figure evidence.
 - The tested function is a setting of the reuse, not part of the scenario (2026-10-05):
   a story built for AEB serves FCW or ACC after the system and its scoring are switched.
   Most of it lives outside the scenario file: on the 230 assets with confirmed function
@@ -70,7 +75,8 @@ It does not introduce a second ingestion, model or indexing stack.
   test: "驾驶员触发的换道" reads either way. Only the inputs that take over the controls
   (pedals, wheel) count against a functional test.
 - The ego's lane among its direction's lanes (`ego_lane`, prompt v9) is not compared with
-  an asset's start lane yet: it stays an adjustable item to verify, like a placement.
+  an asset's start lane yet: it stays an adjustable item to verify, like a placement (read
+  from a figure, a figure check).
 - The way the ego leaves a junction (`ego_turn`: straight, left, right, U-turn) is read
   from the ego's routing (`scene_facts.ego_turn`). A road file without a junction leaves
   nowhere to turn, so its ego goes straight whatever the routing says (the bend of a

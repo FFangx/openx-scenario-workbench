@@ -65,6 +65,9 @@ class ParticipantSignature:
     # A requirement's stated pedestrian age (儿童 / 成人), kept among `unverified` until an asset
     # shows it; carried here so an alternative left out takes its age along.
     age: str = field(default="", compare=False)
+    # Which of "bearing" and "facing" a requirement read from a figure rather than its text: an
+    # aid to ranking, never a conflict (reuse_policy.TIER_FIGURE). Only a requirement has it.
+    from_figure: tuple[str, ...] = field(default=(), compare=False)
 
     def __post_init__(self) -> None:
         if not self.actions:
@@ -131,6 +134,10 @@ class RetrievalQuery:
     # speed-limit values it sets up (several: alternatives). The asset side is its road file.
     traffic_controls: frozenset[str] = frozenset()
     speed_limits_kph: tuple[float, ...] = ()
+    # Which of its direction's lanes a requirement's ego drives in (最左侧车道 / 最右侧车道 / 中间车道).
+    ego_lane: str = ""
+    # The requirement's scene facts ("ego_turn", "ego_lane") read from a figure rather than its text.
+    figure_facts: frozenset[str] = frozenset()
 
 
 STRUCTURE_KINDS = {
@@ -235,6 +242,12 @@ def query_structure_text(query: RetrievalQuery) -> str:
     return json.dumps(content, ensure_ascii=False, sort_keys=True)
 
 
+def _from_figure(item: dict, fields: tuple[str, ...]) -> tuple[str, ...]:
+    """The fields the extraction read from a figure; a person's edit of a field drops its evidence."""
+    evidence = item.get("evidence") or {}
+    return tuple(name for name in fields if (evidence.get(name) or {}).get("source") == "图")
+
+
 def _structured_query(package: ScenePackage) -> RetrievalQuery:
     from .pdf_v2.scene_schemas import SceneStructure
 
@@ -264,6 +277,7 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
                 speed_kph=float(speed) if speed is not None else None,
                 alternative=participant.get("alternative_group") or "",
                 age=participant["age"] if participant["age"] != "未知" else "",
+                from_figure=_from_figure(participant, ("bearing", "facing")),
             )
         )
         if participant["age"] != "未知":
@@ -327,8 +341,11 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     if structure["test_intent"] not in {"未知", "驾驶员干预试验"}:
         unverified.append(f"test_intent={structure['test_intent']}")
     # Which of its direction's lanes the ego drives in; an asset's start lane is not compared yet.
-    if structure.get("ego_lane", "未知") != "未知":
-        unverified.append(f"ego_lane={structure['ego_lane']}")
+    # Read from a figure, it is checked against the figure instead (reuse_structured).
+    figure_facts = frozenset(_from_figure(structure, ("ego_turn", "ego_lane")))
+    ego_lane = structure.get("ego_lane", "未知")
+    if ego_lane != "未知" and "ego_lane" not in figure_facts:
+        unverified.append(f"ego_lane={ego_lane}")
     for key in (
         "lateral_direction",
         "curve_radius_m",
@@ -380,6 +397,8 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         ego_turn=STRUCTURE_TURNS.get(structure.get("ego_turn", ""), ""),
         traffic_controls=frozenset(STRUCTURE_TRAFFIC_CONTROLS[item] for item in structure.get("traffic_controls", ())),
         speed_limits_kph=tuple(params.get("speed_limits_kph", ())),
+        ego_lane=ego_lane if ego_lane != "未知" else "",
+        figure_facts=figure_facts,
     )
     if not any(
         (

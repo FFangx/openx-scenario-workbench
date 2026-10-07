@@ -589,3 +589,11 @@ def test_the_way_the_ego_leaves_a_junction_is_compared():
     assert routes("左转", turning) == [("ego_turn=left", "ego_turn=right", 2, True, "core")]
     assert routes("直行", junction) == [("ego_turn=straight", "not read", 0.5, False, "core")]
     assert routes("未知", junction) == []
+    # Drawn in a figure, not written: checked against it, never a route to change or a review.
+    for turn, item, shown in (("左转", turning, "ego_turn=right"), ("直行", junction, "not read")):
+        package = ScenePackage("REQ", "Junction", "", structure={
+            "road_class": "交叉口", "ego_turn": turn, "evidence": {"ego_turn": {"source": "图", "quote": "图1", "reason": "箭头"}}})
+        found = [(difference.category, difference.candidate, difference.tier)
+                 for difference in compare_structure(scene_package_to_query(package), item)
+                 if difference.category in {"ego_route", "figure"}]
+        assert found == [("figure", shown, "figure")]

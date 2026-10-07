@@ -60,6 +60,7 @@ LABELS = {
     "set the speed limit sign value": "调整限速标志数值",
     "variant": "任选其一", "select or build the other alternatives": "其余任选项另选或另建素材",
     "ego_lane": "主车车道",
+    "figure": "示意图", "check against the figure": "对照示意图核对", "not compared": "未比对",
 }
 LABELS.update({f"ego_turn={value}": "主车" + label for label, value in STRUCTURE_TURNS.items()})
 for vocabulary in (STRUCTURE_KINDS, STRUCTURE_BEARINGS, STRUCTURE_FACING, STRUCTURE_ACTIONS):

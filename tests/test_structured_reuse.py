@@ -11,7 +11,7 @@ from openx_workbench.reuse_structured import participant_differences
 from openx_workbench.scene_package import ParticipantSignature, ScenePackage, scene_package_to_query
 
 
-def authored_asset(*, speed=10, final_speed=10, function="AEB", weather="dry"):
+def authored_asset(*, speed=10, final_speed=10, function="AEB", weather="dry", target_y=0):
     fixture = Path(__file__).parent / "fixtures"
     source = (fixture / "minimal.xosc").read_text(encoding="utf-8")
     source = source.replace('description="Minimal cut-in"', 'description="Opaque 001"')
@@ -23,7 +23,7 @@ def authored_asset(*, speed=10, final_speed=10, function="AEB", weather="dry"):
       <SpeedActionTarget><AbsoluteTargetSpeed value="10"/></SpeedActionTarget>
       </SpeedAction></LongitudinalAction></PrivateAction></Private>
       <Private entityRef="Target"><PrivateAction><TeleportAction><Position>
-      <WorldPosition x="20" y="0" h="0"/></Position></TeleportAction></PrivateAction>
+      <WorldPosition x="20" y="{target_y}" h="0"/></Position></TeleportAction></PrivateAction>
       <PrivateAction><LongitudinalAction><SpeedAction><SpeedActionTarget>
       <AbsoluteTargetSpeed value="{speed}"/></SpeedActionTarget></SpeedAction>
       </LongitudinalAction></PrivateAction></Private>'''
@@ -344,17 +344,20 @@ def test_assignment_solver_agrees_with_enumeration():
                   ("same", "crossing", "unknown"), ("cruise", "static", "stop", "unknown"))
     generator = random.Random(7)
 
+    drawn = ((), ("bearing",), ("facing",), ("bearing", "facing"))
+
     def draw(count):
         return tuple(ParticipantSignature(*(generator.choice(options) for options in vocabulary[:3]),
-                                          (generator.choice(vocabulary[3]),)) for _ in range(count))
+                                          (generator.choice(vocabulary[3]),), from_figure=generator.choice(drawn))
+                     for _ in range(count))
 
     def total(requested, candidates, pairing):
         differences = [item for expected, column in zip(requested, pairing) for item in
                        reuse_structured._pair_differences(expected, candidates[column] if column is not None else None)]
         differences += [reuse_structured._extra_difference(actual) for column, actual in enumerate(candidates)
                         if column not in pairing]
-        blocking, cost, unverified = reuse_structured._score(differences)
-        return blocking, round(cost, 6), unverified
+        blocking, cost, figure, unverified = reuse_structured._score(differences)
+        return blocking, round(cost, 6), round(figure, 6), unverified
 
     for _ in range(300):
         requested, candidates = draw(generator.randint(1, 5)), draw(generator.randint(0, 5))
@@ -365,6 +368,36 @@ def test_assignment_solver_agrees_with_enumeration():
         enumerated = reuse_structured._enumerate(table, absent, extra)
         assigned = reuse_structured._assign(table, absent, extra)
         assert total(requested, candidates, assigned) == total(requested, candidates, enumerated)
+
+
+DRAWN = {"source": "图", "quote": "图1", "reason": "画在主车右前方"}
+
+
+def test_a_fact_drawn_in_a_figure_aids_ranking_but_never_decides_reuse():
+    car = {"kind": "乘用车", "bearing": "右前方", "facing": "同向", "actions": ["匀速行驶"]}
+    ahead, right = authored_asset(), replace(authored_asset(target_y=-3.5), asset_id="right")
+    # Written in the text, a car ahead on the right is another interaction than one in the ego's lane.
+    written = search(requirement(participants=[{**car, "evidence": {"bearing": {"source": "原文", "quote": "右前方"}}}]),
+                     ahead, right)
+    assert [(item.asset.asset_id, item.reuse_level) for item in written] == [("right", "direct"), (ahead.asset_id, "new_build")]
+    # Drawn only, it is checked against the figure: the verdict rests on the text, the figure ranks.
+    drawn = search(requirement(participants=[{**car, "evidence": {"bearing": DRAWN}}]), ahead, right)
+    assert [(item.asset.asset_id, item.reuse_level) for item in drawn] == [("right", "direct"), (ahead.asset_id, "direct")]
+    assert drawn[0].differences == ()
+    assert [(item.category, item.tier, item.blocking, item.verified) for item in drawn[1].differences] == [
+        ("figure", "figure", False, False)]
+    assert drawn[1].estimated_change_cost == 0
+
+
+def test_an_ego_lane_drawn_in_a_figure_is_checked_against_it():
+    written = search(requirement(ego_lane="最右侧车道"), authored_asset())[0]
+    assert written.reuse_level == "modify"
+    assert [(item.category, item.requested, item.tier) for item in written.differences] == [
+        ("unverified", "ego_lane=最右侧车道", "adjustable")]
+    drawn = search(requirement(ego_lane="最右侧车道", evidence={"ego_lane": DRAWN}), authored_asset())[0]
+    assert drawn.reuse_level == "direct"
+    assert [(item.category, item.requested, item.candidate) for item in drawn.differences] == [
+        ("figure", "ego_lane=最右侧车道", "not compared")]
 
 
 def _bound(text, speed):

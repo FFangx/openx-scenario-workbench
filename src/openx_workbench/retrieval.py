@@ -16,7 +16,7 @@ from .atomic_write import write_bytes
 from .catalog import OpenXAsset
 from .models import ParseBundle
 from . import reuse_policy as policy
-from .reuse import change_cost, classify_reuse_level, compare_query_to_asset
+from .reuse import change_cost, classify_reuse_level, compare_query_to_asset, figure_cost
 from .reuse_differences import ReuseDifference
 from .reuse_facts import (
     asset_structure_query,
@@ -429,15 +429,17 @@ def rank_candidates(
     (similarity NAME_STANDOUT_Z standard deviations above the library mean) goes first.
     Then come the remaining standout matches among the NAME_RECALL most similar assets,
     whatever their verdict, fewest blocking differences first. Everything else keeps
-    the structural order: blocking differences, change cost, then score. When no
+    the structural order: blocking differences, change cost, the facts drawn in a figure
+    it does not show, then score. When no
     candidate is verified or reviewable, every one is a new build and structure alone
     picks the closest base.
     """
     count = len(differences)
     blocking = [sum(item.blocking for item in items) for items in differences]
     costs = [change_cost(items) for items in differences]
+    figures = [figure_cost(items) for items in differences]
     levels = [classify_reuse_level(items) for items in differences]
-    structural = sorted(range(count), key=lambda index: (blocking[index], costs[index], -scores[index]))
+    structural = sorted(range(count), key=lambda index: (blocking[index], costs[index], figures[index], -scores[index]))
     mean, spread = statistics.fmean(similarities), statistics.pstdev(similarities)
     standout = {
         index for index in range(count)

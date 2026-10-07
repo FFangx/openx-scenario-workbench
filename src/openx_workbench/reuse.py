@@ -38,17 +38,27 @@ def classify_reuse_level(differences: tuple[ReuseDifference, ...]) -> str:
     review, and changes a modification, a major one from MAJOR_MODIFY_COST.
 
     Unverified adjustable facts (a speed, the weather) are confirmed while making the
-    changes, so they make a modification rather than a review. Notes never count.
+    changes, so they make a modification rather than a review. Notes and figure checks
+    never count: the verdict rests on the requirement's text.
     """
     if any(item.blocking for item in differences):
         return "new_build"
     if any(not item.verified and item.tier == policy.TIER_CORE for item in differences):
         return "review"
-    if not any(item.tier != policy.TIER_NOTE for item in differences):
+    if all(item.tier in _ASIDE for item in differences):
         return "direct"
     return "major_modify" if change_cost(differences) >= policy.MAJOR_MODIFY_COST else "modify"
 
 
+_ASIDE = (policy.TIER_NOTE, policy.TIER_FIGURE)
+
+
 def change_cost(differences: tuple[ReuseDifference, ...]) -> float:
-    """The summed cost of everything to change or confirm; notes cost nothing."""
-    return round(sum(item.cost for item in differences if item.tier != policy.TIER_NOTE), 3)
+    """The summed cost of everything to change or confirm; notes and figure checks cost nothing."""
+    return round(sum(item.cost for item in differences if item.tier not in _ASIDE), 3)
+
+
+def figure_cost(differences: tuple[ReuseDifference, ...]) -> float:
+    """The summed cost of the facts drawn in a figure that the asset does not show: it ranks
+    candidates of equal change cost, never decides one."""
+    return round(sum(item.cost for item in differences if item.tier == policy.TIER_FIGURE), 3)

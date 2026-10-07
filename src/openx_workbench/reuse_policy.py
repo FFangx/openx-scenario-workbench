@@ -27,6 +27,7 @@ COST_TRIGGER = 1.5  # change a start trigger
 COST_PLACEMENT = 1.5  # move a moving participant's start or retime its trigger; turn a standing one
 COST_ROAD = 1.0  # select or modify the OpenDRIVE road
 COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
+COST_FIGURE = 0.5  # a fact read only from a figure that the asset does not show: check it against the figure
 
 # ---------- difference tiers ----------
 # Which differences decide reuse. Core facts make up the scenario's story and its road
@@ -36,10 +37,15 @@ COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
 # Notes (test intent, end condition) describe the evaluation, not the scenario: listed, never
 # compared. Mirrors the ScenarioManager layering of 2026-07-27 (story > map > parameters).
 
-TIER_CORE, TIER_ADJUSTABLE, TIER_NOTE = "core", "adjustable", "note"
+# A fact the requirement's text does not state but its figure shows (a bearing drawn, not written)
+# is an aid: an asset that shows it ranks ahead of an equal one that does not, and one that does
+# not is listed to check against the figure. It never decides reuse: the verdict and its change
+# cost rest on the text alone.
+TIER_CORE, TIER_ADJUSTABLE, TIER_NOTE, TIER_FIGURE = "core", "adjustable", "note", "figure"
 # An unresolved parameter reference in the asset ("parameter_resolution") stays core: what the
 # file does at all is unclear until it is resolved.
 TIER_BY_CATEGORY = {
+    "figure": TIER_FIGURE,
     "function": TIER_ADJUSTABLE,  # a setting of the reuse, rarely in the file (2026-10-05)
     "background_participant": TIER_ADJUSTABLE,  # kept or removed while reusing, like scenery
     "parameter": TIER_ADJUSTABLE,
@@ -98,7 +104,7 @@ MOVING_SPEED_MPS = 0.3  # speeds up to this (about 1 km/h) are standstill; targe
 # Two stages (retrieval.rank_candidates): structure decides the verdict and puts
 # verified candidates first; among structurally tied review candidates a standout
 # name or text match leads; then the other standout matches; then the rest by
-# (blocking differences, change cost, -score). The score also orders free-text search.
+# (blocking differences, change cost, figure checks, -score). The score also orders free-text search.
 
 WEIGHT_SEMANTIC = 0.55  # encoder similarity of requirement and asset text
 WEIGHT_SCENARIO = 0.30  # overlap of participants, behaviors, triggers and function

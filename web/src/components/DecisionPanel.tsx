@@ -34,10 +34,13 @@ const SUB: Record<string, [string, string]> = {
 };
 
 // Only an unverified core fact needs review; an adjustable one is confirmed while making the change,
-// and a note (test intent, end condition) is never compared.
+// a note (test intent, end condition) is never compared, and a fact only drawn in a figure is
+// checked against it without deciding reuse.
 const STATUS = (d: Difference, lang: Lang) =>
   d.tier === "note"
     ? { label: lang === "zh" ? "提示" : "Note", cls: "", icon: <QuestionCircleFilled /> }
+    : d.tier === "figure"
+    ? { label: lang === "zh" ? "按图核对" : "Check against figure", cls: "", icon: <QuestionCircleFilled /> }
     : !d.verified && d.tier === "adjustable"
     ? { label: lang === "zh" ? "改时确认" : "Confirm when changing", cls: "warn", icon: <QuestionCircleFilled /> }
     : !d.verified

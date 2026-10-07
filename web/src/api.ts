@@ -211,7 +211,7 @@ const CATEGORY_EN: Record<string, string> = {
   participant_signature: "Participant", participant: "Participant", participant_topology: "Participant relation",
   background_participant: "Background participant", placement: "Placement", ego_action: "Ego action", action: "Action", entity: "Participant", trigger: "Trigger", environment: "Environment",
   parameter: "Parameter", parameter_resolution: "Parameter resolution", weather: "Weather", time_of_day: "Time of day",
-  ego_route: "Ego route", variant: "Either-or choice",
+  ego_route: "Ego route", variant: "Either-or choice", figure: "Figure",
 };
 export const categoryLabel = (d: { category: string; category_label: string }, lang: Lang) =>
   lang === "zh" ? d.category_label : CATEGORY_EN[d.category] ?? d.category.replaceAll("_", " ").replace(/^./, (m) => m.toUpperCase());

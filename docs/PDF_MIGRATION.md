@@ -54,7 +54,9 @@ with other scenes stay out unless named). When the configured model declares ima
 settings take `input_modalities` from the model list), they follow the scene's text as image parts
 of the same request. `scene-structure-prompt-v10` adds the evidence source "图": the quote names a
 figure sent with the scene and the reason says what it shows; code checks both. The text still
-wins over a figure, and a crossing target's bearing is the side it starts from. The figures a
+wins over a figure, and a crossing target's bearing is the side it starts from. Matching uses a
+fact read from a figure only as an aid: it ranks, it never blocks or decides the verdict
+(see REUSE_ALIGNMENT.md, figure tier). The figures a
 structure was read with are stored per scene and shown, cut from the page, on the fact's tag.
 v9 found the scenes in one call with the unchanged v1 instructions, then read their structure scene by
 scene (`scene-structure-prompt-v9`): one scene per call with the clauses its text refers to by

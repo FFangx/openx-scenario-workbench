@@ -126,6 +126,9 @@ def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: Retr
                 verified=False,
             )
         )
+    if query.ego_lane and "ego_lane" in query.figure_facts:
+        # An asset's start lane is not compared yet: a lane drawn in a figure is checked against it.
+        differences.append(_figure_check(f"ego_lane={query.ego_lane}", "not compared"))
     if query.tested_function:
         actual = candidate.tested_function
         # The tested function is a setting of the reuse (which system is switched on, how it is
@@ -307,6 +310,8 @@ def _route_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list
     if not query.ego_turn or query.ego_turn == candidate.ego_turn:
         return []
     requested = f"ego_turn={query.ego_turn}"
+    if "ego_turn" in query.figure_facts:
+        return [_figure_check(requested, f"ego_turn={candidate.ego_turn}" if candidate.ego_turn else "not read")]
     if not candidate.ego_turn:
         return [ReuseDifference("ego_route", requested, "not read", "verify the ego's route",
                                 cost=policy.COST_PARAMETER, verified=False)]
@@ -402,6 +407,26 @@ def _turned(expected: ParticipantSignature, actual: ParticipantSignature) -> boo
             and expected.facing != _facing(actual, expected) and "unknown" not in {expected.facing, actual.facing})
 
 
+def _figure_check(requested: str, candidate: str) -> ReuseDifference:
+    """A fact the requirement's figure shows, not its text, that the asset does not show."""
+    return ReuseDifference("figure", requested, candidate, "check against the figure",
+                           cost=policy.COST_FIGURE, verified=False)
+
+
+def _drawn(expected: ParticipantSignature, actual: ParticipantSignature) -> ParticipantSignature:
+    """`expected` with each component it read from a figure taken from `actual` where both are
+    known and differ: a figure aids ranking (_figure_check), it never makes a conflict or a change."""
+    taken = {}
+    if ("bearing" in expected.from_figure and expected.bearing != actual.bearing
+            and "unknown" not in {expected.bearing, actual.bearing}):
+        taken["bearing"] = actual.bearing
+    shown = _facing(actual, expected)
+    if ("facing" in expected.from_figure and _facing(expected, actual) != shown
+            and "unknown" not in {expected.facing, shown}):
+        taken["facing"] = shown
+    return replace(expected, **taken) if taken else expected
+
+
 def _placement(expected: ParticipantSignature, actual: ParticipantSignature) -> str:
     """The change that places `actual` like `expected` when that is all that differs, else ""."""
     if _retimed(expected, actual):
@@ -438,7 +463,8 @@ def _pair_differences(expected: ParticipantSignature, actual: ParticipantSignatu
         return [ReuseDifference("participant_signature", signature, "missing", "add participant", True,
                                 policy.COST_PARTICIPANT)]
     result = []
-    mismatch, action_mismatch, _ = _conflicts(expected, actual)
+    compared = _drawn(expected, actual)
+    mismatch, action_mismatch, _ = _conflicts(compared, actual)
     if mismatch:
         result.append(ReuseDifference("participant_signature", signature, actual.key(),
                                       "rebuild participant interaction", True, policy.COST_PARTICIPANT))
@@ -452,14 +478,16 @@ def _pair_differences(expected: ParticipantSignature, actual: ParticipantSignatu
         if extra_actions:
             result.append(ReuseDifference("action", signature, actual.key(), "remove additional participant behavior",
                                           cost=policy.COST_BEHAVIOR))
-    if not mismatch and (placement := _placement(expected, actual)):
+    if not mismatch and (placement := _placement(compared, actual)):
         result.append(ReuseDifference("placement", signature, actual.key(), placement, cost=policy.COST_PLACEMENT))
     if not mismatch and any(
         "unknown" in (item.kind, item.bearing, _facing(item, other), *item.actions)
-        for item, other in ((expected, actual), (actual, expected))
+        for item, other in ((compared, actual), (actual, compared))
     ):
         result.append(ReuseDifference("participant_topology", signature, actual.key(), "verify participant facts",
                                       cost=policy.COST_VERIFY_PARTICIPANT, verified=False))
+    if not mismatch and compared is not expected:
+        result.append(_figure_check(signature, actual.key()))
     if not mismatch and expected.speed_kph is not None:
         result.extend(_speed_difference(expected, actual))
     return result
@@ -491,9 +519,12 @@ def _background_differences(left_over: list[ParticipantSignature]) -> list[Reuse
             for key, count in sorted(counts.items())]
 
 
-def _score(differences: list[ReuseDifference]) -> tuple[int, float, int]:
-    """The ranking key of a set of differences (blocking count, then change cost), then unverified count."""
-    return (sum(item.blocking for item in differences), sum(item.cost for item in differences),
+def _score(differences: list[ReuseDifference]) -> tuple[int, float, float, int]:
+    """The ranking key of a set of differences (blocking count, then change cost, then the facts
+    drawn in a figure it does not show), then unverified count."""
+    return (sum(item.blocking for item in differences),
+            sum(item.cost for item in differences if item.tier != policy.TIER_FIGURE),
+            sum(item.cost for item in differences if item.tier == policy.TIER_FIGURE),
             sum(not item.verified for item in differences))
 
 
@@ -511,7 +542,7 @@ def _pair(
     table = [[_score(_pair_differences(expected, actual)) for actual in candidates] for expected in requested]
     absent = [_score(_pair_differences(expected, None)) for expected in requested]
     extra = [_score([_extra_difference(actual)]) if index < len(candidates) - scenery and not actual.background
-             else (0, 0, 0) for index, actual in enumerate(candidates)]
+             else (0, 0, 0, 0) for index, actual in enumerate(candidates)]
     if max(len(requested), len(candidates)) <= ENUMERATION_LIMIT:
         return _enumerate(table, absent, extra)
     return _assign(table, absent, extra)
@@ -524,9 +555,10 @@ def _enumerate(table, absent, extra) -> list[int | None]:
     def rank(pairing):
         scores = [table[row][column] if column is not None else absent[row] for row, column in enumerate(pairing)]
         scores += [extra[column] for column in set(range(len(extra))) - set(pairing)]
-        blocking, cost, unverified = (sum(values) for values in zip(*scores)) if scores else (0, 0, 0)
+        blocking, cost, figure, unverified = (sum(values) for values in zip(*scores)) if scores else (0, 0, 0, 0)
         # Ties keep candidates in key order, so the result does not depend on enumeration order.
-        return blocking, round(cost, 6), unverified, [len(extra) if column is None else column for column in pairing]
+        return (blocking, round(cost, 6), round(figure, 6), unverified,
+                [len(extra) if column is None else column for column in pairing])
 
     return list(min(set(permutations(slots, len(absent))), key=rank))
 
@@ -535,8 +567,8 @@ def _assign(table, absent, extra) -> list[int | None]:
     """Minimum-cost assignment (Hungarian method) on the scores folded into one exact integer."""
 
     def weight(score):
-        blocking, cost, unverified = score
-        return blocking * 10**9 + round(cost * 1000) * 100 + unverified
+        blocking, cost, figure, unverified = score
+        return blocking * 10**18 + round(cost * 1000) * 10**10 + round(figure * 1000) * 10**4 + unverified
 
     rows, columns = len(absent), len(extra)
     size = max(rows, columns)

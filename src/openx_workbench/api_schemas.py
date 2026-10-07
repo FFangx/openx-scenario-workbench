@@ -246,7 +246,7 @@ class Difference(Shape):
     blocking: bool
     cost: float
     verified: bool
-    tier: str = "core"  # core, adjustable or note (reuse_policy.difference_tier)
+    tier: str = "core"  # core, adjustable, note or figure (reuse_policy.difference_tier)
     category_label: str
     requested_label: str
     candidate_label: str
