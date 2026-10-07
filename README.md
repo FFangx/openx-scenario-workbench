@@ -9,9 +9,9 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 
 **Try it:** start the workbench (see [Quick start](#quick-start)), switch to English with the language button in the top-right corner, then open **Asset management → Import assets → Public esmini example**. Importing and inspecting the pinned esmini cut-in example needs no API key, model download, or local input files. For a complete walkthrough without your own files, run `openx-demo` after installing: it opens the workbench on an authored library of 26 assets and 38 reviewed requirements ([demo workspace](#demo-workspace)). Semantic search and simulation have separate dependencies below.
 
-![Search manually: a requirement, the library ranked by structural rules and the rule comparison of a candidate](docs/images/workbench-en.jpg)
+![Clause reuse assessment: the model's suggestion and a person's confirmation for every clause, with the selected clause's source text, preferred asset and candidates](docs/images/workbench-en.jpg)
 
-*Search manually on the authored demo workspace: the requirement (reviewed, revision 2) with its source evidence, the library ranked by structural rules, and the rule-by-rule comparison of the selected candidate, which needs a change. The authored parser fixtures do not pass the XSD checks, so the comparison keeps showing the pending standard check instead of claiming direct reuse.*
+*The clause reuse assessment in `openx-demo`: one row per clause with the asset the model prefers and whether its three assessments agree, the first three confirmed by a person (green check); on the right the selected clause's source evidence, an esmini frame and top-down road of the preferred asset, and each candidate's verdict and reason. The demo's suggestions are a recorded real model run, whose reasons the model writes in Chinese.*
 
 ![Asset management with a real esmini frame of the public cut-in example](docs/images/assets-en.jpg)
 
