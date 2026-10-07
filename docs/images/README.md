@@ -4,17 +4,18 @@
 and English screenshots of the React workbench, refreshed on 2026-10-07 at
 1586×992.
 
-They were captured against the fixtures demo workspace (`scripts/seed_demo_workspace.py`:
-authored assets, authored PDFs and reviewed typed requirements), without an XSD
-registry. The workbench shot shows manual search with a "modify and reuse" candidate
-whose standard checks are still open. For the asset shot the public esmini cut-in
-example (MPL-2.0) was imported under **Asset management** and played once: a real
-frame rendered by esmini, with the road drawn from above. No private assets, user
-project data or credentials appear.
+The workbench shot is the clause reuse assessment of the benchmark demo workspace
+(`scripts/seed_demo_workspace.py <folder> --dataset benchmark`: authored assets, authored
+PDFs, reviewed typed requirements and the recorded model suggestions it replays), after
+**Make previews** in asset management and adopting the first three clauses: the
+preferred asset shows a real esmini frame and its road from above. The asset shot uses
+the fixtures demo workspace with the public esmini cut-in example (MPL-2.0) imported
+under **Asset management** and played once. No XSD registry was installed. No private
+assets, user project data or credentials appear.
 
-To refresh: start `openx-web` on a freshly seeded folder (`OPENX_DATA_DIR`), import
-the public example under **Asset management**, play it, and capture both languages
-through the normal interface. Keep evidence and check states visible; never relabel a
+To refresh: start `openx-web` on a freshly seeded folder (`OPENX_DATA_DIR`), make the
+previews (and import and play the public example for the asset shot), and capture both
+languages through the normal interface. Keep evidence and check states visible; never relabel a
 pending check as a successful reuse or preview.
 
 `demo-en.gif` / `demo-zh.gif` open the authored
