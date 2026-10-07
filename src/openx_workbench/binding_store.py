@@ -129,10 +129,20 @@ class BindingStore:
             }
             new = {(item["asset_id"], item["version_id"]) for item in entry["assets"]}
             old = {(item["asset_id"], item["version_id"]) for item in (before or {}).get("assets", [])}
-            for pair in sorted(new - old):
-                self.assets.pin_version(REFERENCE + key, versions[pair])
-            entries[key] = entry
-            self._write(entries)
+            # Pin first, as a saved report does: a crash may leave an orphan pin, never a binding to a
+            # deleted version. A failed pin or write releases what this call pinned, unless the table took it.
+            pinned = []
+            try:
+                for pair in sorted(new - old):
+                    self.assets.pin_version(REFERENCE + key, versions[pair])
+                    pinned.append(versions[pair])
+                entries[key] = entry
+                self._write(entries)
+            except Exception:
+                if self.entries().get(key) != entry:
+                    for version in pinned:
+                        self.assets.release_reference(REFERENCE + key, version)
+                raise
             for pair in sorted(old - new):
                 if pair in versions:
                     self.assets.release_reference(REFERENCE + key, versions[pair])

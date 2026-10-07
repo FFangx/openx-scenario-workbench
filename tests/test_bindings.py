@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from openx_workbench import api, demo_workspace
 from openx_workbench.asset_store import AssetStore
+from openx_workbench.binding_store import BindingStore
 from openx_workbench.binding_suggest import candidate_pool, judge_efforts, title_order
 from openx_workbench.catalog import AssetFile
 from openx_workbench.llm_service import ModelClient, ModelConfig, ModelError, ModelInfo
@@ -207,6 +208,30 @@ def test_a_person_changes_the_choice_marks_none_and_removes(demo):
     exact = {"status": "same", "assets": [{"asset_id": item["asset_id"], "version_id": item["version_id"]}
                                           for item in chosen]}
     assert client.put(url, json=exact).json()["binding"]["source"] == "suggestion"
+
+
+def test_a_failed_save_keeps_the_earlier_binding_and_pins_nothing_new(demo, monkeypatch):
+    client, base, _, _ = demo
+    _, view = suggested(client, base)
+    row = view["scenes"][0]
+    first, second = [{"asset_id": item["asset_id"], "version_id": item["version_id"]}
+                     for item in row["suggestion"]["candidates"][:2]]
+    url = base.scene(row)
+    assert client.put(url, json={"status": "same", "assets": [first]}).status_code == 200
+
+    def broken(self, entries):
+        raise OSError("disk full")
+
+    with monkeypatch.context() as patch, pytest.raises(OSError):
+        patch.setattr(BindingStore, "_write", broken)
+        client.put(url, json={"status": "same", "assets": [second]})
+
+    store = AssetStore()
+    pinned = {item.version_id for item in store.versions()
+              if any(ref.startswith("binding:") for ref in store.references(item))}
+    assert pinned == {first["version_id"]}
+    assert [item["asset_id"] for item in base.view()["scenes"][0]["binding"]["assets"]] == [first["asset_id"]]
+    store.delete_version(next(item for item in store.versions() if item.version_id == second["version_id"]))
 
 
 def test_an_edited_scene_or_a_new_asset_version_asks_for_a_second_look(demo):
