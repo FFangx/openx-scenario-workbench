@@ -16,7 +16,7 @@ from .pdf_v2.quality import assess_structure_quality
 from .pdf_v2.section_tree import build_section_tree
 from .pdf_v2.figures import find_figures
 from .pdf_v2.scene_first import run_scene_first_extraction, scene_figures
-from .scene_package import EvidenceRef, ScenePackage, canonical_features, synchronize_structure
+from .scene_package import EvidenceRef, ScenePackage, canonical_features, clause_text, synchronize_structure
 
 ENGINE_VERSION = "openx-v2-scene-first-5"
 PROMPT_VERSION = "scene-first-prompt-v10"
@@ -140,7 +140,7 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
         # Anchor first makes the default evidence preview the scene itself, not shared setup.
         ids = [scene.anchor_node_id, *[item for item in scene.node_ids if item != scene.anchor_node_id]]
         evidence = [EvidenceRef(filename, nodes[nid].section_id, nodes[nid].page_start, nodes[nid].page_end,
-                                texts[nid]) for nid in ids]
+                                clause_text(nodes[nid].title, texts[nid])) for nid in ids]
         source_ids = dict.fromkeys(bid for nid in ids for bid in (nodes[nid].heading_block_id, *nodes[nid].block_ids) if bid in blocks)
         source_blocks = [blocks[bid] for bid in source_ids]
         source_flags = [flag.model_dump(mode="json") for flag in document.structure_flags

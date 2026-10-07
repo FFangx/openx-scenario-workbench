@@ -279,3 +279,25 @@ def test_wrong_schema_is_not_saved_as_confirmed_empty(tmp_path):
     assert len(calls) == 2
     assert store.documents(project.project_id) == []
     assert len(list((tmp_path / "extraction_failures").glob("*.json"))) == 1
+
+
+def test_evidence_keeps_each_clause_heading_and_older_scenes_get_it_back(tmp_path):
+    client, _ = fake_client()
+    assets = AssetStore(tmp_path)
+    store = PdfStore(assets)
+    project = ProjectStore(assets).create("Authored")
+    record = store.import_pdf(project.project_id, "authored.pdf", authored_pdf(), client=client)
+    scene = store.scenes(project.project_id, record.document_id)[0]
+    titles = {node["node_id"]: node["title"] for node in store.extraction_audit(record)["nodes"]}
+    heading = titles[scene.package.extraction["anchor_node_id"]]
+    assert scene.package.evidence[0].source_text.startswith(heading + "\n")
+    # Saved before evidence kept the heading line: a one-sentence clause had no text at all.
+    path = (tmp_path / "projects" / project.project_id / "documents" / record.document_id / "scenes"
+            / scene.scene_id / "0001.json")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for item in payload["evidence"]:
+        item["source_text"] = ""
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    older = store.scenes(project.project_id, record.document_id)[0]
+    assert older.package.evidence[0].source_text == heading
+    assert all(item.source_text for item in older.package.evidence)

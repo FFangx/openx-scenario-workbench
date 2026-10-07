@@ -15,6 +15,15 @@ class EvidenceRef:
     source_text: str
 
 
+def clause_text(title: str, body: str) -> str:
+    """A clause as a person reads it: its heading line, then its body. A one-sentence clause, a list
+    item or a clause made only of sub-clauses is all heading."""
+    title, body = (title or "").strip(), (body or "").strip()
+    if not title or title in body:
+        return body
+    return f"{title}\n{body}" if body else title
+
+
 @dataclass(slots=True)
 class ScenePackage:
     package_id: str

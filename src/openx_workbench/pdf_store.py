@@ -6,8 +6,9 @@ import hashlib
 import json
 import math
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from .atomic_write import write_bytes, write_json
 from .asset_store import AssetStore
 from .pdf_pipeline import extract_scene_packages_from_pdf
 from .project_store import ProjectStore
-from .scene_package import EvidenceRef, ScenePackage, synchronize_structure
+from .scene_package import EvidenceRef, ScenePackage, clause_text, synchronize_structure
 from .store_lock import serialized
 
 
@@ -38,6 +39,36 @@ class StoredScene:
     scene_id: str
     revision: int
     package: ScenePackage
+
+
+@lru_cache(maxsize=16)
+def _clause_titles(path: str, stamp: float) -> dict[str, str]:
+    """Section node -> heading line, from a document's extraction record (`stamp` renews the cache)."""
+    try:
+        nodes = json.loads(Path(path).read_text(encoding="utf-8")).get("nodes", [])
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return {node["node_id"]: str(node.get("title") or "") for node in nodes
+            if isinstance(node, dict) and isinstance(node.get("node_id"), str)}
+
+
+def _with_headings(package: ScenePackage, record: Path) -> ScenePackage:
+    """Evidence saved before it kept each clause's heading line gets it from the extraction record.
+
+    The evidence follows the scene's sections, its anchor first; a one-sentence clause was saved
+    with no text at all."""
+    extraction = package.extraction or {}
+    anchor = extraction.get("anchor_node_id")
+    ids = [anchor, *(item for item in extraction.get("node_ids", []) if item != anchor)]
+    if not anchor or len(ids) != len(package.evidence):
+        return package
+    try:
+        titles = _clause_titles(str(record), record.stat().st_mtime)
+    except OSError:
+        return package
+    evidence = [replace(item, source_text=clause_text(titles.get(node_id, ""), item.source_text))
+                for item, node_id in zip(package.evidence, ids)]
+    return package if evidence == package.evidence else replace(package, evidence=evidence)
 
 
 class PdfStore:
@@ -170,8 +201,8 @@ class PdfStore:
 
     @classmethod
     def _revision(cls, document: PdfDocument, scene_id: str, path: Path) -> StoredScene:
-        return StoredScene(document, scene_id, int(path.stem),
-                           cls._package(json.loads(path.read_text(encoding="utf-8"))))
+        package = cls._package(json.loads(path.read_text(encoding="utf-8")))
+        return StoredScene(document, scene_id, int(path.stem), _with_headings(package, path.parents[2] / "extraction.json"))
 
     def _scene_document(self, project_id: str, document_id: str) -> tuple[Path, PdfDocument]:
         root = self._document_root(project_id, document_id)
