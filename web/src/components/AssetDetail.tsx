@@ -94,7 +94,8 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                     {detail.summary.description && <><br />{detail.summary.description}</>}
                   </p>
                 )}
-                <div className="asset-player"><PreviewPlayer cand={{ ...version, compatibility: v.compatibility, has_frame: detail.has_frame }} esmini={esmini} onSettings={onSettings} /></div>
+                <div className="asset-player"><PreviewPlayer cand={{ ...version, compatibility: v.compatibility, has_frame: detail.has_frame }} esmini={esmini} onSettings={onSettings}
+                  onPlayed={() => { load(); onChanged(); }} /></div>
                 {detail.summary && !detail.summary.road_file_missing && (
                   <img className="road-drawing" src={urls.roadDrawing(version)} alt={t("道路俯视图与参与者起点", "The road from above with where the participants start")} loading="lazy" />
                 )}

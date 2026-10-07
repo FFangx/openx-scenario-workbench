@@ -7,8 +7,9 @@ import { ArrowUpRight } from "./ArrowUpRight";
 
 const ACTIVE = new Set(["starting", "running"]);
 
-/** Real esmini frames only: a live MJPEG stream while playing, otherwise the saved still frame of this exact version. */
-export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Pick<Candidate, "asset_id" | "version_id" | "has_frame"> & { compatibility?: string }; esmini: boolean; onSettings: () => void }) {
+/** Real esmini frames only: a live MJPEG stream while playing, otherwise the saved still frame of this exact version.
+ * `onPlayed` hears when a run ends, once the service has recorded whether the version plays. */
+export function PreviewPlayer({ cand, esmini, onSettings, onPlayed }: { cand: Pick<Candidate, "asset_id" | "version_id" | "has_frame"> & { compatibility?: string }; esmini: boolean; onSettings: () => void; onPlayed?: () => void }) {
   const { t } = useT();
   const [status, setStatus] = useState<PreviewStatus>({ state: "idle" });
   const [busy, setBusy] = useState(false);
@@ -32,6 +33,7 @@ export function PreviewPlayer({ cand, esmini, onSettings }: { cand: Pick<Candida
         setHasFrame(true);
         setFrameStamp(Date.now());
       }
+      if (wasLive.current && mine) onPlayed?.();
       wasLive.current = false;
       return;
     }
