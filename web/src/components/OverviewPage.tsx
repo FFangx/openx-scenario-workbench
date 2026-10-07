@@ -5,6 +5,7 @@ import { api, urls, verdictClass, verdictLabel, type Overview, type Report, type
 import { dateTime, useT } from "../i18n";
 import { PREVIEW_FAILED, valueLabel } from "../vocab";
 import { BatchCounts, BatchTable, encoderName } from "./BatchTable";
+import { Coverage } from "./BindingViews";
 import type { Page } from "./TopBar";
 
 interface Props {
@@ -39,7 +40,16 @@ export function OverviewPage({ projectId, onNavigate, onOpenScene }: Props) {
         {!overview ? <div className="center-pad"><Spin /></div> : <Library overview={overview} onNavigate={onNavigate} />}
       </section>
       <section className="panel ov-decisions">
-        <Decisions projectId={projectId} onOpenScene={onOpenScene} />
+        {/* Remounted per project: a report selected in one project is never fetched from the next. */}
+        <Decisions key={projectId ?? ""} projectId={projectId} onOpenScene={onOpenScene} />
+      </section>
+      <section className="panel ov-coverage">
+        <div className="ph">
+          {t("需求 ↔ 素材对应", "Requirement ↔ asset coverage")}
+          <span className="meta">{t("已确认的绑定，所有项目共用一张表", "Confirmed bindings; one table shared by all projects")}</span>
+        </div>
+        {projectId ? <Coverage projectId={projectId} onOpenScene={onOpenScene} />
+          : <div className="ov-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("请先在顶栏创建或选择项目。", "Create or select a project in the header first.")} /></div>}
       </section>
     </main>
   );

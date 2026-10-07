@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from . import matching
 from .api_assets import router as assets_router
+from .api_bindings import router as bindings_router
 from .api_common import (FACETS, DecisionRequest, MatchRequest, _cache, _catalog, _lock, _matches, _run,
                          _scene_json, _candidate_json, _store, _trace_for, _version)
 from .api_jobs import router as jobs_router
@@ -56,6 +57,7 @@ async def _this_machine_only(request: Request, call_next):
 
 
 app.include_router(assets_router)
+app.include_router(bindings_router)
 app.include_router(jobs_router)
 app.include_router(preview_router)
 app.include_router(settings_router)

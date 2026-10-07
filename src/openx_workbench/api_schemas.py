@@ -652,7 +652,7 @@ class JobResult(Open):
 
 class Job(Shape):
     id: str
-    kind: Literal["pdf_import", "asset_import", "schema_update"]
+    kind: Literal["pdf_import", "asset_import", "schema_update", "binding_suggest"]
     status: Literal["running", "completed", "failed", "stopped", "interrupted"]
     stage: str
     current: str
@@ -678,6 +678,143 @@ class VersionKey(Shape):
 class PendingClassification(Shape):
     count: int
     versions: list[VersionKey]
+
+
+# ---------- requirement <-> asset bindings ----------
+
+Verdict = Literal["同一测试", "同一测试但要改", "不是", "拿不准", ""]
+
+
+class SuggestedCandidate(Shape):
+    id: str = Field(description="C1, C2, … as the model saw them.")
+    asset_id: str
+    version_id: str
+    version_number: int
+    title: str
+    rank: int = Field(description="Place in the workbench ranking.")
+    routes: list[Literal["full", "rules", "name", "structure", "title"]]
+    level: Level
+    verdict: Verdict = Field(description="Empty when the model gave no usable reply.")
+    reason: str
+    changes: str
+    latest: bool
+
+
+class BindingSuggestion(Shape):
+    created_at: str
+    model: str
+    binding: list[str] = Field(description="Candidate ids the model would bind; empty when none fits.")
+    preferred: str | None
+    note: str
+    failure: str = Field(description="Why the model gave no usable reply; empty when it did.")
+    candidates: list[SuggestedCandidate]
+    outdated: list[Literal["scene", "asset"]] = Field(
+        description="scene: the scene's facts changed since; asset: a candidate has a newer version.")
+
+
+class BoundAssetRecord(Shape):
+    asset_id: str
+    version_id: str
+    version_number: int
+    title: str
+    preferred: bool
+    verdict: Verdict
+    reason: str
+    changes: str
+    latest: bool
+
+
+class BindingOrigin(Shape):
+    project_id: str | None
+    document_id: str | None
+    scene_id: str | None
+    revision: int | None
+
+
+class ConfirmedBinding(Shape):
+    status: Literal["same", "modify", "none"]
+    changes: str
+    assets: list[BoundAssetRecord]
+    source: Literal["suggestion", "manual"]
+    confirmed_at: str
+    stale: list[Literal["scene", "asset"]] = Field(
+        description="scene: the scene's facts changed since; asset: a bound asset has a newer version.")
+    confirmed_in: BindingOrigin
+
+
+class SceneBinding(Shape):
+    scene_id: str
+    revision: int
+    title: str
+    section_id: str
+    key: str = Field(description="The requirement: PDF content, clause number and extracted title.")
+    pages: list[int] | None
+    suggestion: BindingSuggestion | None
+    binding: ConfirmedBinding | None
+
+
+class DocumentBindings(Shape):
+    document_id: str
+    pdf_sha256: str
+    scenes: list[SceneBinding]
+    job: Job | None
+
+
+class AssetBinding(Shape):
+    """A requirement clause bound to some version of an asset."""
+    key: str
+    filename: str | None
+    standard: str | None
+    section_id: str | None
+    title: str | None
+    project_id: str | None
+    document_id: str | None
+    scene_id: str | None
+    status: Literal["same", "modify", "none"]
+    changes: str
+    preferred: bool
+    group_size: int = Field(description="How many assets the clause is bound to.")
+    version_id: str
+    version_number: int
+    latest: bool = Field(description="The bound version is still the asset's latest.")
+    stale: list[Literal["scene", "asset"]]
+    source: Literal["suggestion", "manual"]
+    confirmed_at: str
+
+
+class CoverageScene(Shape):
+    scene_id: str
+    section_id: str
+    title: str
+    status: Literal["same", "modify", "none", "unconfirmed"]
+    stale: bool
+    assets: list[str] = Field(description="Titles of the bound assets, the preferred one first.")
+
+
+class DocumentCoverage(Shape):
+    document_id: str
+    filename: str
+    standard: str
+    same: int
+    modify: int
+    none: int
+    unconfirmed: int
+    stale: int
+    scenes: list[CoverageScene]
+
+
+class UnusedAsset(Shape):
+    asset_id: str
+    version_id: str
+    title: str
+    source_name: str
+
+
+class BindingCoverage(Shape):
+    documents: list[DocumentCoverage]
+    asset_count: int
+    bound_asset_count: int = Field(description="Assets some clause of any project is bound to.")
+    unused_assets: list[UnusedAsset]
 
 
 # ---------- settings and preview ----------

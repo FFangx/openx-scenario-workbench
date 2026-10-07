@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Asset Bindings
+         * @description The requirement clauses bound to any version of the asset, across projects.
+         */
+        get: operations["asset_bindings_api_assets__asset_id__bindings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/versions/{version_id}": {
         parameters: {
             query?: never;
@@ -472,6 +492,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/bindings/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coverage
+         * @description For every PDF of the project: which clauses have assets, which have none, which are not confirmed
+         *     yet; and which assets of the library no clause of any project is bound to.
+         */
+        get: operations["coverage_api_projects__project_id__bindings_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/documents": {
         parameters: {
             query?: never;
@@ -541,6 +582,68 @@ export interface paths {
         put?: never;
         /** Batch Save */
         post: operations["batch_save_api_projects__project_id__documents__document_id__batch_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/documents/{document_id}/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bindings
+         * @description Every scene of the PDF with the model's suggestion and the confirmed binding, each marked when
+         *     something changed since: the scene's facts, or a newer version of an asset it names.
+         */
+        get: operations["bindings_api_projects__project_id__documents__document_id__bindings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/documents/{document_id}/bindings/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept
+         * @description Confirms current suggestions as proposed; outdated or failed suggestions are left alone.
+         */
+        post: operations["accept_api_projects__project_id__documents__document_id__bindings_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/documents/{document_id}/bindings/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest
+         * @description Asks the configured model which candidates build the same test as each scene. Sends the scenes'
+         *     source text and extracted facts, and each candidate's name, story and differences, to that model.
+         */
+        post: operations["suggest_api_projects__project_id__documents__document_id__bindings_suggest_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -647,6 +750,31 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Confirm
+         * @description Stores the person's binding of the scene, replacing an earlier one; the named versions are pinned.
+         *     It counts as the accepted suggestion when it is exactly what the current suggestion proposed.
+         */
+        put: operations["confirm_api_projects__project_id__documents__document_id__scenes__scene_id__binding_put"];
+        post?: never;
+        /**
+         * Unbind
+         * @description Removes the scene's confirmed binding and releases the versions it pinned.
+         */
+        delete: operations["unbind_api_projects__project_id__documents__document_id__scenes__scene_id__binding_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1166,6 +1294,68 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptRequest */
+        AcceptRequest: {
+            /**
+             * Scene Ids
+             * @description Accept these scenes' suggestions as they are, replacing a binding. When omitted: every scene not bound yet whose suggestion prefers an asset the model judged the same test.
+             */
+            scene_ids?: string[] | null;
+        };
+        /**
+         * AssetBinding
+         * @description A requirement clause bound to some version of an asset.
+         */
+        AssetBinding: {
+            /** Changes */
+            changes: string;
+            /** Confirmed At */
+            confirmed_at: string;
+            /** Document Id */
+            document_id: string | null;
+            /** Filename */
+            filename: string | null;
+            /**
+             * Group Size
+             * @description How many assets the clause is bound to.
+             */
+            group_size: number;
+            /** Key */
+            key: string;
+            /**
+             * Latest
+             * @description The bound version is still the asset's latest.
+             */
+            latest: boolean;
+            /** Preferred */
+            preferred: boolean;
+            /** Project Id */
+            project_id: string | null;
+            /** Scene Id */
+            scene_id: string | null;
+            /** Section Id */
+            section_id: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "suggestion" | "manual";
+            /** Stale */
+            stale: ("scene" | "asset")[];
+            /** Standard */
+            standard: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "same" | "modify" | "none";
+            /** Title */
+            title: string | null;
+            /** Version Id */
+            version_id: string;
+            /** Version Number */
+            version_number: number;
+        };
         /** AssetDetail */
         AssetDetail: {
             classification: components["schemas"]["ClassificationRecord"] | null;
@@ -1283,6 +1473,80 @@ export interface components {
             /** Signature */
             signature: string;
         };
+        /** BindingCoverage */
+        BindingCoverage: {
+            /** Asset Count */
+            asset_count: number;
+            /**
+             * Bound Asset Count
+             * @description Assets some clause of any project is bound to.
+             */
+            bound_asset_count: number;
+            /** Documents */
+            documents: components["schemas"]["DocumentCoverage"][];
+            /** Unused Assets */
+            unused_assets: components["schemas"]["UnusedAsset"][];
+        };
+        /** BindingOrigin */
+        BindingOrigin: {
+            /** Document Id */
+            document_id: string | null;
+            /** Project Id */
+            project_id: string | null;
+            /** Revision */
+            revision: number | null;
+            /** Scene Id */
+            scene_id: string | null;
+        };
+        /** BindingRequest */
+        BindingRequest: {
+            /** Assets */
+            assets?: components["schemas"]["BoundAsset"][];
+            /**
+             * Changes
+             * @default
+             */
+            changes?: string;
+            /**
+             * Preferred
+             * @description Asset ID of the preferred asset; the first one when omitted.
+             */
+            preferred?: string | null;
+            /**
+             * Status
+             * @description same: the same test, at most other values; modify: the same test after the changes named; none: no asset in the library builds it.
+             * @enum {string}
+             */
+            status: "same" | "modify" | "none";
+        };
+        /** BindingSuggestion */
+        BindingSuggestion: {
+            /**
+             * Binding
+             * @description Candidate ids the model would bind; empty when none fits.
+             */
+            binding: string[];
+            /** Candidates */
+            candidates: components["schemas"]["SuggestedCandidate"][];
+            /** Created At */
+            created_at: string;
+            /**
+             * Failure
+             * @description Why the model gave no usable reply; empty when it did.
+             */
+            failure: string;
+            /** Model */
+            model: string;
+            /** Note */
+            note: string;
+            /**
+             * Outdated
+             * @description scene: the scene's facts changed since; asset: a candidate has a newer version.
+             */
+            outdated: ("scene" | "asset")[];
+            /** Preferred */
+            preferred: string | null;
+        };
         /** Body_import_assets_api_assets_import_post */
         Body_import_assets_api_assets_import_post: {
             /**
@@ -1302,6 +1566,37 @@ export interface components {
              * @default
              */
             standard?: string;
+        };
+        /** BoundAsset */
+        BoundAsset: {
+            /** Asset Id */
+            asset_id: string;
+            /** Version Id */
+            version_id: string;
+        };
+        /** BoundAssetRecord */
+        BoundAssetRecord: {
+            /** Asset Id */
+            asset_id: string;
+            /** Changes */
+            changes: string;
+            /** Latest */
+            latest: boolean;
+            /** Preferred */
+            preferred: boolean;
+            /** Reason */
+            reason: string;
+            /** Title */
+            title: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "同一测试" | "同一测试但要改" | "不是" | "拿不准" | "";
+            /** Version Id */
+            version_id: string;
+            /** Version Number */
+            version_number: number;
         };
         /** Candidate */
         Candidate: {
@@ -1496,6 +1791,52 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["VersionRef"][] | null;
         };
+        /** ConfirmedBinding */
+        ConfirmedBinding: {
+            /** Assets */
+            assets: components["schemas"]["BoundAssetRecord"][];
+            /** Changes */
+            changes: string;
+            /** Confirmed At */
+            confirmed_at: string;
+            confirmed_in: components["schemas"]["BindingOrigin"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "suggestion" | "manual";
+            /**
+             * Stale
+             * @description scene: the scene's facts changed since; asset: a bound asset has a newer version.
+             */
+            stale: ("scene" | "asset")[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "same" | "modify" | "none";
+        };
+        /** CoverageScene */
+        CoverageScene: {
+            /**
+             * Assets
+             * @description Titles of the bound assets, the preferred one first.
+             */
+            assets: string[];
+            /** Scene Id */
+            scene_id: string;
+            /** Section Id */
+            section_id: string;
+            /** Stale */
+            stale: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "same" | "modify" | "none" | "unconfirmed";
+            /** Title */
+            title: string;
+        };
         /** DecisionRequest */
         DecisionRequest: {
             /** Asset Id */
@@ -1595,6 +1936,37 @@ export interface components {
             tier?: string;
             /** Verified */
             verified: boolean;
+        };
+        /** DocumentBindings */
+        DocumentBindings: {
+            /** Document Id */
+            document_id: string;
+            job: components["schemas"]["Job"] | null;
+            /** Pdf Sha256 */
+            pdf_sha256: string;
+            /** Scenes */
+            scenes: components["schemas"]["SceneBinding"][];
+        };
+        /** DocumentCoverage */
+        DocumentCoverage: {
+            /** Document Id */
+            document_id: string;
+            /** Filename */
+            filename: string;
+            /** Modify */
+            modify: number;
+            /** None */
+            none: number;
+            /** Same */
+            same: number;
+            /** Scenes */
+            scenes: components["schemas"]["CoverageScene"][];
+            /** Stale */
+            stale: number;
+            /** Standard */
+            standard: string;
+            /** Unconfirmed */
+            unconfirmed: number;
         };
         /** Evidence */
         Evidence: {
@@ -1787,7 +2159,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "pdf_import" | "asset_import" | "schema_update";
+            kind: "pdf_import" | "asset_import" | "schema_update" | "binding_suggest";
             /** Messages */
             messages: string[];
             /** Reports */
@@ -2455,6 +2827,26 @@ export interface components {
             /** Weather */
             weather: string[];
         };
+        /** SceneBinding */
+        SceneBinding: {
+            binding: components["schemas"]["ConfirmedBinding"] | null;
+            /**
+             * Key
+             * @description The requirement: PDF content, clause number and extracted title.
+             */
+            key: string;
+            /** Pages */
+            pages: number[] | null;
+            /** Revision */
+            revision: number;
+            /** Scene Id */
+            scene_id: string;
+            /** Section Id */
+            section_id: string;
+            suggestion: components["schemas"]["BindingSuggestion"] | null;
+            /** Title */
+            title: string;
+        };
         /**
          * SceneFigure
          * @description A figure the scene's structure was read with: its number, caption and box on the page.
@@ -2977,6 +3369,59 @@ export interface components {
             /** Xosc Name */
             xosc_name: string;
         };
+        /** SuggestedCandidate */
+        SuggestedCandidate: {
+            /** Asset Id */
+            asset_id: string;
+            /** Changes */
+            changes: string;
+            /**
+             * Id
+             * @description C1, C2, … as the model saw them.
+             */
+            id: string;
+            /** Latest */
+            latest: boolean;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "direct" | "modify" | "major_modify" | "review" | "new_build";
+            /**
+             * Rank
+             * @description Place in the workbench ranking.
+             */
+            rank: number;
+            /** Reason */
+            reason: string;
+            /** Routes */
+            routes: ("full" | "rules" | "name" | "structure" | "title")[];
+            /** Title */
+            title: string;
+            /**
+             * Verdict
+             * @description Empty when the model gave no usable reply.
+             * @enum {string}
+             */
+            verdict: "同一测试" | "同一测试但要改" | "不是" | "拿不准" | "";
+            /** Version Id */
+            version_id: string;
+            /** Version Number */
+            version_number: number;
+        };
+        /** SuggestRequest */
+        SuggestRequest: {
+            /**
+             * Encoder
+             * @description Retrieval backend of the candidates; the preferred one when omitted.
+             */
+            encoder?: string | null;
+            /**
+             * Scene Ids
+             * @description Only these scenes; every scene of the PDF when omitted.
+             */
+            scene_ids?: string[] | null;
+        };
         /**
          * Trace
          * @description A reuse assessment of one scene, or (kind "batch_match") of every scene of a PDF.
@@ -3052,6 +3497,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** UnusedAsset */
+        UnusedAsset: {
+            /** Asset Id */
+            asset_id: string;
+            /** Source Name */
+            source_name: string;
+            /** Title */
+            title: string;
+            /** Version Id */
+            version_id: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -3124,6 +3580,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetRow"][];
+                };
+            };
+        };
+    };
+    asset_bindings_api_assets__asset_id__bindings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetBinding"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3895,6 +4382,37 @@ export interface operations {
             };
         };
     };
+    coverage_api_projects__project_id__bindings_coverage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingCoverage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     documents_api_projects__project_id__documents_get: {
         parameters: {
             query?: never;
@@ -4056,6 +4574,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavedBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bindings_api_projects__project_id__documents__document_id__bindings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_api_projects__project_id__documents__document_id__bindings_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_api_projects__project_id__documents__document_id__bindings_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
                 };
             };
             /** @description Validation Error */
@@ -4252,6 +4874,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueuedScene"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_api_projects__project_id__documents__document_id__scenes__scene_id__binding_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                project_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unbind_api_projects__project_id__documents__document_id__scenes__scene_id__binding_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                project_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBindings"];
                 };
             };
             /** @description Validation Error */

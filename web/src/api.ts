@@ -55,6 +55,16 @@ export type ClassificationRecord = Schemas["ClassificationRecord"];
 export type AssetDetail = Schemas["AssetDetail"];
 export type StandardExportResult = Schemas["StandardExportResult"];
 export type RequirementRecord = Schemas["RequirementRecord"];
+export type DocumentBindings = Schemas["DocumentBindings"];
+export type SceneBinding = Schemas["SceneBinding"];
+export type BindingSuggestion = Schemas["BindingSuggestion"];
+export type SuggestedCandidate = Schemas["SuggestedCandidate"];
+export type ConfirmedBinding = Schemas["ConfirmedBinding"];
+export type BindingStatus = ConfirmedBinding["status"];
+export type AssetBinding = Schemas["AssetBinding"];
+export type BindingCoverage = Schemas["BindingCoverage"];
+/** What a person confirms for one scene: the bound asset versions, the preferred one, and what to change. */
+export interface BindingDraft { status: BindingStatus; assets: { asset_id: string; version_id: string }[]; preferred: string | null; changes: string }
 
 /** An asset version as the client addresses it; a search candidate may have no stored version. */
 export interface VersionRef { asset_id: string; version_id: string | null }
@@ -95,6 +105,17 @@ export const api = {
   batch: (pid: string, did: string) => post<{ signature: string; trace: Trace }>(`/api/projects/${pid}/documents/${did}/batch`, {}),
   batchSave: (pid: string, did: string, signature: string) =>
     post<{ report_id: string }>(`/api/projects/${pid}/documents/${did}/batch/save`, { signature }),
+  bindings: (pid: string, did: string) => call<DocumentBindings>(`/api/projects/${pid}/documents/${did}/bindings`),
+  suggestBindings: (pid: string, did: string, sceneIds?: string[]) =>
+    post<Job>(`/api/projects/${pid}/documents/${did}/bindings/suggest`, { scene_ids: sceneIds ?? null }),
+  acceptBindings: (pid: string, did: string, sceneIds?: string[]) =>
+    post<DocumentBindings>(`/api/projects/${pid}/documents/${did}/bindings/accept`, { scene_ids: sceneIds ?? null }),
+  confirmBinding: (pid: string, did: string, sid: string, draft: BindingDraft) =>
+    send<DocumentBindings>("PUT", `/api/projects/${pid}/documents/${did}/scenes/${sid}/binding`, draft),
+  unbind: (pid: string, did: string, sid: string) =>
+    send<DocumentBindings>("DELETE", `/api/projects/${pid}/documents/${did}/scenes/${sid}/binding`),
+  assetBindings: (assetId: string) => call<AssetBinding[]>(`/api/assets/${assetId}/bindings`),
+  coverage: (pid: string) => call<BindingCoverage>(`/api/projects/${pid}/bindings/coverage`),
   explanation: (req: DecisionReq & { mode: "evidence" | "structural" | "model" }) => post<Explanation>("/api/explanation", req),
   traceReport: async (req: DecisionReq) => {
     const res = await fetch("/api/trace/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });

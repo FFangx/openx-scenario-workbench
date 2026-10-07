@@ -25,8 +25,9 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 | **Free-text search** | Describe a scenario on the start page (or close the scene chip in a PDF's workflow). Similar assets appear as cards on their own page; open one for its details. Text search makes no reuse decision. |
 | **Play simulation** | Use **Play**, **Stop** or **Capture frame** in the candidate preview or the asset detail. An installed Windows esmini is detected automatically; choose a custom installation under **Settings → Local service**. |
 | **Match entire PDF** | From the PDF card's **⋯** menu, match all scenes of the document and download or save a version-pinned JSON/HTML summary. |
-| **Overview** | Library statistics, recent imports, and saved decisions and summaries with their downloads; reopen a requirement to continue its review. |
-| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a version to review its preview, classification, source files, standard export and history. The PDF requirement library lists published requirements. |
+| **Bind assets** | In the same dialog, let the configured model suggest for every scene the group of assets that build its test, then accept, change or mark "no asset" row by row. Confirmed bindings form one table shared by all projects; a newer asset version or edited scene facts mark a binding for a second look. |
+| **Overview** | Library statistics, recent imports, and saved decisions and summaries with their downloads; reopen a requirement to continue its review. Each PDF's binding coverage and the assets no clause uses. |
+| **Asset management** | Import `.sim`, paired `.xosc` / `.xodr`, or a dependency `.zip`. Select a version to review its preview, classification, the requirement clauses bound to it, source files, standard export and history. The PDF requirement library lists published requirements. |
 
 Asset versions are shared across projects. PDF sources, scene revisions and decisions belong to the selected project.
 

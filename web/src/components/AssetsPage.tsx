@@ -114,6 +114,7 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
             onChanged={changed}
             onDeleted={() => { setSelected(null); changed(); }}
             onModelClassify={(v) => modelClassify([v])}
+            onOpenScene={onOpenScene}
           />
         ) : tab === "requirements" && requirement ? (
           <RequirementDetail record={requirement} onOpen={() => onOpenScene(requirement.project_id, requirement.document_id, requirement.scene_id)} />

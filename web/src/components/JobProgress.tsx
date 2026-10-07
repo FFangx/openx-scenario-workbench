@@ -13,6 +13,8 @@ const STAGES: Record<string, [string, string]> = {
   classifying: ["复核分类", "Reviewing classification"],
   downloading: ["下载规范文件", "Downloading schemas"],
   comparing: ["对比场景库检查结论", "Comparing library verdicts"],
+  ranking: ["为每个场景找候选素材", "Finding candidate assets"],
+  judging: ["模型判断候选素材", "The model judges the candidates"],
 };
 
 /** Live state of a background job: stage, count, current step, recent messages, stop. */

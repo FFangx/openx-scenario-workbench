@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDemo } from "./demo-server.mjs";
+import { startFakeModel } from "./fake-model.mjs";
 
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(WEB, ".verify-out", "ui");
@@ -260,6 +261,39 @@ try {
   await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Save summary report" }).click();
   await p.locator(".ant-message-success").filter({ hasText: "Summary saved" }).waitFor();
   check("the summary is saved as a report", (await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/reports`)).json()).some((r) => r.kind === "batch"));
+
+  // requirement <-> asset bindings: the model suggests a group per scene, a person confirms
+  await p.locator(".ant-modal:visible .ant-tabs-tab").filter({ hasText: "Bind assets" }).click();
+  const bindRows = () => p.locator(".ant-modal:visible .bind-table tbody tr.ant-table-row");
+  await bindRows().first().waitFor();
+  check("binding lists every scene, none confirmed", (await bindRows().count()) === 4 && (await bindRows().filter({ hasText: "Not confirmed" }).count()) === 4);
+  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Suggest bindings" }).click();
+  await p.locator(".ant-modal:visible .ant-alert-error").filter({ hasText: "Configure a model" }).waitFor();
+  check("suggesting without a model says what is missing", true);
+  const fake = await startFakeModel();
+  await p.request.put(`${BASE}/api/settings/model`, { data: { base_url: fake.url, model: "fake-judge", api_key: "test-key", thinking: false } });
+  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Suggest bindings" }).click();
+  await p.locator(".ant-modal:visible .bind-table .mtag.direct").first().waitFor({ timeout: 60000 });
+  check("the model's suggestion shows on every scene", (await p.locator(".ant-modal:visible .bind-table tr.ant-table-row .mtag.direct").count()) === 4 && fake.calls() === 4, `${fake.calls()} calls`);
+  await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Accept every" }).click();
+  await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "4 / 4 confirmed" }).waitFor();
+  check("accepting the suggestions binds every scene", (await bindRows().filter({ hasText: "Use as is" }).count()) === 4);
+  await bindRows().first().click();
+  const editor = p.locator(".ant-modal:visible .bind-editor").first();
+  await editor.waitFor();
+  check("the editor shows the suggested group with the model's reasons", (await editor.locator(".bind-cand.on").count()) === 2
+    && (await editor.locator(".bind-cand.on .why").first().innerText()).includes("authored reason"));
+  await p.screenshot({ path: path.join(OUT, "bindings.png") });
+  await editor.locator(".bind-form .ant-radio-wrapper").filter({ hasText: "Change first" }).click();
+  await editor.locator("textarea").fill("Slow the target down");
+  await editor.locator(".ant-btn-primary").filter({ hasText: "Update binding" }).click();
+  await bindRows().first().filter({ hasText: "Change first" }).waitFor();
+  const docs = await (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents`)).json();
+  const bound = (await Promise.all(docs.map(async (d) => (await p.request.get(`${BASE}/api/projects/${demo.seed.project_id}/documents/${d.document_id}/bindings`)).json())))
+    .flatMap((v) => v.scenes).find((s) => s.binding?.status === "modify");
+  check("a person's change is stored as their own choice", bound?.binding.source === "manual" && bound.binding.changes === "Slow the target down");
+  await p.request.delete(`${BASE}/api/settings/model/key`);
+  fake.stop();
   await closeModal();
 
   // extraction record of the rule-extracted demo PDF
@@ -364,6 +398,16 @@ try {
   await p.waitForTimeout(400);
   check("an unreferenced version is deleted", (await assetRows().count()) === 6);
 
+  // an asset lists the requirement clauses bound to it
+  const boundTitle = bound.binding.assets.find((a) => a.preferred).title;
+  await assetRows().filter({ hasText: boundTitle }).click();
+  await p.locator(".asset-detail-head").filter({ hasText: boundTitle }).waitFor();
+  await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Requirements" }).click();
+  await p.locator(".asset-detail .bind-clauses tbody tr.ant-table-row").first().waitFor();
+  check("an asset lists the requirement clauses bound to it", (await p.locator(".asset-detail .bind-clauses tbody tr.ant-table-row").filter({ hasText: bound.title }).count()) === 1
+    && (await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: /Requirements \(\d+\)/ }).count()) === 1);
+  check("a bound version cannot be deleted", await p.locator(".asset-detail-head .ant-btn-dangerous").isDisabled());
+
   await p.locator(".assets-tabs .ant-tabs-tab").filter({ hasText: "PDF requirement library" }).click();
   const requirementRows = p.locator(".req-library tbody tr.ant-table-row");
   await requirementRows.first().waitFor();
@@ -375,6 +419,15 @@ try {
   check("Open source document returns to the requirement facts", (await p.locator(".ox-nav button.on").innerText()) === "Workbench"
     && (await p.locator(".left-tabs .ant-tabs-tab-active").innerText()) === "Requirement facts"
     && (await p.locator(".facts-title").innerText()).endsWith(publishedTitle), publishedTitle);
+
+  // overview: how the project's PDFs are covered by confirmed bindings
+  await p.locator(".ox-nav button").filter({ hasText: "Overview" }).click();
+  await p.locator(".ov-coverage .cov-head").first().waitFor();
+  const heads = await p.locator(".ov-coverage .cov-head").allInnerTexts();
+  check("Overview shows each PDF's binding coverage", heads.length === 2
+    && heads.some((h) => h.includes("4 clauses · 4 with assets · 0 with none · 0 not confirmed")) && heads.some((h) => h.includes("4 not confirmed")), heads.join(" | "));
+  check("Overview counts the assets no clause uses", /Assets no clause uses: \d \/ 6/.test(await p.locator(".ov-coverage").innerText()));
+  await p.screenshot({ path: path.join(OUT, "coverage.png") });
 
   // new project starts empty and becomes current
   await p.locator(".hbtn").first().click();

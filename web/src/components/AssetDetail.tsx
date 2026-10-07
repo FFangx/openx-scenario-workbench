@@ -5,6 +5,7 @@ import { api, urls, type AssetDetail as Detail, type ClassificationLabels, type 
 import { dateTime, useT } from "../i18n";
 import { PREVIEW_FAILED, roadFeatureLabel, valueLabel } from "../vocab";
 import { SourceFilesDialog, StandardChecks } from "./AssessmentDialogs";
+import { AssetClauses } from "./BindingViews";
 import { PreviewPlayer } from "./PreviewPlayer";
 
 interface Props {
@@ -17,15 +18,18 @@ interface Props {
   onChanged: () => void;
   onDeleted: () => void;
   onModelClassify: (v: VersionRef) => void;
+  /** Opens a bound requirement scene in the workbench; without it the bound clauses are only listed. */
+  onOpenScene?: (projectId: string, documentId: string, sceneId: string) => void;
 }
 
 /** One immutable asset version: preview, labels, provenance and its sibling versions. */
-export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClose, onChanged, onDeleted, onModelClassify }: Props) {
+export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClose, onChanged, onDeleted, onModelClassify, onOpenScene }: Props) {
   const { t, lang } = useT();
   const { message } = App.useApp();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState(false);
+  const [clauses, setClauses] = useState<number | null>(null);
   const key = `${version.asset_id}/${version.version_id}`;
 
   const load = () => api.assetDetail(version).then(setDetail).catch((e: Error) => setError(e.message));
@@ -62,14 +66,14 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
         </div>
         <Popconfirm title={t("删除此版本？", "Delete this version?")} description={t("删除所选版本将移除它的本地记录与文件。", "Deleting removes this version's local record and files.")}
           onConfirm={remove} okText={t("删除", "Delete")} okButtonProps={{ danger: true }} cancelText={t("取消", "Cancel")}>
-          <Tooltip title={detail.references.length ? t("被项目或报告引用的版本不能删除", "Referenced versions cannot be deleted") : busy ? t("导入结束后可删除", "Available after the import finishes") : t("删除此版本", "Delete this version")}>
+          <Tooltip title={detail.references.length ? t("被报告或需求绑定引用的版本不能删除", "Versions a report or a requirement binding refers to cannot be deleted") : busy ? t("导入结束后可删除", "Available after the import finishes") : t("删除此版本", "Delete this version")}>
             <Button type="text" danger icon={<DeleteOutlined />} disabled={busy || detail.references.length > 0} aria-label={t("删除此版本", "Delete this version")} />
           </Tooltip>
         </Popconfirm>
         <Button type="text" icon={<CloseOutlined />} onClick={onClose} aria-label={t("关闭", "Close")} />
       </div>
       {detail.references.length > 0 && (
-        <Alert type="info" showIcon title={t(`此版本已被 ${detail.references.length} 条项目或报告记录引用，无法删除。`, `This version is referenced by ${detail.references.length} project or report items and cannot be deleted.`)} />
+        <Alert type="info" showIcon title={t(`此版本已被 ${detail.references.length} 条报告或需求绑定引用，无法删除。`, `This version is referenced by ${detail.references.length} reports or requirement bindings and cannot be deleted.`)} />
       )}
       <Tabs
         size="small"
@@ -129,6 +133,11 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                 }]} />
               </div>
             ),
+          },
+          {
+            key: "clauses",
+            label: clauses === null ? t("对应需求", "Requirements") : t(`对应需求（${clauses}）`, `Requirements (${clauses})`),
+            children: <AssetClauses assetId={v.asset_id} onOpen={onOpenScene} onCount={setClauses} />,
           },
           {
             key: "history",

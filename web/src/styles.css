@@ -404,6 +404,31 @@ a { color: var(--link); }
 .batch-table .ant-table-tbody > tr > td { vertical-align: top; }
 .batch-cand { display: flex; align-items: center; gap: 6px; min-width: 0; line-height: 20px; }
 .batch-cand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-tabs .ant-tabs-nav { margin-bottom: 10px; }
+.bind-table .ant-table-tbody > tr.ant-table-row { cursor: pointer; }
+.bind-table .ant-table-expanded-row > td { background: var(--soft) !important; }
+.bind-status { display: inline-flex; gap: 4px; }
+.bind-actions { display: inline-flex; gap: 2px; }
+.bind-counts { margin-left: auto; font-size: 12px; }
+.bind-editor { display: flex; flex-direction: column; gap: 8px; padding: 2px 4px 4px; font-size: 12.5px; }
+.bind-note { font-size: 12px; }
+.bind-cands { display: flex; flex-direction: column; gap: 2px; }
+.bind-cand { display: grid; grid-template-columns: 18px 20px auto minmax(0, 1fr) auto auto; align-items: center; column-gap: 6px;
+  padding: 3px 6px; border-radius: 4px; border: 1px solid transparent; }
+.bind-cand.on { background: var(--blue-bg); border-color: var(--line); }
+.bind-cand .ant-radio-wrapper { margin: 0; }
+.bind-cand .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bind-cand .rank { font-size: 11.5px; white-space: nowrap; }
+.bind-cand .why { grid-column: 3 / -1; color: var(--text-2); font-size: 12px; line-height: 1.5; }
+.bind-cand .why b { font-weight: 500; color: var(--amber-ink); }
+.bind-form { display: flex; flex-direction: column; gap: 8px; }
+.bind-clauses .ant-table-tbody > tr { cursor: pointer; }
+.ov-coverage { grid-column: 1 / -1; }
+.coverage-list { gap: 8px; }
+.cov-head { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.6fr) auto; align-items: center; gap: 12px; }
+.cov-head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.cov-head .ant-progress { margin: 0; }
+.cov-head .muted { font-size: 12px; white-space: nowrap; }
 .dot-status { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); }
 .dot-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
 .dot-status.ok { color: var(--green); } .dot-status.ok::before { background: var(--green); }
