@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Alert, Button, Empty, Form, Input, Select, Table, Tabs, Tag, Tooltip, type TableColumnsType } from "antd";
 import { CheckCircleFilled, CloseCircleFilled, CloseOutlined, FileOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
-import { basename, facetLabel, LEVEL, levelLabel, urls, type Candidate, type Level, type Lang, type Library, type Scene, type SearchResponse } from "../api";
+import { basename, classLabel, facetLabel, LEVEL, levelLabel, REUSE_CLASSES, urls, type Candidate, type Lang, type ReuseClass, type Library, type Scene, type SearchResponse } from "../api";
 import { roadFeatureLabel, valueLabel } from "../vocab";
 import { dateTime, useT } from "../i18n";
 import { useNames } from "../names";
 import { ArrowUpRight } from "./ArrowUpRight";
 import { PreviewPlayer } from "./PreviewPlayer";
 
-type Show = "all" | Level;
+type Show = "all" | ReuseClass;
 
 interface Props {
   query: string;
@@ -43,7 +43,7 @@ export function SearchPanel(p: Props) {
   const [show, setShow] = useState<Show>("all");
   const [tab, setTab] = useState("search");
 
-  const rows = (p.result?.results ?? []).map((c, i) => ({ ...c, idx: i + 1 })).filter((c) => show === "all" || c.level === show);
+  const rows = (p.result?.results ?? []).map((c, i) => ({ ...c, idx: i + 1 })).filter((c) => show === "all" || LEVEL[c.level].cls === show);
 
   const columns: TableColumnsType<Candidate & { idx: number }> = [
     { title: "#", dataIndex: "idx", width: 30, align: "center" },
@@ -259,7 +259,7 @@ export function SearchPanel(p: Props) {
           popupMatchSelectWidth={false}
           options={[
             { value: "all", label: t("全部候选", "All candidates") },
-            ...(Object.keys(LEVEL) as Level[]).map((k) => ({ value: k, label: levelLabel(k, lang) })),
+            ...REUSE_CLASSES.map((k) => ({ value: k, label: classLabel(k, lang) })),
           ]}
         />
         <span className="n">{p.result ? t(`${p.result.total} 个结果`, `${p.result.total} results`) : "—"}</span>

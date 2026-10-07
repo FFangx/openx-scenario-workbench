@@ -11,23 +11,34 @@ import {
   QuestionCircleFilled,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
-import { api, categoryLabel, LEVEL, urls, verdictLabel, type Candidate, type Difference, type Lang } from "../api";
+import { api, categoryLabel, LEVEL, urls, type Candidate, type Difference, type Lang } from "../api";
 import { useT } from "../i18n";
 import { useNames } from "../names";
 import { valueLabel } from "../vocab";
 import type { SceneRef } from "../App";
 import { ArrowUpRight } from "./ArrowUpRight";
-import { ExplanationDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
+import { CHECK_LABELS, ExplanationDialog, SourceFilesDialog, StandardChecksDialog } from "./AssessmentDialogs";
 
 const SUB: Record<string, [string, string]> = {
   direct: ["候选场景无需修改即可复用。", "The candidate scenario can be reused without modification."],
   modify: ["按下方列出的修改后即可复用；标为“改时确认”的项在修改时核对。", "The candidate can be reused after the changes listed below; check the items marked to confirm while making them."],
   major_modify: ["可以复用，但修改量接近新建：多个参与者或行为需要调整。", "Reusable, but the changes come close to a new build: several participants or behaviors change."],
-  new_build: ["存在阻断差异，无法复用，需要新建场景。", "Blocking differences prevent reuse. Build a new scenario."],
-  standards: ["结构相似，但场景或道路的标准检查未通过或未完成。", "Structure matches, but the scenario or road standard checks have not passed yet."],
-  partial: ["已完成部分结构比较；确认未验证项后才能认定复用。", "Part of the structure was compared. Resolve the unverified items before confirming reuse."],
+  new_build: ["存在阻断差异，这个素材不能用于本条款。", "Blocking differences: this asset cannot be used for the clause."],
+  standards: ["结构一致，但场景或道路文件的标准检查未通过或未完成。", "The structure matches, but the scenario or road file standard checks have not passed yet."],
+  partial: ["已比较部分结构；核对下方未验证的项后才能确定。", "Part of the structure was compared. Check the unverified items below before deciding."],
   undecidable: ["参与者交互或主车动作缺少关键结构，无法判断复用。", "Key participant or ego-action facts are missing, so reuse cannot be assessed."],
-  recall: ["这是文本检索结果。选择 PDF 场景后才能按结构评估复用。", "Text-only match. Select a PDF scene to assess reuse structurally."],
+  recall: ["这是文本检索结果。选择 PDF 条款后才能按结构评估复用。", "Text-only match. Select a PDF clause to assess reuse structurally."],
+};
+
+/** The files whose standard check is still open, those with the same status named together. */
+const pendingText = (pending: Record<string, string>, lang: Lang) => {
+  const groups = new Map<string, string[]>();
+  for (const [role, status] of Object.entries(pending)) {
+    const label = (CHECK_LABELS[status] ?? CHECK_LABELS.unavailable)[lang === "zh" ? 0 : 1];
+    groups.set(label, [...(groups.get(label) ?? []), role === "road" ? (lang === "zh" ? "道路" : "road") : (lang === "zh" ? "场景" : "scenario")]);
+  }
+  return [...groups].map(([label, roles]) => lang === "zh" ? `${roles.join("、")}：${label}` : `${roles.join(", ").replace(/^./, (m) => m.toUpperCase())}: ${label.toLowerCase()}`)
+    .join(lang === "zh" ? "；" : "; ");
 };
 
 // Only an unverified core fact needs review; an adjustable one is confirmed while making the change,
@@ -138,7 +149,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
             </span>
           </Tooltip>
         </div>
-        <div className="big">{verdictLabel(cand.level, cand.review_kind, lang)}</div>
+        <div className="big">{level[lang]}</div>
         <div className="sub">{t(...SUB[cand.level === "review" ? (SUB[cand.review_kind] ? cand.review_kind : "partial") : cand.level])}</div>
         {cand.level === "review" && scene && cand.review_kind !== "standards" && (
           <Button size="small" className="review-facts" onClick={onReviewFacts}>{t("返回核对需求事实", "Review requirement facts")}</Button>
@@ -190,7 +201,7 @@ export function DecisionPanel({ sceneRef, cand, searching, query, lang, onReview
           <span>{t("标准检查", "Standard checks")}</span>
           <span className={std.passed ? "cost-Low" : "cost-Medium"}>
             <a className="plain-link" onClick={() => setDialog("checks")}>
-              {std.passed ? t("已通过", "Passed") : `${t("待完成：", "Pending: ")}${Object.entries(std.pending).map(([k, v]) => `${k} ${v}`).join(", ")}`}
+              {std.passed ? t("已通过", "Passed") : pendingText(std.pending, lang)}
             </a>
           </span>
         </div>

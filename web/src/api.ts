@@ -195,34 +195,20 @@ export const urls = {
   file: (c: VersionRef, role: "scenario" | "road") => `/api/assets/${c.asset_id}/versions/${c.version_id}/files/${role}`,
 };
 
-export const LEVEL: Record<Level, { zh: string; en: string; cls: "direct" | "modify" | "review" | "not" }> = {
+// The rules' verdicts on the four reuse levels the model and a person use; the sub-kind of a
+// review and a major modification are told by the explanation under the level, not by its name.
+export const LEVEL: Record<Level, { zh: string; en: string; cls: ReuseClass }> = {
   direct: { zh: "直接复用", en: "Direct reuse", cls: "direct" },
   modify: { zh: "修改复用", en: "Modify and reuse", cls: "modify" },
-  major_modify: { zh: "大幅修改复用", en: "Major modification", cls: "modify" },
-  review: { zh: "待复核", en: "Needs review", cls: "review" },
-  new_build: { zh: "不可复用", en: "Not reusable", cls: "not" },
+  major_modify: { zh: "修改复用", en: "Modify and reuse", cls: "modify" },
+  review: { zh: "无法判断", en: "Undetermined", cls: "review" },
+  new_build: { zh: "不适用", en: "Not applicable", cls: "not" },
 };
+export type ReuseClass = "direct" | "modify" | "review" | "not";
+export const REUSE_CLASSES: ReuseClass[] = ["direct", "modify", "review", "not"];
+export const classLabel = (cls: ReuseClass, lang: Lang) => Object.values(LEVEL).find((l) => l.cls === cls)![lang];
 
 export const levelLabel = (level: Level, lang: Lang) => LEVEL[level][lang];
-
-// "Needs review" splits into sub-kinds with their own headline, matching the desktop wording.
-const REVIEW_TITLE: Record<string, { zh: string; en: string }> = {
-  standards: { zh: "文件标准待复核", en: "File standards need review" },
-  partial: { zh: "部分已验证 · 待复核", en: "Partially verified · review" },
-  undecidable: { zh: "关键结构不足 · 无法判断", en: "Insufficient structure · undecidable" },
-  recall: { zh: "文本召回 · 待结构验证", en: "Text recall · verify structure" },
-};
-
-export const verdictLabel = (level: Level | "no_candidates" | string, kind: string | null | undefined, lang: Lang, signedOff = false) =>
-  signedOff && level === "review"
-    ? lang === "zh" ? "复核后确认" : "Confirmed after review"
-    : level === "no_candidates"
-    ? lang === "zh" ? "没有候选资产" : "No candidate assets"
-    : level === "review" && kind && REVIEW_TITLE[kind]
-      ? REVIEW_TITLE[kind][lang]
-      : REVIEW_TITLE[level]?.[lang] ?? LEVEL[level as Level]?.[lang] ?? level;
-
-export const verdictClass = (level: string) => LEVEL[level as Level]?.cls ?? (REVIEW_TITLE[level] ? "review" : "not");
 
 export const FACET_LABEL: Record<string, { zh: string; en: string }> = {
   function_type: { zh: "功能", en: "Function" },

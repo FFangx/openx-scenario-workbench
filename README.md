@@ -67,7 +67,7 @@ Similarity over the structural facts finds most right assets, but cannot say whe
 - Imports ScenarioManager-compatible `.sim` ZIP archives, converts their embedded OpenSCENARIO JSON to the same parser input, and pairs cases with contained or separately uploaded `.xodr` roads.
 - Ranks every library asset for a reviewed requirement by blocking differences, then estimated change cost; BGE-M3 (or an explicitly selected offline hashing baseline) orders assets within the same change and serves free-text search.
 - Pairs requested and candidate participants for the fewest blocking differences and compares each participant's own initial speed when the requirement states it.
-- In manual search, gives one of five rule verdicts: direct reuse, modify, major modification (verified changes close to a new build), review, or build new.
+- In manual search, rates each candidate on the assessment's four levels (direct reuse, modify and reuse, not applicable, undetermined); a line under the level says why, such as changes close to a new build or file standard checks still open.
 - Builds participant interaction signatures from type, ego-relative bearing, facing direction, and actor-owned actions.
 - Reports grounded reuse differences such as a mismatched scenario family or participant interaction, or a missing relation, action, trigger, or road feature.
 - Checks road-filename references, missing scenario entities, and missing road elements.

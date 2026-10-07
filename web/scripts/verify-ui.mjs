@@ -196,10 +196,10 @@ try {
 
   // Show dropdown filters client side
   await p.locator(".cand-head .ant-select").click();
-  await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: "Not reusable" }).click();
+  await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: "Not applicable" }).click();
   await p.waitForTimeout(150);
   const tags = await p.locator(".cand-table tbody .mtag").allInnerTexts();
-  check("Show filter keeps only that verdict", tags.length > 0 && tags.every((t) => t === "Not reusable"), `${tags.length} rows`);
+  check("Show filter keeps only that verdict", tags.length > 0 && tags.every((t) => t === "Not applicable"), `${tags.length} rows`);
   await p.locator(".cand-head .ant-select").click();
   await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: "All candidates" }).click();
 
