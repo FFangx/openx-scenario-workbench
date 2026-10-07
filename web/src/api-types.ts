@@ -167,6 +167,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/versions/{version_id}/road-drawing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Road Drawing
+         * @description The version's road from above (PNG), with where each participant starts; drawn once, then kept.
+         */
+        get: operations["road_drawing_api_assets__asset_id__versions__version_id__road_drawing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/versions/{version_id}/standard-export": {
         parameters: {
             query?: never;
@@ -468,6 +488,27 @@ export interface paths {
         put?: never;
         /** Preview Stop */
         post: operations["preview_stop_api_preview_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Previews
+         * @description Saves an esmini frame for every latest version that has none yet, one at a time, and draws each
+         *     road from above. Versions whose road was not imported are skipped.
+         */
+        post: operations["previews_api_previews_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2176,7 +2217,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "pdf_import" | "asset_import" | "schema_update" | "binding_suggest";
+            kind: "pdf_import" | "asset_import" | "schema_update" | "binding_suggest" | "preview_batch";
             /** Messages */
             messages: string[];
             /** Reports */
@@ -2440,6 +2481,11 @@ export interface components {
              */
             appearance: "light" | "dark" | "system";
             /**
+             * Auto Preview
+             * @description An asset import is followed by making previews of the library.
+             */
+            auto_preview: boolean;
+            /**
              * Encoder
              * @enum {string}
              */
@@ -2459,12 +2505,23 @@ export interface components {
         PreferencesUpdate: {
             /** Appearance */
             appearance?: ("light" | "dark" | "system") | null;
+            /** Auto Preview */
+            auto_preview?: boolean | null;
             /** Encoder */
             encoder?: string | null;
             /** Language */
             language?: ("zh" | "en") | null;
             /** Show File Names */
             show_file_names?: boolean | null;
+        };
+        /** PreviewBatchRequest */
+        PreviewBatchRequest: {
+            /**
+             * Retry Failed
+             * @description Also try again the versions esmini failed on before.
+             * @default false
+             */
+            retry_failed?: boolean;
         };
         /** PreviewRequest */
         PreviewRequest: {
@@ -3943,6 +4000,38 @@ export interface operations {
             };
         };
     };
+    road_drawing_api_assets__asset_id__versions__version_id__road_drawing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     standard_export_api_assets__asset_id__versions__version_id__standard_export_post: {
         parameters: {
             query?: never;
@@ -4222,7 +4311,7 @@ export interface operations {
     job_list_api_jobs_get: {
         parameters: {
             query?: {
-                kind?: ("pdf_import" | "asset_import") | null;
+                kind?: ("pdf_import" | "asset_import" | "preview_batch") | null;
             };
             header?: never;
             path?: never;
@@ -4388,6 +4477,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewStatus"];
+                };
+            };
+        };
+    };
+    previews_api_previews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

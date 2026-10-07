@@ -47,7 +47,7 @@ def _uploads(files: list[UploadFile], suffixes: tuple[str, ...], message: str) -
 # ---------- jobs ----------
 
 @router.get("/jobs", **documented(list[Job]))
-def job_list(kind: Literal["pdf_import", "asset_import"] | None = None) -> list[dict[str, Any]]:
+def job_list(kind: Literal["pdf_import", "asset_import", "preview_batch"] | None = None) -> list[dict[str, Any]]:
     store = AssetStore()
     result = jobs.recent(kind, str(store.root.resolve()))
     if kind in (None, import_jobs.KIND) and not any(item["kind"] == import_jobs.KIND for item in result):

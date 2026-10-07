@@ -95,6 +95,9 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                   </p>
                 )}
                 <div className="asset-player"><PreviewPlayer cand={{ ...version, compatibility: v.compatibility, has_frame: detail.has_frame }} esmini={esmini} onSettings={onSettings} /></div>
+                {detail.summary && !detail.summary.road_file_missing && (
+                  <img className="road-drawing" src={urls.roadDrawing(version)} alt={t("道路俯视图与参与者起点", "The road from above with where the participants start")} loading="lazy" />
+                )}
                 {v.compatibility_detail && <pre className="json-view">{v.compatibility_detail}</pre>}
                 <Collapse size="small" items={[{ key: "checks", label: t("文件标准检查", "File standard checks"), children: <StandardChecks checks={detail.validation ?? {}} /> }]} />
               </div>

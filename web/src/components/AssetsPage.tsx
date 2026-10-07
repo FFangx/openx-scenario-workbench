@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Button, Collapse, Empty, Input, Select, Spin, Switch, Table, Tabs, Tag, type TableColumnsType } from "antd";
-import { DownloadOutlined, FileTextOutlined, RobotOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, FileTextOutlined, PictureOutlined, RobotOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, urls, type AssetRow, type Job, type RequirementRecord, type VersionRef } from "../api";
 import { dateTime, useT } from "../i18n";
 import { useJob } from "../jobs";
@@ -39,12 +39,21 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
     load();
     onLibraryChanged();
   }, [load, onLibraryChanged]);
-  const { job, setJob, cancel } = useJob(lastJob, changed);
+  const [previewJob, setPreviewJob] = useState<Job | null>(null);
+  const { job, setJob, cancel } = useJob(lastJob, (finished) => {
+    changed();
+    // An import may have started the previews (a setting).
+    if (finished.kind === "asset_import") api.jobs("preview_batch").then((all) => setPreviewJob(all[0] ?? null)).catch(() => undefined);
+  });
+  const previews = useJob(previewJob, load);
 
   useEffect(() => {
     load();
     api.jobs("asset_import").then((all) => setLastJob(all[0] ?? null)).catch(() => undefined);
+    api.jobs("preview_batch").then((all) => setPreviewJob(all[0] ?? null)).catch(() => undefined);
   }, [load]);
+  const makePreviews = () => api.startPreviews().then(setPreviewJob).catch((e: Error) => setError(e.message));
+  const previewing = previews.job?.status === "running";
 
   const busy = job?.status === "running";
   const modelClassify = async (versions?: VersionRef[]) => {
@@ -61,6 +70,10 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
         <div className="ph">
           {t("资产管理", "Asset management")}
           {rows && <span className="meta">{t(`${rows.filter((r) => r.latest).length} 个资产 · ${rows.length} 个版本`, `${rows.filter((r) => r.latest).length} assets · ${rows.length} versions`)}</span>}
+          <Button icon={<PictureOutlined />} disabled={previewing} onClick={makePreviews}
+            title={t("为还没有画面的版本逐个跑 esmini 截一张图，并画出道路俯视图", "Run esmini on each version without a frame to save one, and draw each road from above")}>
+            {t("生成预览", "Make previews")}
+          </Button>
           <Button type="primary" icon={<UploadOutlined />} onClick={() => setImporting(true)}>{t("导入资产", "Import assets")}</Button>
         </div>
         {error && <Alert type="error" showIcon closable title={error} onClose={() => setError(null)} />}
@@ -80,6 +93,14 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
                       label: <JobSummary job={job} />,
                       children: <div className="settings-form"><JobProgress job={job} onCancel={cancel} unit={["个场景", "scenarios"]} /><ImportReports job={job} /></div>,
                       extra: !busy && <Button size="small" type="text" onClick={(e) => { e.stopPropagation(); setJob(null); setLastJob(null); }}>{t("收起", "Dismiss")}</Button>,
+                    }]} />
+                  )}
+                  {previews.job && (
+                    <Collapse size="small" className="job-strip preview-strip" defaultActiveKey={previewing ? ["job"] : []} items={[{
+                      key: "job",
+                      label: <PreviewSummary job={previews.job} />,
+                      children: <div className="settings-form"><JobProgress job={previews.job} onCancel={previews.cancel} unit={["个版本", "versions"]} /></div>,
+                      extra: !previewing && <Button size="small" type="text" onClick={(e) => { e.stopPropagation(); previews.setJob(null); setPreviewJob(null); }}>{t("收起", "Dismiss")}</Button>,
                     }]} />
                   )}
                   {pending > 0 && !busy && (
@@ -127,6 +148,24 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
       </section>
       <ImportAssetsDialog open={importing} onClose={() => { setImporting(false); api.jobs("asset_import").then((all) => setLastJob(all[0] ?? null)).catch(() => undefined); }} onFinished={changed} />
     </main>
+  );
+}
+
+function PreviewSummary({ job }: { job: Job }) {
+  const { t } = useT();
+  const counts = (job.result ?? {}) as Partial<Record<"frames" | "failed" | "kept" | "road_missing" | "drawings", number>>;
+  const states: Record<string, string> = {
+    running: t(`正在生成预览 ${job.done}/${job.total}`, `Making previews ${job.done}/${job.total}`), completed: t("预览已生成", "Previews made"),
+    stopped: t("预览已停止", "Previews stopped"), failed: t("预览任务失败", "Previews failed"),
+  };
+  return (
+    <span className="job-summary">
+      <b>{states[job.status] ?? job.status}</b>
+      <span className="muted">
+        {t(`新画面 ${counts.frames ?? 0} · 播放失败 ${counts.failed ?? 0} · 已有 ${counts.kept ?? 0} · 道路缺失 ${counts.road_missing ?? 0}`,
+          `${counts.frames ?? 0} new frames · ${counts.failed ?? 0} failed · ${counts.kept ?? 0} kept · ${counts.road_missing ?? 0} without road`)}
+      </span>
+    </span>
   );
 }
 

@@ -1,4 +1,4 @@
-"""esmini playback for one asset version at a time.
+"""esmini playback for one asset version at a time, previews for the whole library, and road drawings.
 
 The worker serves an MJPEG stream on its own loopback port; the page embeds that URL
 in an <img>. Polling the status here also records whether the version played.
@@ -9,12 +9,14 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from . import preview_batch
 from .api_common import _store, _version
-from .api_schemas import PreviewStatus, documented
-from .esmini_preview import PreviewProcess, find_esmini, start_preview
+from .api_schemas import Job, PreviewStatus, documented
+from .esmini_preview import PreviewProcess, find_esmini, record_outcome, start_preview
 from .preferences import read_preferences
 
 router = APIRouter(prefix="/api", tags=["preview"])
@@ -31,16 +33,8 @@ def _record(preview: PreviewProcess, status: dict) -> None:
     store = _store()
     version = next((item for item in store.versions()
                     if (item.asset_id, item.version_id) == (preview.asset_id, preview.version_id)), None)
-    if version is None:
-        return
-    if status["state"] == "failed":
-        if version.compatibility != "failed" or version.compatibility_detail != status["error"]:
-            store.set_compatibility(version, "failed", status["error"])
-    elif status["state"] == "finished" and not status["frames"]:
-        if version.compatibility != "failed":
-            store.set_compatibility(version, "failed", "esmini finished without rendered frames.")
-    elif status["frames"] and version.compatibility != "playable":
-        store.set_compatibility(version, "playable")
+    if version is not None:
+        record_outcome(store, version, status)
 
 
 def _status(preview: PreviewProcess | None) -> dict[str, Any]:
@@ -94,3 +88,23 @@ def preview_stop() -> dict[str, Any]:
     if preview:
         preview.stop()
     return {"state": "idle"}
+
+
+class PreviewBatchRequest(BaseModel):
+    retry_failed: bool = Field(False, description="Also try again the versions esmini failed on before.")
+
+
+@router.post("/previews", **documented(Job))
+def previews(request: PreviewBatchRequest) -> dict[str, Any]:
+    """Saves an esmini frame for every latest version that has none yet, one at a time, and draws each
+    road from above. Versions whose road was not imported are skipped."""
+    return preview_batch.start(_store(), retry_failed=request.retry_failed).snapshot()
+
+
+@router.get("/assets/{asset_id}/versions/{version_id}/road-drawing")
+def road_drawing(asset_id: str, version_id: str) -> Response:
+    """The version's road from above (PNG), with where each participant starts; drawn once, then kept."""
+    data = preview_batch.road_drawing(_store(), _version(asset_id, version_id))
+    if data is None:
+        raise HTTPException(404, "This version has no road to draw.")
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})

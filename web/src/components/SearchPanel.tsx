@@ -350,10 +350,16 @@ export function SearchPanel(p: Props) {
                 {t("关联道路：", "Associated road: ")}{c.road.file_missing ? t("缺失", "missing")
                   : <a href={urls.file(c, "road")} target="_blank" rel="noreferrer" title={c.xodr}>{names.road(c)}</a>}
               </div>
-              <div className="img-empty road">
-                <b>{metres(c.road.total_length_m)}</b>
-                <span>{t(`${c.road.road_count} 条道路 · ${c.road.junction_count} 个交叉口`, `${c.road.road_count} roads · ${c.road.junction_count} junctions`)}</span>
-              </div>
+              {!c.road.file_missing && c.version_id ? (
+                <img className="road-drawing" src={urls.roadDrawing(c)} loading="lazy"
+                  alt={t("道路俯视图与参与者起点", "The road from above with where the participants start")}
+                  title={t(`${metres(c.road.total_length_m)} · ${c.road.road_count} 条道路 · ${c.road.junction_count} 个交叉口`, `${metres(c.road.total_length_m)} · ${c.road.road_count} roads · ${c.road.junction_count} junctions`)} />
+              ) : (
+                <div className="img-empty road">
+                  <b>{metres(c.road.total_length_m)}</b>
+                  <span>{t(`${c.road.road_count} 条道路 · ${c.road.junction_count} 个交叉口`, `${c.road.road_count} roads · ${c.road.junction_count} junctions`)}</span>
+                </div>
+              )}
               <div className="kv" style={{ gridTemplateColumns: "72px 1fr", marginTop: 6, paddingLeft: 4, rowGap: 3 }}>
                 <span>{facetLabel("function_type", lang)}</span><span>{listText(c.classification.function_type, lang)}</span>
                 <span>{facetLabel("label_road_type", lang)}</span><span>{listText(c.classification.label_road_type, lang)}</span>

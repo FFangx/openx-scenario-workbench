@@ -661,7 +661,7 @@ class JobResult(Open):
 
 class Job(Shape):
     id: str
-    kind: Literal["pdf_import", "asset_import", "schema_update", "binding_suggest"]
+    kind: Literal["pdf_import", "asset_import", "schema_update", "binding_suggest", "preview_batch"]
     status: Literal["running", "completed", "failed", "stopped", "interrupted"]
     stage: str
     current: str
@@ -854,6 +854,7 @@ class Preferences(Shape):
     appearance: Literal["light", "dark", "system"]
     encoder: Literal["bge", "hashing"]
     show_file_names: bool = Field(description="Candidates are named by their files instead of the scenario and map names.")
+    auto_preview: bool = Field(description="An asset import is followed by making previews of the library.")
 
 
 class Settings(Shape):

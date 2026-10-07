@@ -5,10 +5,11 @@ from dataclasses import asdict, replace
 import json
 import time
 
-from . import jobs
+from . import jobs, preview_batch
 from .classification import classify_asset, read_classification
 from .llm_service import ModelClient
 from .pdf_store import PdfStore
+from .preferences import read_preferences
 
 KIND = "asset_import"
 
@@ -51,6 +52,11 @@ class ImportJob(jobs.Job):
             if classify and consecutive_failures >= 3:
                 # ModelClient sanitizes remote failures; never persist raw request/config objects.
                 raise ValueError("连续 3 个场景分类失败，已暂停模型请求。检查模型设置后可重试；资产已保留。 / Three consecutive classification failures; assets retained.")
+        # The setting "make previews after an import"; a preview run already going is left to finish.
+        if (versions is None and imported and read_preferences().get("auto_preview") is True
+                and not jobs.running(preview_batch.KIND, _scope(self.store))):
+            preview_batch.start(self.store)
+            self.note("已开始生成预览 / Making previews")
         return {"versions": [{"asset_id": v.asset_id, "version_id": v.version_id} for v in imported]}
 
 

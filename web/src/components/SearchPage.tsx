@@ -77,6 +77,8 @@ export function SearchPage({ search, library, from, esmini, onBack, onSettings, 
             <button key={c.asset_id} className="rcard" style={{ "--i": Math.min(i, 11) } as React.CSSProperties} onClick={() => setOpen(c)}>
               {c.has_frame && c.version_id ? (
                 <div className="thumb"><img src={urls.frame(c)} alt="" loading="lazy" /></div>
+              ) : !c.road.file_missing && c.version_id ? (
+                <div className="thumb road"><img src={urls.roadDrawing(c)} alt="" loading="lazy" /></div>
               ) : (
                 <div className="thumb blank" aria-hidden="true">
                   {[c.classification.function_type].flat()[0] && [c.classification.function_type].flat()[0] !== "未知"

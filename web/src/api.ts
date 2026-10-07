@@ -167,6 +167,7 @@ export const api = {
   jobs: (kind?: Job["kind"]) => call<Job[]>(`/api/jobs${kind ? `?kind=${kind}` : ""}`),
   job: (id: string) => call<Job>(`/api/jobs/${id}`),
   cancelJob: (id: string) => post<Job>(`/api/jobs/${id}/cancel`, {}),
+  startPreviews: (retryFailed = false) => post<Job>("/api/previews", { retry_failed: retryFailed }),
   importPdfs: (pid: string, files: File[], standard: string) => call<Job>(`/api/projects/${pid}/documents`, form(files, { standard })),
   reextract: (pid: string, did: string) => post<Job>(`/api/projects/${pid}/documents/${did}/reextract`, {}),
   importAssets: (files: File[], classify: boolean) => call<Job>("/api/assets/import", form(files, { classify: String(classify) })),
@@ -182,6 +183,7 @@ export const urls = {
   report: (pid: string, rid: string, format: "json" | "html", lang: Lang) =>
     `/api/projects/${pid}/reports/${rid}/download?format=${format}&lang=${lang}`,
   frame: (c: VersionRef, bust?: number) => `/api/assets/${c.asset_id}/versions/${c.version_id}/frame${bust ? `?v=${bust}` : ""}`,
+  roadDrawing: (c: VersionRef) => `/api/assets/${c.asset_id}/versions/${c.version_id}/road-drawing`,
   extraction: (pid: string, did: string) => `/api/projects/${pid}/documents/${did}/extraction/download`,
   classification: (v: VersionRef) => `/api/assets/${v.asset_id}/versions/${v.version_id}/classification/download`,
   standardExport: (v: VersionRef) => `/api/assets/${v.asset_id}/versions/${v.version_id}/standard-export/download`,

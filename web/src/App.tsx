@@ -32,7 +32,7 @@ function useSystemDark() {
 }
 
 const CACHE = "openx.preferences";
-const DEFAULTS: Preferences = { language: "zh", appearance: "system", encoder: "bge", show_file_names: false };
+const DEFAULTS: Preferences = { language: "zh", appearance: "system", encoder: "bge", show_file_names: false, auto_preview: false };
 
 /** The server owns preferences; a local copy only avoids a flash of the wrong theme and language on load. */
 function cachedPreferences(): Preferences {

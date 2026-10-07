@@ -38,7 +38,8 @@ export function SettingsDialog({ open, onClose, preferences, onPreferences }: Pr
             {
               key: "service",
               label: t("本机服务", "Local service"),
-              children: <ServiceTab settings={settings} onPreview={(preview) => setSettings({ ...settings, preview })} onOpen={openFolder} />,
+              children: <ServiceTab settings={settings} onPreview={(preview) => setSettings({ ...settings, preview })} onOpen={openFolder}
+                preferences={preferences} onPreferences={onPreferences} />,
             },
             { key: "schemas", label: t("文件标准", "File standards"), children: <SchemaTab /> },
             { key: "display", label: t("显示与检索", "Display & search"), children: <DisplayTab preferences={preferences} onChange={onPreferences} /> },
@@ -192,7 +193,10 @@ function ModelTab({ settings, onSaved }: { settings: Settings; onSaved: (m: Sett
   );
 }
 
-function ServiceTab({ settings, onPreview, onOpen }: { settings: Settings; onPreview: (p: Settings["preview"]) => void; onOpen: (t: "data" | "esmini") => void }) {
+function ServiceTab({ settings, onPreview, onOpen, preferences, onPreferences }: {
+  settings: Settings; onPreview: (p: Settings["preview"]) => void; onOpen: (t: "data" | "esmini") => void;
+  preferences: Preferences; onPreferences: (p: Partial<Preferences>) => void;
+}) {
   const { t } = useT();
   const [busy, setBusy] = useState<"browse" | "detect" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +237,12 @@ function ServiceTab({ settings, onPreview, onOpen }: { settings: Settings; onPre
         <Button icon={<SearchOutlined />} loading={busy === "detect"} onClick={() => act("detect")} disabled={!preview.configured}>{t("自动查找", "Detect automatically")}</Button>
       </Space>
       <p className="muted settings-note">{t("文件夹选择窗口会在这台电脑的桌面上打开。", "The folder picker opens on this computer's desktop.")}</p>
+      <label className="switch-row">
+        <Switch size="small" checked={preferences.auto_preview} onChange={(on) => onPreferences({ auto_preview: on })} />
+        <span>{t("导入素材后自动生成预览", "Make previews after an asset import")}</span>
+      </label>
+      <p className="muted settings-note">{t("逐个运行 esmini 截一张画面并画出道路俯视图，会占用一部分 CPU，可在资产管理里随时停止；也可以在资产管理里手动点“生成预览”。",
+        "Runs esmini on one version at a time to save a frame and draws each road from above. It uses some CPU and can be stopped in Asset management at any time, where \"Make previews\" also starts it by hand.")}</p>
 
       <h4 className="settings-h">{t("数据位置", "Data location")}</h4>
       <div className="location">

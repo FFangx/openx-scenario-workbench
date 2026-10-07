@@ -362,6 +362,11 @@ try {
   check("settings show no saved key in the demo", (await p.locator('.settings-form input[type="password"]').getAttribute("placeholder")) === "Enter API key");
   await p.locator(".settings-tabs .ant-tabs-tab").filter({ hasText: "Local service" }).click();
   check("settings show the demo data folder", (await p.locator(".location code").last().innerText()) === demo.dataDir);
+  await p.locator(".switch-row .ant-switch").click();
+  await p.waitForTimeout(300);
+  check("the setting to make previews after an import is saved", (await (await p.request.get(BASE + "/api/settings")).json()).preferences.auto_preview === true);
+  await p.locator(".switch-row .ant-switch").click();
+  await p.waitForTimeout(300);
   await p.locator(".settings-tabs .ant-tabs-tab").filter({ hasText: "Display" }).click();
   await p.locator(".ant-radio-button-wrapper").filter({ hasText: "Dark" }).click();
   await p.waitForTimeout(300);
@@ -385,7 +390,14 @@ try {
   const assetRows = () => p.locator(".asset-table tbody tr.ant-table-row");
   await assetRows().first().waitFor();
   check("asset table lists the latest versions", (await assetRows().count()) === 6, `${await assetRows().count()} rows`);
+  await p.locator(".assets-page .ph .ant-btn").filter({ hasText: "Make previews" }).click();
+  await p.locator(".preview-strip .job-summary b").filter({ hasText: /Previews (made|stopped|failed)/ }).waitFor({ timeout: 180000 });
+  const previewRun = (await (await p.request.get(`${BASE}/api/jobs?kind=preview_batch`)).json())[0];
+  check("one preview run draws every road and tries every version once", previewRun.status === "completed" && previewRun.result.drawings === 6
+    && previewRun.result.frames + previewRun.result.failed + previewRun.result.kept === 6, JSON.stringify(previewRun.result));
   await assetRows().filter({ hasText: "Opaque 003" }).click();
+  await p.locator(".asset-detail .road-drawing").waitFor();
+  check("an asset shows its road from above", await p.locator(".asset-detail .road-drawing").evaluate((img) => img.complete && img.naturalWidth > 0));
   await p.locator(".asset-detail .ant-tabs-tab").filter({ hasText: "Classification" }).click();
   await p.locator(".asset-detail .ant-form-item").filter({ hasText: "Road type" }).locator(".ant-select").click();
   await p.locator(".ant-select-dropdown:visible .ant-select-item-option").filter({ hasText: /^Curve$/ }).click();
