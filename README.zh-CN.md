@@ -111,7 +111,7 @@ openx-web
 
 - **BGE-M3 检索**：执行 `python -m pip install ".[semantic]"`。界面默认 BGE-M3，未缓存时首次使用下载权重，仓库不自带模型；无权重的离线检查需显式选择哈希基线。
 - **PDF 提取**：在**设置**中配置服务地址、密钥和模型。导入会将文档文字发送给该服务；扫描 PDF 还需按 [PDF 迁移说明](docs/PDF_MIGRATION.md)安装并配置本机 OCR。
-- **标准检查**：先执行 `openx-validate --install-schemas` 下载固定版本的 Schema 库，之后可本机检查。场景和道路都通过检查后，才能确认直接复用。
+- **标准检查**：先执行 `openx-validate --install-schemas` 下载固定版本的 Schema 库，之后可本机检查。手动检索里，场景和道路都通过检查，规则才会判为“直接复用”。条款的复用结论由人确定，不受检查结果限制，检查结果仅供参考：从仿真软件导出的素材常常通不过。
 - **仿真预览**：在 Windows 上单独安装 esmini。自动检测支持 `OPENX_ESMINI_PATH`、PATH、`%LOCALAPPDATA%/OpenXScenarioWorkbench/tools/esmini`，以及下载、桌面、文档和 Program Files 中的 esmini 文件夹；也可在**设置 → 本机服务**中用**浏览安装文件夹**选择安装目录或 `bin` 目录，**自动查找**恢复自动检测。仓库不自带 esmini，部分扩展或缺少依赖会导致无法播放。
 - **Windows 桌面入口**：按[桌面启动器说明](docs/DESKTOP_LAUNCHER.md)配置快捷方式和托盘，日常使用无需终端。
 

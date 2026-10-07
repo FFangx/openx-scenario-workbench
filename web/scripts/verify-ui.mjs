@@ -246,6 +246,20 @@ try {
   await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "demo-aeb-protocol-zh.pdf" }).click();
   await p.waitForFunction(() => document.querySelectorAll(".scene").length === 4);
 
+  // a PDF left before its clauses arrive: its late answer must not replace the clauses of the PDF now shown
+  const enDoc = (await allDocs()).find((d) => d.filename === "demo-aeb-protocol.pdf").document_id;
+  const slowScenes = (url) => url.pathname === `/api/projects/${project}/documents/${enDoc}/scenes`;
+  await p.route(slowScenes, async (route) => { await new Promise((r) => setTimeout(r, 1500)); await route.continue().catch(() => undefined); });
+  for (const name of ["demo-aeb-protocol.pdf", "demo-aeb-protocol-zh.pdf"]) {
+    await p.locator(".pdfcard .doc-switch").click();
+    await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: name }).click();
+  }
+  await p.waitForTimeout(2500);
+  await p.unroute(slowScenes);
+  const lateTitles = await p.locator(".scene .t").allInnerTexts();
+  check("a late answer for a PDF left behind keeps the shown PDF's clauses", lateTitles.length === 4 && lateTitles.every((title) => /\p{Script=Han}/u.test(title))
+    && (await p.locator(".pdfcard").innerText()).includes("demo-aeb-protocol-zh.pdf"), lateTitles.join(" | "));
+
   // binding a candidate found by hand stores it on the clause and returns to the table
   await p.locator(".scene").nth(2).click();
   await idle();
@@ -436,6 +450,19 @@ try {
   await p.waitForTimeout(400);
   check("new project becomes current and starts empty",
     (await p.locator(".hbtn b").first().innerText()) === "Verify project" && (await p.locator(".start-doc").count()) === 0);
+
+  // a project left before its PDFs arrive: its late answer must not fill the project now shown
+  const slowDocs = (url) => url.pathname === `/api/projects/${project}/documents`;
+  await p.route(slowDocs, async (route) => { await new Promise((r) => setTimeout(r, 1500)); await route.continue().catch(() => undefined); });
+  for (const name of ["Demo · AEB protocol", "Verify project"]) {
+    await p.locator(".hbtn").first().click();
+    await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: name }).first().click();
+  }
+  await p.waitForTimeout(2500);
+  await p.unroute(slowDocs);
+  check("a late answer for a project left behind leaves the current project's PDFs",
+    (await p.locator(".hbtn b").first().innerText()) === "Verify project" && (await p.locator(".start-doc").count()) === 0,
+    `${await p.locator(".start-doc").count()} PDFs`);
 
   check("no runtime errors", errors.length === 0, errors.join(" | "));
 } catch (error) {

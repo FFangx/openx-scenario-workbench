@@ -56,13 +56,20 @@ export function useRequirements({ onEnter, onError }: { onEnter: (scene: Scene) 
   const pendingDoc = useRef<string | null>(null);
   const handlers = useRef({ onEnter, onError });
   handlers.current = { onEnter, onError };
+  // Only the latest load of each list may fill it: switching project or PDF again before an answer
+  // arrives leaves that answer unused.
+  const docsSeq = useRef(0);
+  const scenesSeq = useRef(0);
 
-  const loadDocs = useCallback((pid: string, select?: string) =>
-    api.documents(pid).then((d) => {
+  const loadDocs = useCallback((pid: string, select?: string) => {
+    const seq = ++docsSeq.current;
+    return api.documents(pid).then((d) => {
+      if (seq !== docsSeq.current) return;
       const wanted = select ?? pendingDoc.current;
       pendingDoc.current = null;
       dispatch({ type: "docs", docs: d, docId: wanted && d.some((x) => x.document_id === wanted) ? wanted : d[0]?.document_id ?? null });
-    }).catch((e: Error) => handlers.current.onError(e.message)), []);
+    }).catch((e: Error) => seq === docsSeq.current && handlers.current.onError(e.message));
+  }, []);
 
   useEffect(() => {
     if (projectId) loadDocs(projectId);
@@ -70,18 +77,20 @@ export function useRequirements({ onEnter, onError }: { onEnter: (scene: Scene) 
 
   /** Reload the queue; keep the current selection when it still exists, else enter at the requested or first scene. */
   const loadScenes = useCallback((keep: string | null) => {
+    const seq = ++scenesSeq.current;
     if (!projectId || (scope === "pdf" && !docId)) {
       dispatch({ type: "scenes", scenes: [], selected: null });
       return;
     }
     const request = scope === "all" ? api.allScenes(projectId) : api.scenes(projectId, docId!);
     request.then((s) => {
+      if (seq !== scenesSeq.current) return;
       const wanted = pending.current ?? keep;
       pending.current = null;
       const next = s.find((x) => sceneKey(x) === wanted) ?? s[0];
       dispatch({ type: "scenes", scenes: s, selected: next ? sceneKey(next) : null });
       if (next && sceneKey(next) !== keep) handlers.current.onEnter(next);
-    }).catch((e: Error) => handlers.current.onError(e.message));
+    }).catch((e: Error) => seq === scenesSeq.current && handlers.current.onError(e.message));
   }, [projectId, docId, scope]);
 
   const scene = scenes.find((s) => sceneKey(s) === selected) ?? null;
