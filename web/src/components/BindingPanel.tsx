@@ -28,6 +28,30 @@ const VerdictTag = ({ verdict }: { verdict: string }) => {
 /** A suggestion is usable while what the model judged is still there and it gave a reply that fits. */
 const usable = (s: BindingSuggestion | null | undefined): s is BindingSuggestion => !!s && !s.failure && !s.outdated.length;
 
+/** What the readings that disagree preferred instead, by name. */
+function othersText(s: BindingSuggestion, t: (zh: string, en: string) => string) {
+  return s.other_preferred.map((id) => (id ? s.candidates.find((c) => c.id === id)?.title ?? id : t("没有合适的", "none fits"))).join(t("、", ", "));
+}
+
+/** Settled: every reading named the same preferred asset. Unsettled: they disagree, a person should look. */
+function Steadiness({ s }: { s: BindingSuggestion }) {
+  const { t } = useT();
+  if (s.stable === null) return null;
+  if (s.stable) {
+    return (
+      <Tooltip title={t(`问了 ${s.readings} 次，首选都一样。`, `Asked ${s.readings} times, the same preferred asset each time.`)}>
+        <Tag className="mtag steady">{t("稳", "Settled")}</Tag>
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip title={t(`问了 ${s.readings} 次，${s.agree} 次首选这个；别的几次首选：${othersText(s, t)}。`,
+      `${s.agree} of ${s.readings} readings prefer this asset; the others: ${othersText(s, t)}.`)}>
+      <Tag className="mtag review">{t("请看一眼", "Take a look")}</Tag>
+    </Tooltip>
+  );
+}
+
 /** The suggestion as a binding: its group, the preferred asset and that asset's changes. */
 function proposal(s: BindingSuggestion): BindingDraft {
   const chosen = s.candidates.filter((c) => s.binding.includes(c.id));
@@ -96,10 +120,15 @@ export function BindingPanel({ projectId, docs, open }: Props) {
   /** One row: the reply replaces that row only. */
   const actRow = (key: string, work: () => Promise<SceneBinding>) => run(key, work, (row) =>
     setView((v) => v && { ...v, scenes: v.scenes.map((s) => (rowKey(s) === rowKey(row) ? row : s)) }));
-  const suggest = () => api.suggestBindings(projectId, ids).then(setInitial).catch((e: Error) => setError(e.message));
+  const suggest = () => {
+    setError(null);
+    return api.suggestBindings(projectId, ids).then(setInitial).catch((e: Error) => setError(e.message));
+  };
   const running = job?.status === "running";
   const rows: Row[] = (view?.scenes ?? []).map((s) => ({ ...s, key: rowKey(s) }));
-  const acceptable = rows.filter((r) => !r.binding && usable(r.suggestion) && proposal(r.suggestion).status === "same").length;
+  const acceptable = rows.filter((r) => !r.binding && usable(r.suggestion) && r.suggestion.stable !== false
+    && proposal(r.suggestion).status === "same").length;
+  const look = rows.filter((r) => !r.binding && usable(r.suggestion) && r.suggestion.stable === false).length;
   const confirmed = rows.filter((r) => r.binding).length;
   const stale = rows.filter((r) => r.binding?.stale.length).length;
   const suggested = rows.filter((r) => r.suggestion).length;
@@ -142,6 +171,7 @@ export function BindingPanel({ projectId, docs, open }: Props) {
           <div className="batch-cand">
             {s.outdated.length > 0 && <Tooltip title={staleText(s.outdated, t)}><Tag className="mtag review">{t("建议已过期", "Outdated")}</Tag></Tooltip>}
             {preferred ? <VerdictTag verdict={preferred.verdict} /> : <Tag className="mtag not">{t("没有合适的", "None fits")}</Tag>}
+            <Steadiness s={s} />
             {preferred && <span className="muted" title={preferred.title}>{preferred.title}{chosen.length > 1 ? ` +${chosen.length - 1}` : ""}</span>}
           </div>
         );
@@ -174,8 +204,8 @@ export function BindingPanel({ projectId, docs, open }: Props) {
   return (
     <div className="settings-form">
       <p className="muted">
-        {t("模型从候选素材里挑出与每个需求场景做同一测试的一组素材（只差数值的变体算一组）。你确认后才存进对应表，所有项目共用。会把场景原文、抽取的事实和候选素材的名字、故事、差异发给已配置的模型。",
-          "The model picks, for every scene, the group of candidate assets that build the same test (variants that differ only in values belong together). A row enters the binding table, shared by all projects, only when you confirm it. The scenes' source text and facts, and the candidates' names, stories and differences, go to your configured model.")}
+        {t("模型从候选素材里挑出与每个需求场景做同一测试的一组素材（只差数值的变体算一组）。每个场景用模型最深的思考问 3 次：首选每次都一样的标“稳”，不一样的标“请看一眼”。你确认后才存进对应表，所有项目共用。会把场景原文、抽取的事实和候选素材的名字、故事、差异发给已配置的模型。",
+          "The model picks, for every scene, the group of candidate assets that build the same test (variants that differ only in values belong together). It reads every scene three times at its deepest thinking: the same preferred asset each time is \"Settled\", otherwise \"Take a look\". A row enters the binding table, shared by all projects, only when you confirm it. The scenes' source text and facts, and the candidates' names, stories and differences, go to your configured model.")}
       </p>
       {!docs.length && <Alert type="info" showIcon title={t("先在上面选择 PDF。", "Select PDFs above first.")} />}
       {error && <Alert type="error" showIcon title={error} />}
@@ -191,11 +221,12 @@ export function BindingPanel({ projectId, docs, open }: Props) {
         </Tooltip>
         <Button icon={<CheckOutlined />} disabled={!acceptable || running} loading={busy === "accept-all"}
           onClick={() => act("accept-all", () => api.acceptBindings(projectId, ids))}>
-          {t(`接受全部“同一测试”的建议（${acceptable}）`, `Accept every "same test" suggestion (${acceptable})`)}
+          {t(`接受全部稳的“同一测试”建议（${acceptable}）`, `Accept every settled "same test" suggestion (${acceptable})`)}
         </Button>
         {view && (
           <span className="muted bind-counts">
             {t(`已确认 ${confirmed} / ${rows.length}`, `${confirmed} / ${rows.length} confirmed`)}
+            {look > 0 && t(` · 请看一眼 ${look}`, ` · ${look} to look at`)}
             {stale > 0 && t(` · 待重核 ${stale}`, ` · ${stale} to recheck`)}
           </span>
         )}
@@ -255,6 +286,12 @@ function BindingEditor({ row, busy, onSave, onRemove }: { row: Row; busy: string
 
   return (
     <div className="bind-editor">
+      {s?.stable === false && (
+        <div className="bind-note bind-unsettled">
+          {t(`这条建议不稳：问了 ${s.readings} 次，${s.agree} 次首选同一个。别的几次首选：${othersText(s, t)}。`,
+            `Unsettled: ${s.agree} of ${s.readings} readings prefer the same asset. The others: ${othersText(s, t)}.`)}
+        </div>
+      )}
       {s?.note && <div className="muted bind-note">{t("模型备注：", "Model note: ")}{s.note}</div>}
       {!choices.length && <div className="muted">{t("还没有候选：先让模型建议。", "No candidates yet: ask the model first.")}</div>}
       <div className="bind-cands">

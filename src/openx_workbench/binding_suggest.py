@@ -4,8 +4,9 @@ Candidates come from five routes over the library: the workbench ranking, the st
 alone, the asset names, the name-free structure text and the requirement title against the asset
 names. A library whose names say little still reaches the right family through structure, one whose
 files the rules misread still through its names. The model then judges every candidate
-(binding_judge) and a person confirms. Replies are cached by request, so asking again about
-unchanged scenes and candidates calls nothing.
+(binding_judge) three times at its deepest thinking, the preferred asset most readings name is the
+suggestion, and a person confirms. Readings that disagree mark the suggestion for a second look.
+Replies are cached by request, so asking again about unchanged scenes and candidates calls nothing.
 """
 
 from __future__ import annotations
@@ -15,13 +16,13 @@ import json
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any, Callable
 
-from .binding_judge import JUDGE_VERSION, JudgementInvalid, judge_request, parse_judgement
+from .binding_judge import JUDGE_VERSION, Judgement, JudgementInvalid, judge_request, parse_judgement
 from .atomic_write import write_json
 from .catalog import OpenXAsset
 from .llm_service import ModelClient, ModelError, base_url
@@ -31,8 +32,12 @@ from .scene_package import ScenePackage, query_structure_text, scene_package_to_
 
 # (route, how many of its best candidates join the pool); the pool keeps this order, then rank.
 ROUTES = (("full", 10), ("rules", 10), ("name", 5), ("structure", 5), ("title", 5))
-READINGS = 3  # independent readings tried when a reply is cut off or does not fit the candidates
-ATTEMPTS = 5  # tries of one reading while the service is busy or unreachable
+# Independent readings of every scene. On three standards (105 scenes, max effort) the readings
+# named the same preferred asset for 91 scenes, and that asset was right every time it could be checked.
+VOTES = 3
+TRIES = 2  # tries of one reading whose reply is cut off or does not fit the candidates
+ATTEMPTS = 5  # tries of one call while the service is busy or unreachable
+EFFORT_DEPTH = ("minimal", "low", "medium", "high", "xhigh", "max")  # thinking efforts, shallow to deep
 
 
 @dataclass(frozen=True)
@@ -83,30 +88,53 @@ def candidate_pool(index: OpenXIndex, package: ScenePackage) -> list[PoolCandida
     return [PoolCandidate(by_position[number], tuple(routes), rank[number]) for number, routes in found.items()]
 
 
-class Judge:
-    """Model calls of one suggestion run: cached by request, retried while the service is busy, stoppable."""
+def judge_efforts(client: ModelClient) -> tuple[str, str]:
+    """The deepest thinking effort the model declares, and the one a reading falls back to when its reply
+    is cut off there (the model's default, else the next shallower). A model that declares none, or a
+    service without a model list, keeps the effort of the settings."""
+    config = client.config
+    if not config.thinking:
+        return config.reasoning_effort, config.reasoning_effort
+    try:
+        info = next((item for item in client.catalog() if item.id == config.model), None)
+    except ModelError:
+        info = None
+    levels = sorted((level for level in (info.effort_levels if info else ()) if level in EFFORT_DEPTH),
+                    key=EFFORT_DEPTH.index)
+    if not levels:
+        return config.reasoning_effort, config.reasoning_effort
+    fallback = info.default_effort if info.default_effort in levels[:-1] else levels[max(len(levels) - 2, 0)]
+    return levels[-1], fallback
 
-    def __init__(self, client: ModelClient, cache_root: Path, cancel: Event | None = None):
+
+class Judge:
+    """Model calls of one suggestion run: cached by request and reading, retried while the service is busy,
+    stoppable. `efforts` = (effort of every reading, effort of a reading whose reply was cut off)."""
+
+    def __init__(self, client: ModelClient, cache_root: Path, cancel: Event | None = None,
+                 efforts: tuple[str, str] | None = None):
         self.client = client
         self.cache_root = cache_root
         self.cancel = cancel or Event()
         self.lock = Lock()
         self.spent: Counter = Counter()
+        self.efforts = efforts or (client.config.reasoning_effort, client.config.reasoning_effort)
+        self.clients = {effort: ModelClient(replace(client.config, reasoning_effort=effort), opener=client.opener)
+                        for effort in self.efforts}
 
-    def _path(self, request: dict, reading: int) -> Path:
+    def _path(self, request: dict, reading: int, effort: str) -> Path:
         config = self.client.config
         identity = {"judge": JUDGE_VERSION, "endpoint": base_url(config.base_url), "model": config.model,
-                    "thinking": config.thinking, "effort": config.reasoning_effort, "request": request,
-                    "sample": reading}
+                    "thinking": config.thinking, "effort": effort, "request": request, "sample": reading}
         return self.cache_root / (hashlib.sha256(
             json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest() + ".json")
 
-    def _call(self, request: dict) -> dict:
+    def _call(self, effort: str, request: dict) -> dict:
         for attempt in range(1, ATTEMPTS + 1):
             if self.cancel.is_set():
                 raise InterruptedError()
             try:
-                envelope = self.client.complete(request)
+                envelope = self.clients[effort].complete(request)
                 break
             except Exception as error:  # noqa: BLE001 - only a retryable service failure is tried again
                 if not getattr(error, "retryable", False) or attempt == ATTEMPTS:
@@ -120,41 +148,71 @@ class Judge:
                     self.spent[key] += value
         return envelope
 
-    def judge(self, request: dict, count: int):
-        """The first reading that fits the candidates, or None and why none did.
+    def reading(self, request: dict, count: int, number: int) -> tuple[Judgement | None, str]:
+        """Reading `number` of a request: the judgement, or None and why there is none.
 
-        Only a reply that fits is cached: one cut off or off the candidates is asked again next time.
-        A service still busy after every attempt fails this scene only; any other service failure
-        (a wrong key, an unknown model) would fail every scene and stops the run.
+        A reply cut off at the deep effort is asked again at the fallback effort, one off the candidates
+        at the same. Only a reply that fits is cached, under the effort that gave it. A service still
+        busy after every attempt fails this reading only; any other service failure (a wrong key, an
+        unknown model) would fail every scene and stops the run.
         """
-        failure = ""
-        for reading in range(READINGS):
-            path = self._path(request, reading)
+        deep, fallback = self.efforts
+        for effort in dict.fromkeys((deep, fallback)):
+            path = self._path(request, number, effort)
             try:
-                cached = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
-            except ValueError:
-                cached = None
+                return parse_judgement(json.loads(path.read_text(encoding="utf-8")), count), ""
+            except (OSError, ValueError):  # not cached, unreadable, or no longer fits
+                pass
+        failure, effort = "", deep
+        for _ in range(TRIES):
             try:
-                envelope = cached or self._call(request)
+                envelope = self._call(effort, request)
                 judgement = parse_judgement(envelope, count)
-                if cached:
-                    return judgement, ""
             except JudgementInvalid as error:
                 failure = str(error)
+                if (envelope.get("choices") or [{}])[0].get("finish_reason") == "length":
+                    effort = fallback
                 continue
             except ModelError as error:
                 if not error.retryable:
                     raise
                 return None, str(error)
+            path = self._path(request, number, effort)
             path.parent.mkdir(parents=True, exist_ok=True)
             write_json(path, envelope, ensure_ascii=False, prefix="judge-", suffix=".tmp")
             return judgement, ""
         return None, failure
 
 
-def suggestion_record(pool: list[PoolCandidate], versions: dict, judgement, failure: str,
+@dataclass(frozen=True)
+class Vote:
+    """The readings of one scene taken together."""
+    judgement: Judgement | None  # the earliest reading naming the preferred asset most readings name
+    readings: int  # readings whose reply fits the candidates
+    agree: int  # of them, how many name that preferred asset (or none)
+    others: tuple[str | None, ...]  # the other preferred assets named, most often first; None: no asset
+    failure: str = ""  # why no reading fits
+
+    @property
+    def stable(self) -> bool:
+        return self.readings >= 2 and self.agree == self.readings
+
+
+def vote(readings: list[tuple[Judgement | None, str]]) -> Vote:
+    fitting = [judgement for judgement, _ in readings if judgement]
+    if not fitting:
+        return Vote(None, 0, 0, (), next((why for _, why in reversed(readings) if why), ""))
+    named = Counter(item.preferred for item in fitting)
+    most = max(named.values())
+    chosen = next(item for item in fitting if named[item.preferred] == most)
+    return Vote(chosen, len(fitting), most, tuple(key for key, _ in named.most_common() if key != chosen.preferred))
+
+
+def suggestion_record(pool: list[PoolCandidate], versions: dict, result: Vote,
                       scene_digest: str, revision: int, model: str) -> dict[str, Any]:
-    """What is kept of one scene's suggestion: the candidates as asset versions with the model's words."""
+    """What is kept of one scene's suggestion: the candidates as asset versions with the words of the
+    reading chosen, and how far the readings agree."""
+    judgement = result.judgement
     judged = {item.id: item for item in judgement.candidates} if judgement else {}
     candidates = []
     for number, item in enumerate(pool, 1):
@@ -169,33 +227,41 @@ def suggestion_record(pool: list[PoolCandidate], versions: dict, judgement, fail
             "revision": revision, "scene_digest": scene_digest, "candidates": candidates,
             "binding": list(judgement.binding) if judgement else [],
             "preferred": judgement.preferred if judgement else None,
-            "note": judgement.note if judgement else "", "failure": failure}
+            "note": judgement.note if judgement else "", "failure": result.failure,
+            "readings": result.readings, "agree": result.agree, "other_preferred": list(result.others)}
 
 
 def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge, concurrency: int, *,
                    digest: Callable[[ScenePackage], str], save: Callable[[Any, dict], None],
                    ranked: Callable[[Any], None] = lambda scene: None,
                    judged: Callable[[Any], None] = lambda scene: None) -> int:
-    """Rank each scene's candidates and ask the model about them while the next scene is ranked.
+    """Rank each scene's candidates and ask the model about them, VOTES readings at once, while the next
+    scene is ranked.
 
     `save(scene, record)` receives each finished suggestion; returns how many scenes failed.
     """
     failed = 0
-    with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(scenes)))) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(scenes) * VOTES))) as executor:
         futures = {}
+        readings: dict[int, list] = {}
         try:
-            for scene in scenes:
+            for number, scene in enumerate(scenes):
                 if judge.cancel.is_set():
                     raise InterruptedError()
                 pool = candidate_pool(index, scene.package)
                 request = judge_request(scene.package, [(item.result.asset, item.result.differences) for item in pool])
-                futures[executor.submit(judge.judge, request, len(pool))] = (scene, pool)
+                for reading in range(VOTES):
+                    futures[executor.submit(judge.reading, request, len(pool), reading)] = (number, reading, scene, pool)
                 ranked(scene)
             for future in as_completed(futures):
-                scene, pool = futures[future]
-                judgement, failure = future.result()
-                failed += judgement is None
-                save(scene, suggestion_record(pool, versions, judgement, failure, digest(scene.package),
+                number, reading, scene, pool = futures[future]
+                done = readings.setdefault(number, [None] * VOTES)
+                done[reading] = future.result()
+                if None in done:
+                    continue
+                result = vote(done)
+                failed += result.judgement is None
+                save(scene, suggestion_record(pool, versions, result, digest(scene.package),
                                               scene.revision, judge.client.config.model))
                 judged(scene)
         except BaseException:

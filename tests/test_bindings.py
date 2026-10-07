@@ -2,7 +2,9 @@
 import json
 import re
 import time
+from collections import Counter
 from pathlib import Path
+from threading import Lock
 
 import pytest
 
@@ -11,9 +13,9 @@ from fastapi.testclient import TestClient
 
 from openx_workbench import api, demo_workspace
 from openx_workbench.asset_store import AssetStore
-from openx_workbench.binding_suggest import candidate_pool, title_order
+from openx_workbench.binding_suggest import candidate_pool, judge_efforts, title_order
 from openx_workbench.catalog import AssetFile
-from openx_workbench.llm_service import ModelClient, ModelError
+from openx_workbench.llm_service import ModelClient, ModelConfig, ModelError, ModelInfo
 from openx_workbench.pdf_store import PdfStore
 from openx_workbench.retrieval import OpenXIndex
 from openx_workbench.scene_package import scene_package_to_query
@@ -27,21 +29,30 @@ def reply(data, finish="stop"):
             "usage": {"prompt_tokens": 100, "completion_tokens": 20}}
 
 
-class FakeModel:
+def judged(body, preferred="C1"):
     """Binds the first two candidates (the ranking's best) as the same test, judges the others not."""
+    ids = re.findall(r"### (C\d+)", body["messages"][1]["content"])
+    return reply({"candidates": [{"id": key, "verdict": "同一测试" if key in ("C1", "C2") else "不是",
+                                  "reason": "依据", "changes": ""} for key in ids],
+                  "binding": ["C1", "C2"], "preferred": preferred, "note": ""})
 
+
+class FakeModel:
     def __init__(self):
         self.calls = 0
-        self.answer = None  # set to replace the reply
+        self.efforts = Counter()  # thinking effort of every call
+        self.seen = Counter()  # calls per request
+        self.lock = Lock()
+        self.answer = None  # set to replace the reply: answer(body, client, nth call of this request)
 
     def __call__(self, client, body, **_):
-        self.calls += 1
-        if self.answer is not None:
-            return self.answer(body)
-        ids = re.findall(r"### (C\d+)", body["messages"][1]["content"])
-        return reply({"candidates": [{"id": key, "verdict": "同一测试" if key in ("C1", "C2") else "不是",
-                                      "reason": "依据", "changes": ""} for key in ids],
-                      "binding": ["C1", "C2"], "preferred": "C1", "note": ""})
+        with self.lock:
+            self.calls += 1
+            self.efforts[client.config.reasoning_effort] += 1
+            key = json.dumps(body, sort_keys=True, ensure_ascii=False)
+            self.seen[key] += 1
+            nth = self.seen[key]
+        return judged(body) if self.answer is None else self.answer(body, client, nth)
 
 
 class Base:
@@ -71,6 +82,7 @@ def demo(tmp_path, monkeypatch):
     seeded = demo_workspace.seed(tmp_path / "data", "fixtures")
     model = FakeModel()
     monkeypatch.setattr(ModelClient, "complete", lambda self, body, **kwargs: model(self, body, **kwargs))
+    monkeypatch.setattr(ModelClient, "catalog", lambda self: [ModelInfo(self.config.model, ("low", "high", "max"), "high")])
     api._cache.clear()
     client = TestClient(api.app, base_url="http://127.0.0.1")
     client.put("/api/settings/preferences", json={"encoder": "hashing"})  # BGE would load a large model
@@ -122,17 +134,20 @@ def test_pool_starts_with_the_ranking_and_names_the_routes():
 def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
     client, base, model, _ = demo
     job, view = suggested(client, base)
-    assert job["result"]["failed"] == 0 and job["result"]["usage"]["calls"] == 4 == model.calls
+    # Three readings of each of the four scenes, all at the deepest effort the model declares.
+    assert job["result"]["failed"] == 0 and job["result"]["usage"]["calls"] == 12 == model.calls
+    assert job["result"]["effort"] == "max" and model.efforts == {"max": 12}
     rows = view["scenes"]
     assert len(rows) == 4 and all(row["binding"] is None for row in rows)
     for row in rows:
         suggestion = row["suggestion"]
         assert suggestion["outdated"] == [] and suggestion["failure"] == ""
+        assert (suggestion["readings"], suggestion["agree"], suggestion["other_preferred"], suggestion["stable"]) == (3, 3, [], True)
         preferred = next(item for item in suggestion["candidates"] if item["id"] == suggestion["preferred"])
         assert preferred["verdict"] == "同一测试" and preferred["latest"] and preferred["routes"][0] == "full"
     # The same request again is answered from the cache.
     suggested(client, base)
-    assert model.calls == 4
+    assert model.calls == 12
 
     view = base.accept().json()
     bound = [row["binding"] for row in view["scenes"]]
@@ -153,7 +168,7 @@ def test_one_job_suggests_for_several_pdfs_and_lists_them_together(demo):
     job, view = suggested(client, group)
     expected = [item["document_id"] for item in reversed(seeded["documents"]) for _ in range(item["scenes"])]
     assert [row["document_id"] for row in view["scenes"]] == expected  # the PDFs in the order selected
-    assert model.calls == len(expected) and job["result"]["document_ids"] == documents
+    assert model.calls == 3 * len(expected) and job["result"]["document_ids"] == documents
     assert [item["document_id"] for item in view["documents"]] == documents
     assert {row["filename"] for row in view["scenes"]} == {"demo-aeb-protocol.pdf", "demo-aeb-protocol-zh.pdf"}
     assert base.view()["job"]["id"] == job["id"]  # one suggestion job per project, seen from any selection
@@ -235,15 +250,58 @@ def test_the_same_pdf_in_another_project_finds_the_binding(demo):
     assert all(row["binding"]["confirmed_in"]["project_id"] == seeded["project_id"] for row in rows)
 
 
+def test_readings_that_disagree_leave_the_scene_to_a_person(demo):
+    client, base, model, _ = demo
+    model.answer = lambda body, client, nth: judged(body, "C2" if nth == 3 else "C1")
+    _, view = suggested(client, base)
+    suggestion = view["scenes"][0]["suggestion"]
+    assert suggestion["preferred"] == "C1" and suggestion["binding"] == ["C1", "C2"]  # what most readings say
+    assert (suggestion["readings"], suggestion["agree"], suggestion["other_preferred"], suggestion["stable"]) == (3, 2, ["C2"], False)
+    assert all(row["binding"] is None for row in base.accept().json()["scenes"])  # "accept all" leaves them
+    first = view["scenes"][0]
+    named = base.accept(scenes=[{"document_id": first["document_id"], "scene_id": first["scene_id"]}]).json()
+    assert named["scenes"][0]["binding"]["source"] == "suggestion"  # a person accepts it by name
+
+
+def test_a_reply_cut_off_at_the_deepest_effort_is_read_again_at_the_default(demo):
+    client, base, model, _ = demo
+    model.answer = lambda body, client, nth: (reply({}, finish="length") if client.config.reasoning_effort == "max"
+                                              else judged(body))
+    first = base.view()["scenes"][0]
+    only = [{"document_id": first["document_id"], "scene_id": first["scene_id"]}]
+    job = finished(client, base.suggest(scenes=only).json())
+    assert job["result"]["failed"] == 0 and model.efforts == {"max": 3, "high": 3}
+    assert base.view()["scenes"][0]["suggestion"]["stable"]
+    finished(client, base.suggest(scenes=only).json())
+    assert model.calls == 6  # the replies kept under the default effort answer the next run
+
+
+def test_the_deepest_declared_effort_and_its_fallback(monkeypatch):
+    def efforts(levels=(), default="", thinking=True, fails=False):
+        def catalog(self):
+            if fails:
+                raise ModelError("no list")
+            return [ModelInfo("judge", levels, default)]
+        monkeypatch.setattr(ModelClient, "catalog", catalog)
+        return judge_efforts(ModelClient(ModelConfig(model="judge", api_key="k", thinking=thinking, reasoning_effort="low")))
+
+    assert efforts(("low", "high", "max"), "high") == ("max", "high")
+    assert efforts(("max", "low", "high"), "max") == ("max", "high")  # listed in any order
+    assert efforts(("low", "medium", "high"), "") == ("high", "medium")
+    assert efforts(("high",), "high") == ("high", "high")
+    assert efforts() == efforts(fails=True) == efforts(("low", "max"), thinking=False) == ("low", "low")
+
+
 def test_replies_that_never_fit_fail_the_scene_and_a_wrong_key_fails_the_run(demo):
     client, base, model, _ = demo
-    model.answer = lambda body: reply({"candidates": [], "binding": []})
+    model.answer = lambda body, client, nth: reply({"candidates": [], "binding": []})
     job, view = suggested(client, base)
-    assert job["result"]["failed"] == 4 and model.calls == 12  # three readings each
+    assert job["result"]["failed"] == 4 and model.calls == 24  # two tries of three readings each
     assert all(row["suggestion"]["failure"].startswith("candidates not judged") for row in view["scenes"])
+    assert all(row["suggestion"]["stable"] is None for row in view["scenes"])
     assert base.accept().json()["scenes"][0]["binding"] is None
 
-    def refuse(body):
+    def refuse(body, client, nth):
         raise ModelError("模型服务 HTTP 401")
     model.answer = refuse
     first = view["scenes"][0]

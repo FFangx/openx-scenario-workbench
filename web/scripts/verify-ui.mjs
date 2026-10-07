@@ -274,8 +274,15 @@ try {
   await p.request.put(`${BASE}/api/settings/model`, { data: { base_url: fake.url, model: "fake-judge", api_key: "test-key", thinking: false } });
   await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Suggest bindings" }).click();
   await p.locator(".ant-modal:visible .bind-table .mtag.direct").first().waitFor({ timeout: 60000 });
-  check("the model's suggestion shows on every scene", (await p.locator(".ant-modal:visible .bind-table tr.ant-table-row .mtag.direct").count()) === 4 && fake.calls() === 4, `${fake.calls()} calls`);
+  check("the model's suggestion shows on every scene", (await p.locator(".ant-modal:visible .bind-table tr.ant-table-row .mtag.direct").count()) === 4 && fake.calls() === 12, `${fake.calls()} calls`);
+  check("readings that agree are settled, the scene whose readings disagree asks for a look",
+    (await bindRows().filter({ hasText: "Settled" }).count()) === 3 && (await bindRows().filter({ hasText: "Take a look" }).count()) === 1);
+  check("a later suggestion clears the earlier error", (await p.locator(".ant-modal:visible .ant-alert-error").count()) === 0);
+  await p.screenshot({ path: path.join(OUT, "binding-suggestions.png") });
   await p.locator(".ant-modal:visible .ant-btn").filter({ hasText: "Accept every" }).click();
+  await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "3 / 4 confirmed" }).waitFor();
+  check("accepting every suggestion leaves the unsettled scene to a person", (await bindRows().filter({ hasText: "Not confirmed" }).count()) === 1);
+  await bindRows().filter({ hasText: "Take a look" }).locator(".bind-actions .ant-btn").filter({ hasText: /^Accept$/ }).click();
   await p.locator(".ant-modal:visible .bind-counts").filter({ hasText: "4 / 4 confirmed" }).waitFor();
   check("accepting the suggestions binds every scene", (await bindRows().filter({ hasText: "Use as is" }).count()) === 4);
   await bindRows().first().click();

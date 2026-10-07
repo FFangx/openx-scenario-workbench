@@ -2,8 +2,9 @@
 a person confirms.
 
 `POST .../bindings/suggest` starts a background job (one per project) that ranks every scene's candidates
-and asks the configured model about them; it sends the scenes' source text and the candidates'
-stories to that model. Nothing enters the binding table until a person confirms a row.
+and asks the configured model about them, three times each at its deepest thinking; it sends the scenes'
+source text and the candidates' stories to that model. Nothing enters the binding table until a person
+confirms a row, and "accept all" leaves the scenes whose readings disagree to a person.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from .api_common import _catalog, _index, _store
 from .api_schemas import AssetBinding, BindingCoverage, GroupBindings, Job, SceneBinding, documented
 from .asset_store import AssetStore
 from .binding_store import BindingStore, requirement_keys, scene_digest, section_of, stale_reasons
-from .binding_suggest import Judge, suggest_scenes
+from .binding_suggest import Judge, judge_efforts, suggest_scenes
 from .llm_service import ModelClient
 from .pdf_store import PdfDocument, PdfStore, StoredScene
 
@@ -77,6 +78,14 @@ def _is_latest(item: dict[str, Any], latest: dict[str, Any]) -> bool:
     return version is not None and version.version_id == item["version_id"]
 
 
+def _stable(suggestion: dict[str, Any]) -> bool | None:
+    """Every reading (two at least) names the same preferred asset; None for a failed suggestion or one
+    kept before readings were counted."""
+    if suggestion.get("failure") or "readings" not in suggestion:
+        return None
+    return suggestion["readings"] >= 2 and suggestion["agree"] == suggestion["readings"]
+
+
 def _suggestion_json(suggestion: dict[str, Any], scene: StoredScene, latest: dict[str, Any]) -> dict[str, Any]:
     """The suggestion, marked "scene" when the scene's facts changed since and "asset" when a candidate
     has a newer version: either way the model judged something that is no longer there."""
@@ -84,7 +93,9 @@ def _suggestion_json(suggestion: dict[str, Any], scene: StoredScene, latest: dic
     outdated = (["scene"] if suggestion["scene_digest"] != scene_digest(scene.package) else []) + (
         [] if all(item["latest"] for item in candidates) else ["asset"])
     return {key: suggestion[key] for key in ("created_at", "model", "binding", "preferred", "note", "failure")} | {
-        "candidates": candidates, "outdated": outdated}
+        "candidates": candidates, "outdated": outdated, "readings": suggestion.get("readings"),
+        "agree": suggestion.get("agree"), "other_preferred": suggestion.get("other_preferred", []),
+        "stable": _stable(suggestion)}
 
 
 def _binding_json(entry: dict[str, Any], scene: StoredScene, latest: dict[str, Any]) -> dict[str, Any]:
@@ -147,8 +158,9 @@ class SuggestRequest(BaseModel):
 
 @router.post("/projects/{project_id}/bindings/suggest", **documented(Job))
 def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
-    """Asks the configured model which candidates build the same test as each scene. Sends the scenes'
-    source text and extracted facts, and each candidate's name, story and differences, to that model."""
+    """Asks the configured model which candidates build the same test as each scene, three times each at
+    the deepest thinking effort the model declares. Sends the scenes' source text and extracted facts, and
+    each candidate's name, story and differences, to that model."""
     group = Group(project_id, request.document_ids)
     scenes = group.select(request.scenes)
     if not scenes or not group.pdf.assets.latest():
@@ -163,9 +175,10 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
     def work(job: jobs.Job) -> dict[str, Any]:
         store = BindingStore(group.pdf.assets)
         job.update(stage="ranking", total=len(scenes))
+        efforts = judge_efforts(client)
         catalog, versions = _catalog()
         index = _index(catalog, encoder)
-        judge = Judge(client, group.pdf.assets.root / "model_cache", job.cancel)
+        judge = Judge(client, group.pdf.assets.root / "model_cache", job.cancel, efforts)
         progress = {"ranked": 0, "judged": 0}
 
         def ranked(scene: StoredScene) -> None:
@@ -184,7 +197,7 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
             save=lambda scene, record: store.save_suggestion(scene.document.sha256, group.key(scene), record),
             ranked=ranked, judged=judged)
         return {"project_id": project_id, "document_ids": request.document_ids, "failed": failed,
-                "usage": dict(judge.spent)}
+                "effort": efforts[0], "usage": dict(judge.spent)}
 
     job = jobs.Job(KIND, _scope(group.pdf.assets, project_id))
     return jobs.start(job, work).snapshot()
@@ -260,12 +273,14 @@ class AcceptRequest(BaseModel):
     document_ids: list[str] = Field(description="The PDFs shown together; the reply lists their scenes.")
     scenes: list[SceneRef] | None = Field(
         None, description="Accept these scenes' suggestions as they are, replacing a binding. When omitted: every "
-                          "scene not bound yet whose suggestion prefers an asset the model judged the same test.")
+                          "scene not bound yet whose suggestion prefers an asset the model judged the same test, "
+                          "unless its readings disagree.")
 
 
 @router.post("/projects/{project_id}/bindings/accept", **documented(GroupBindings))
 def accept(project_id: str, request: AcceptRequest) -> dict[str, Any]:
-    """Confirms current suggestions as proposed; outdated or failed suggestions are left alone."""
+    """Confirms current suggestions as proposed; outdated or failed suggestions are left alone, and so are
+    unsettled ones (readings that disagree) unless the scenes are named."""
     group = Group(project_id, request.document_ids)
     store = BindingStore(group.pdf.assets)
     latest = _latest(group.pdf.assets)
@@ -275,14 +290,15 @@ def accept(project_id: str, request: AcceptRequest) -> dict[str, Any]:
         scene for scene in group.scenes if group.key(scene) not in entries]
     versions = {(item.asset_id, item.version_id): item for item in group.pdf.assets.versions()}
     for scene in selected:
-        proposal = _proposal(suggestions[scene.document.sha256].get(group.key(scene)), scene, latest)
+        suggestion = suggestions[scene.document.sha256].get(group.key(scene))
+        proposal = _proposal(suggestion, scene, latest)
         if proposal is None:
             if request.scenes is not None:
                 raise ValueError(f"{scene.package.title}: 建议已过期或失败，请重新建议 / "
                                  "The suggestion is outdated or failed; ask again.")
             continue
         status, chosen, preferred = proposal
-        if request.scenes is None and status != "same":
+        if request.scenes is None and (status != "same" or _stable(suggestion) is False):
             continue
         assets = [{"version": versions[(item["asset_id"], item["version_id"])],
                    "preferred": item["asset_id"] == preferred, "verdict": item["verdict"],

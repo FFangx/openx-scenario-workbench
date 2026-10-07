@@ -620,7 +620,8 @@ export interface paths {
         put?: never;
         /**
          * Accept
-         * @description Confirms current suggestions as proposed; outdated or failed suggestions are left alone.
+         * @description Confirms current suggestions as proposed; outdated or failed suggestions are left alone, and so are
+         *     unsettled ones (readings that disagree) unless the scenes are named.
          */
         post: operations["accept_api_projects__project_id__bindings_accept_post"];
         delete?: never;
@@ -661,8 +662,9 @@ export interface paths {
         put?: never;
         /**
          * Suggest
-         * @description Asks the configured model which candidates build the same test as each scene. Sends the scenes'
-         *     source text and extracted facts, and each candidate's name, story and differences, to that model.
+         * @description Asks the configured model which candidates build the same test as each scene, three times each at
+         *     the deepest thinking effort the model declares. Sends the scenes' source text and extracted facts, and
+         *     each candidate's name, story and differences, to that model.
          */
         post: operations["suggest_api_projects__project_id__bindings_suggest_post"];
         delete?: never;
@@ -1345,7 +1347,7 @@ export interface components {
             document_ids: string[];
             /**
              * Scenes
-             * @description Accept these scenes' suggestions as they are, replacing a binding. When omitted: every scene not bound yet whose suggestion prefers an asset the model judged the same test.
+             * @description Accept these scenes' suggestions as they are, replacing a binding. When omitted: every scene not bound yet whose suggestion prefers an asset the model judged the same test, unless its readings disagree.
              */
             scenes?: components["schemas"]["SceneRef"][] | null;
         };
@@ -1574,6 +1576,11 @@ export interface components {
         /** BindingSuggestion */
         BindingSuggestion: {
             /**
+             * Agree
+             * @description Of those readings, how many name the suggested preferred asset (or none).
+             */
+            agree: number | null;
+            /**
              * Binding
              * @description Candidate ids the model would bind; empty when none fits.
              */
@@ -1592,12 +1599,27 @@ export interface components {
             /** Note */
             note: string;
             /**
+             * Other Preferred
+             * @description Candidate ids the other readings preferred, most often first; null: no asset fits.
+             */
+            other_preferred: (string | null)[];
+            /**
              * Outdated
              * @description scene: the scene's facts changed since; asset: a candidate has a newer version.
              */
             outdated: ("scene" | "asset")[];
             /** Preferred */
             preferred: string | null;
+            /**
+             * Readings
+             * @description Readings of the scene whose reply fits; null when kept before readings were counted.
+             */
+            readings: number | null;
+            /**
+             * Stable
+             * @description Every reading (two at least) names the same preferred asset; null for a failed suggestion or one kept before readings were counted.
+             */
+            stable: boolean | null;
         };
         /** Body_import_assets_api_assets_import_post */
         Body_import_assets_api_assets_import_post: {

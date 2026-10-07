@@ -719,6 +719,13 @@ class BindingSuggestion(Shape):
     candidates: list[SuggestedCandidate]
     outdated: list[Literal["scene", "asset"]] = Field(
         description="scene: the scene's facts changed since; asset: a candidate has a newer version.")
+    readings: int | None = Field(description="Readings of the scene whose reply fits; null when kept before "
+                                             "readings were counted.")
+    agree: int | None = Field(description="Of those readings, how many name the suggested preferred asset (or none).")
+    other_preferred: list[str | None] = Field(
+        description="Candidate ids the other readings preferred, most often first; null: no asset fits.")
+    stable: bool | None = Field(description="Every reading (two at least) names the same preferred asset; "
+                                            "null for a failed suggestion or one kept before readings were counted.")
 
 
 class BoundAssetRecord(Shape):

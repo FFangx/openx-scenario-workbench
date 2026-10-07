@@ -418,6 +418,8 @@ a { color: var(--link); }
 .bind-counts { margin-left: auto; font-size: 12px; }
 .bind-editor { display: flex; flex-direction: column; gap: 8px; padding: 2px 4px 4px; font-size: 12.5px; }
 .bind-note { font-size: 12px; }
+.bind-unsettled { color: var(--review-ink); }
+.mtag.steady { background: transparent; color: var(--green-ink); box-shadow: inset 0 0 0 1px var(--green-bg); }
 .bind-cands { display: flex; flex-direction: column; gap: 2px; }
 .bind-cand { display: grid; grid-template-columns: 18px 20px auto minmax(0, 1fr) auto auto; align-items: center; column-gap: 6px;
   padding: 3px 6px; border-radius: 4px; border: 1px solid transparent; }
