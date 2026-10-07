@@ -69,10 +69,10 @@ It does not introduce a second ingestion, model or indexing stack.
   equal change cost. A person's edit of the fact drops its figure evidence.
 - The tested function is a setting of the reuse, not part of the scenario (2026-10-05):
   a story built for AEB serves FCW or ACC after the system and its scoring are switched.
-  Most of it lives outside the scenario file: on the 230 assets with confirmed function
-  labels, standard OpenSCENARIO content alone tells the function family for 33 %; the
-  rest needs simulator-specific commands (`EnableXXX`) that other libraries may not
-  write. So a different function is a change (`COST_FUNCTION`) and an unknown one is
+  Most of it lives outside the scenario file: in a library with confirmed function
+  labels, standard OpenSCENARIO content alone told the function family for only a third
+  of the assets; the rest needs simulator-specific commands (`EnableXXX`) that other
+  libraries may not write. So a different function is a change (`COST_FUNCTION`) and an unknown one is
   confirmed while reusing; neither blocks. A parking requirement against a driving
   asset stays blocking through the parking operation.
 - Either-or participants (2026-10-06, prompt v8). A requirement may offer alternatives
@@ -183,9 +183,9 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   change into, or beside a parking ego, may be read as background.
 - **Start position** (2026-10-06). An actor starts where its Init teleports it. Init
   may also say where it is sent (route waypoints, an `AcquirePositionAction` target,
-  a synchronization point); read last, those moved the ego to where it goes (42 of 336
-  cases in a real library), past the junction or construction zone it drives into, so
-  the targets and props there read as behind it.
+  a synchronization point); read last, those moved the ego to where it goes, past the
+  junction or construction zone it drives into, so the targets and props there read as
+  behind it.
 - **Speed.** An actor's speed is the highest absolute SpeedAction target, since
   initialization often sets 0 and the story accelerates. A story transition (not a
   step) to standstill is a stop; two distinct non-zero targets are a speed change; a
