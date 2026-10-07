@@ -365,8 +365,11 @@ try {
   await p.locator(".assets-page .ph .ant-btn").filter({ hasText: "Make previews" }).click();
   await p.locator(".preview-strip .job-summary b").filter({ hasText: /Previews (made|stopped|failed)/ }).waitFor({ timeout: 180000 });
   const previewRun = (await (await p.request.get(`${BASE}/api/jobs?kind=preview_batch`)).json())[0];
-  check("one preview run draws every road and tries every version once", previewRun.status === "completed" && previewRun.result.drawings === 6
-    && previewRun.result.frames + previewRun.result.failed + previewRun.result.kept === 6, JSON.stringify(previewRun.result));
+  // Without esmini on this machine (as in CI) the run draws the roads only.
+  const esminiFound = !!(await (await p.request.get(`${BASE}/api/settings`)).json()).preview.executable;
+  check(`one preview run draws every road and ${esminiFound ? "tries every version once" : "tries no version without esmini"}`,
+    previewRun.status === "completed" && previewRun.result.drawings === 6
+    && previewRun.result.frames + previewRun.result.failed + previewRun.result.kept === (esminiFound ? 6 : 0), JSON.stringify(previewRun.result));
   await assetRows().filter({ hasText: "Opaque 003" }).click();
   await p.locator(".asset-detail .road-drawing").waitFor();
   check("an asset shows its road from above", await p.locator(".asset-detail .road-drawing").evaluate((img) => img.complete && img.naturalWidth > 0));
