@@ -27,6 +27,13 @@ It does not introduce a second ingestion, model or indexing stack.
   does the ego's own lane (a lead car, a car closing in from behind). A standing
   participant facing another way is turned: near 30° the facing classes split noisily
   (an oblique car reads as crossing in a standard and as same-way in its asset).
+- Behaviors (2026-10-07). A participant that keeps its distance to another
+  (`LongitudinalDistanceAction`, read as `following`) drives along until the test event:
+  for a requirement that has it move otherwise, that is no behavior of its own, and it
+  drives as a requested cruise does (a lead car held at a gap, then braking, is the
+  requested hard stop). Requested to stand still or to follow, it stays a behavior.
+  A requirement that names no behavior leaves every one open: nothing the asset's
+  participant does is extra (it is verified as a participant fact).
 - When both the requirement and the asset put the ego under system control, a
   requested lane change the asset does not script is the system's to make (a
   system-triggered lane change leaves nothing in the file): listed to confirm, at no

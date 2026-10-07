@@ -308,6 +308,22 @@ def test_a_standing_participant_facing_another_way_is_turned():
     assert _blocking(["vehicle@front_same_lane:crossing:cruise"], ["vehicle@front_same_lane:same:cruise"])[0] == 1
 
 
+def test_keeping_a_distance_is_how_a_moving_participant_drives_along():
+    # A lead car that keeps its distance to the ego, then brakes: the requested hard stop, cruising before it.
+    assert _blocking(["vehicle@front_same_lane:same:stop"], ["vehicle@front_same_lane:same:following+stop"]) == (0, [])
+    assert _blocking(["vehicle@front_same_lane:same:cruise"], ["vehicle@front_same_lane:same:following"]) == (0, [])
+    # Requested to stand still, or to follow, it stays a behavior of its own.
+    count, differences = _blocking(["vehicle@front_same_lane:same:static"], ["vehicle@front_same_lane:same:following"])
+    assert count == 0 and [item.action for item in differences] == ["modify participant behavior"]
+    _, differences = _blocking(["vehicle@front_same_lane:same:following"], ["vehicle@front_same_lane:same:cruise"])
+    assert [item.action for item in differences] == ["modify participant behavior"]
+
+
+def test_a_behavior_the_requirement_does_not_name_is_left_open():
+    _, differences = _blocking(["vehicle@front_same_lane:same:unknown"], ["vehicle@front_same_lane:same:following+stop"])
+    assert [item.category for item in differences] == ["participant_topology"]
+
+
 def test_a_scenery_group_stands_for_every_requested_obstacle_there():
     requested = (_signature("obstacle@front_same_lane:crossing:static"),) * 2
     scenery = tuple(map(_signature, ["obstacle@front_left:unknown:static", "obstacle@front_same_lane:unknown:static"]))

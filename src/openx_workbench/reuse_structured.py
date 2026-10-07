@@ -386,6 +386,20 @@ def _side(bearing: str) -> str:
     return bearing.split("_", 1)[1] if "_" in bearing else ""
 
 
+def _actions(actual: ParticipantSignature, expected: ParticipantSignature) -> set[str]:
+    """`actual`'s behaviors as compared with `expected`'s.
+
+    Keeping its distance to another (LongitudinalDistanceAction) is how a moving participant
+    drives along until the test event: for a requirement that has it move otherwise, it is no
+    behavior of its own, and it drives as a requested cruise does.
+    """
+    actions = set(actual.actions)
+    if "following" in actions and "following" not in expected.actions and _moves(expected):
+        actions.discard("following")
+        actions |= {"cruise"} & set(expected.actions)
+    return actions
+
+
 def _retimed(expected: ParticipantSignature, actual: ParticipantSignature) -> bool:
     """Both move the same way on the same side of the ego, one further ahead or behind.
 
@@ -395,7 +409,7 @@ def _retimed(expected: ParticipantSignature, actual: ParticipantSignature) -> bo
     something else as well is another interaction (a car cutting in from ahead does not overtake
     from behind), and the same lane stays apart (a lead car, a car closing in from behind).
     """
-    return (expected.bearing != actual.bearing and set(expected.actions) == set(actual.actions)
+    return (expected.bearing != actual.bearing and set(expected.actions) == _actions(actual, expected)
             and _moves(expected) and _side(expected.bearing) == _side(actual.bearing) in {"left", "right"})
 
 
@@ -437,8 +451,9 @@ def _placement(expected: ParticipantSignature, actual: ParticipantSignature) -> 
 def _conflicts(expected: ParticipantSignature, actual: ParticipantSignature) -> tuple[int, bool, int]:
     """(known identity conflicts, known behavior conflict, unknown components of `actual`).
 
-    An unknown component never proves a conflict. A stop satisfies a requested speed change.
-    A difference in placement alone (_placement) is a change, not a conflict.
+    An unknown component never proves a conflict. A stop satisfies a requested speed change,
+    keeping a distance a requested cruise (_actions). A difference in placement alone
+    (_placement) is a change, not a conflict.
     """
     identity = zip(
         (expected.kind, actual.bearing if _retimed(expected, actual) else expected.bearing,
@@ -447,7 +462,7 @@ def _conflicts(expected: ParticipantSignature, actual: ParticipantSignature) -> 
     )
     mismatches = sum(left != right and "unknown" not in {left, right} for left, right in identity)
     known_actions = set(expected.actions) - {"unknown"}
-    absent = known_actions - set(actual.actions)
+    absent = known_actions - _actions(actual, expected)
     if set(actual.actions) == {"stop"} and known_actions == {"speed_change"}:
         absent = set()
     unknowns = sum(item == "unknown" for item in (actual.kind, actual.bearing, _facing(actual, expected))) + (
@@ -472,8 +487,9 @@ def _pair_differences(expected: ParticipantSignature, actual: ParticipantSignatu
         result.append(ReuseDifference("action", signature, actual.key(), "modify participant behavior",
                                       cost=policy.COST_BEHAVIOR))
     else:
-        extra_actions = set(actual.actions) - set(expected.actions) - {"unknown"}
-        if set(actual.actions) == {"stop"} and set(expected.actions) == {"speed_change"}:
+        extra_actions = _actions(actual, expected) - set(expected.actions) - {"unknown"}
+        # A stop is a speed change; a requirement that names no behavior leaves every one open.
+        if set(actual.actions) == {"stop"} and set(expected.actions) == {"speed_change"} or "unknown" in expected.actions:
             extra_actions = set()
         if extra_actions:
             result.append(ReuseDifference("action", signature, actual.key(), "remove additional participant behavior",
