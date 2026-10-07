@@ -28,7 +28,7 @@ function reduce(state: Search, action: Action): Search {
       return { ...state, searching: false, result: action.result, activeKey: first, checked: first ? [first] : [] };
     }
     case "failed": return { ...state, searching: false, error: action.error, result: null };
-    case "clear": return { ...state, result: null, activeKey: null };
+    case "clear": return IDLE;
     case "activate": return { ...state, activeKey: action.key, checked: state.checked.includes(action.key) ? state.checked : [...state.checked, action.key] };
     case "check": return { ...state, checked: action.keys };
   }
@@ -71,7 +71,11 @@ export function useMatching({ projectId, scene, lang, topK }: { projectId: strin
     filters,
     setFilters,
     runSearch,
-    clear: () => dispatch({ type: "clear" }),
+    // Clearing also drops a search still under way, so its late answer cannot bring the old candidates back.
+    clear: () => {
+      searchSeq.current++;
+      dispatch({ type: "clear" });
+    },
     activate: (key: string) => dispatch({ type: "activate", key }),
     setChecked: (keys: string[]) => dispatch({ type: "check", keys }),
   };
