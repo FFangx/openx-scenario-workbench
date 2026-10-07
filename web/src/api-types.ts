@@ -651,6 +651,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/bindings/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export
+         * @description The reuse assessment of the selected PDFs as a file: every clause with the assets confirmed for reuse, or
+         *     the model's suggestion while none is confirmed. CSV opens in a spreadsheet; HTML reads in a browser.
+         */
+        get: operations["export_api_projects__project_id__bindings_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/bindings/suggest": {
         parameters: {
             query?: never;
@@ -4782,6 +4803,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BindingCoverage"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_api_projects__project_id__bindings_export_get: {
+        parameters: {
+            query: {
+                /** @description The PDFs exported together, in this order. */
+                document_ids: string[];
+                format?: "csv" | "html";
+                lang?: "zh" | "en";
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
