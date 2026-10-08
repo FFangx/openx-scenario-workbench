@@ -75,7 +75,7 @@ def test_pdf_import_reports_progress_and_lists_documents(client, project, legacy
     assert started.status_code == 200 and started.json()["kind"] == "pdf_import"
     job = finished(client, started.json())
     assert job["status"] == "completed" and (job["done"], job["total"]) == (2, 2)
-    assert "authored step for b.pdf" in job["messages"]
+    assert "b.pdf · authored step for b.pdf" in job["messages"]
     documents = client.get(f"/api/projects/{project}/documents").json()
     assert sorted(job["result"]["document_ids"]) == sorted(item["document_id"] for item in documents)
     assert {item["source_standard"] for item in documents} == {"Std"}
@@ -89,19 +89,53 @@ def test_pdf_import_rejects_bad_input_before_starting(client, project, legacy_ex
     assert client.get("/api/jobs").json() == []
 
 
-def test_cancel_stops_after_the_current_pdf_and_blocks_a_second_run(client, project, legacy_extraction):
-    entered, release = Event(), Event()
-    legacy_extraction["first.pdf"] = (entered, release)
-    job = client.post(f"/api/projects/{project}/documents", files=pdfs("first.pdf", "second.pdf")).json()
+def test_pdfs_extract_together_and_report_in_upload_order(client, project, legacy_extraction):
+    names = ("a.pdf", "b.pdf", "c.pdf")
+    for name in names:
+        legacy_extraction[name] = (Event(), Event())
+    uploads = pdfs(*names)
+    job = client.post(f"/api/projects/{project}/documents", files=[*uploads, uploads[0]]).json()  # a.pdf twice
     try:
-        assert entered.wait(5)
+        assert all(legacy_extraction[name][0].wait(5) for name in names)  # all three under way at once
+    finally:
+        for name in names:
+            legacy_extraction[name][1].set()
+    job = finished(client, job)
+    assert job["status"] == "completed" and (job["done"], job["total"]) == (3, 3)
+    documents = {item["document_id"]: item["filename"] for item in client.get(f"/api/projects/{project}/documents").json()}
+    assert [documents[item] for item in job["result"]["document_ids"]] == list(names)
+
+
+def test_cancel_starts_no_further_pdf_and_blocks_a_second_run(client, project, legacy_extraction):
+    names = ("first.pdf", "second.pdf", "third.pdf")
+    for name in names:
+        legacy_extraction[name] = (Event(), Event())
+    job = client.post(f"/api/projects/{project}/documents", files=pdfs(*names, "fourth.pdf")).json()
+    try:
+        assert all(legacy_extraction[name][0].wait(5) for name in names)
         assert client.post(f"/api/projects/{project}/documents", files=pdfs("other.pdf")).status_code == 400
         assert client.post(f"/api/jobs/{job['id']}/cancel").json()["cancelling"] is True
     finally:
-        release.set()
+        for name in names:
+            legacy_extraction[name][1].set()
     job = finished(client, job)
-    assert job["status"] == "stopped" and len(job["result"]["document_ids"]) == 1
-    assert [item["filename"] for item in client.get(f"/api/projects/{project}/documents").json()] == ["first.pdf"]
+    assert job["status"] == "stopped" and len(job["result"]["document_ids"]) == 3
+    assert sorted(item["filename"] for item in client.get(f"/api/projects/{project}/documents").json()) == sorted(names)
+
+
+def test_one_failed_pdf_leaves_the_others_imported(client, project, legacy_extraction, monkeypatch):
+    patched = PdfStore.import_pdf
+
+    def import_pdf(self, project_id, filename, data, standard="", **options):
+        if filename == "broken.pdf":
+            raise ValueError("authored failure")
+        return patched(self, project_id, filename, data, standard, **options)
+
+    monkeypatch.setattr(PdfStore, "import_pdf", import_pdf)
+    job = finished(client, client.post(f"/api/projects/{project}/documents", files=pdfs("good.pdf", "broken.pdf")).json())
+    assert job["status"] == "failed" and job["error"] == "broken.pdf: authored failure"
+    assert [item["filename"] for item in client.get(f"/api/projects/{project}/documents").json()] == ["good.pdf"]
+    assert len(job["result"]["document_ids"]) == 1
 
 
 def test_reextract_runs_as_a_job_for_the_stored_pdf(client, project, legacy_extraction):
