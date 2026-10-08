@@ -60,8 +60,9 @@ def index_identity(catalog: list[OpenXAsset], encoder_name: str, fingerprint: st
     return encoder_name, fingerprint or catalog_fingerprint(catalog)
 
 
-def open_index(catalog: list[OpenXAsset], identity: tuple[str, str]) -> OpenXIndex:
+def open_index(catalog: list[OpenXAsset], identity: tuple[str, str], structures=None) -> OpenXIndex:
     """Build the index for `identity`, encoding only the texts the encoder's saved vectors do not hold yet.
+    `structures` are the catalog's asset structures, when the caller keeps them.
 
     The saved vectors are then exactly this catalog's; anything else in the encoder's folder (such as the
     whole-library index files earlier versions saved) is removed.
@@ -69,7 +70,7 @@ def open_index(catalog: list[OpenXAsset], identity: tuple[str, str]) -> OpenXInd
     encoder_name, fingerprint = identity
     folder = AssetStore().root / "indexes" / encoder_name
     cache = VectorCache(folder / VECTOR_FILE, encoder(encoder_name))
-    index = OpenXIndex(catalog, fingerprint=fingerprint, cache=cache)
+    index = OpenXIndex(catalog, fingerprint=fingerprint, cache=cache, structures=structures)
     cache.save()
     for stale in folder.iterdir() if folder.is_dir() else ():
         if stale.name != VECTOR_FILE and stale.is_file():

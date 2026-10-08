@@ -107,22 +107,24 @@ def asset_structure_text(asset: OpenXAsset) -> str:
     return query_structure_text(asset_structure_query(asset))
 
 
-def catalog_fingerprint(assets: list[OpenXAsset]) -> str:
+def asset_fingerprint(asset: OpenXAsset, structure: RetrievalQuery | None = None) -> str:
+    """One asset's part of `catalog_fingerprint`; `structure` is its `asset_structure_query`, when known."""
     # IDs identify immutable files; reviewed labels and parser semantics also
     # affect recall and must invalidate both disk and session caches.
-    content = [
-        (
-            asset.asset_id,
-            asset_text(asset),
-            asset_structure_text(asset),
-            {key: value for key, value in asset.bundle.to_dict().items() if key != "validation"},
-            asset.bundle.validation,
-        )
-        for asset in assets
-    ]
-    return hashlib.sha256(
-        json.dumps(content, sort_keys=True, ensure_ascii=False).encode()
-    ).hexdigest()
+    content = (
+        asset.asset_id,
+        asset_text(asset),
+        query_structure_text(asset_structure_query(asset) if structure is None else structure),
+        {key: value for key, value in asset.bundle.to_dict().items() if key != "validation"},
+        asset.bundle.validation,
+    )
+    return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def catalog_fingerprint(assets: list[OpenXAsset], parts: list[str] | None = None) -> str:
+    """`parts` are the assets' `asset_fingerprint`s, when already known."""
+    parts = [asset_fingerprint(asset) for asset in assets] if parts is None else parts
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
 class HashingEncoder:
@@ -275,14 +277,16 @@ class OpenXIndex:
         *,
         fingerprint: str | None = None,
         cache: VectorCache | None = None,
+        structures: list[RetrievalQuery] | None = None,
     ) -> None:
-        """`fingerprint` is the caller's `catalog_fingerprint(assets)`, when it already has it.
+        """`fingerprint` is the caller's `catalog_fingerprint(assets)` and `structures` the assets'
+        `asset_structure_query`s, when it already has them.
 
         With a `cache`, its encoder is the index's and only texts it does not hold yet are encoded.
         """
         self.assets = assets
         self.encoder = cache.encoder if cache else encoder or HashingEncoder()
-        self.structures = [asset_structure_query(asset) for asset in assets]
+        self.structures = [asset_structure_query(asset) for asset in assets] if structures is None else structures
         self.fingerprint = fingerprint or catalog_fingerprint(assets)
         encode_many = (cache or self.encoder).encode_many
         self.vectors = encode_many([asset_text(asset) for asset in assets])

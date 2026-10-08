@@ -6,11 +6,12 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-from openx_workbench import api_common, matching
+from openx_workbench import api_common, catalog_cache, matching, retrieval
 from openx_workbench.asset_store import AssetStore
 from openx_workbench.catalog import AssetFile
 from openx_workbench.classification import classify_asset, confirm_classification
-from openx_workbench.retrieval import HashingEncoder, OpenXIndex, VectorCache, asset_structure_text, asset_text
+from openx_workbench.retrieval import (HashingEncoder, OpenXIndex, VectorCache, asset_structure_text, asset_text,
+                                       catalog_fingerprint)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -40,6 +41,57 @@ def test_catalog_parses_each_version_once(workbench, monkeypatch):
         second.version_id] == "ACC"
 
 
+def test_a_restart_reads_the_kept_entries_and_a_relabel_remakes_one(workbench, monkeypatch):
+    store = AssetStore()
+    second = _import(store, "rear.xosc")
+    catalog, _ = api_common._catalog()
+    fingerprint = api_common._derived(catalog)[0]
+    made, described = [], []
+    make, describe = catalog_cache.make, retrieval.asset_structure_query
+    monkeypatch.setattr(catalog_cache, "make", lambda store, version: made.append(version.version_id) or make(store, version))
+    monkeypatch.setattr(retrieval, "asset_structure_query", lambda asset: described.append(asset.asset_id) or describe(asset))
+
+    api_common._cache.clear()  # as after a restart
+    restarted, _ = api_common._catalog()
+    index = api_common._index(restarted, "hashing")
+    assert made == [] and described == []  # parsed, described and fingerprinted before
+    assert [asset.asset_id for asset in restarted] == [asset.asset_id for asset in catalog]
+    assert api_common._derived(restarted)[0] == fingerprint == catalog_fingerprint(restarted)
+    described.clear()
+    assert index.structures == [describe(asset) for asset in restarted]
+
+    confirm_classification(store, second, {**classify_asset(store, second)["rule"], "function_type": "ACC"})
+    relabelled, _ = api_common._catalog()
+    api_common._index(relabelled, "hashing")
+    assert made == [second.version_id] and described == []  # only the relabelled version is made again
+    assert api_common._derived(relabelled)[0] == catalog_fingerprint(relabelled) != fingerprint
+
+
+def test_an_entry_from_other_code_or_damaged_is_made_again_and_a_removed_one_goes(workbench, monkeypatch):
+    store = AssetStore()
+    api_common._catalog()
+    folder = store.root / catalog_cache.FOLDER
+    made = []
+    make = catalog_cache.make
+    monkeypatch.setattr(catalog_cache, "make", lambda store, version: made.append(version.version_id) or make(store, version))
+    for path in folder.iterdir():
+        path.write_bytes(b"damaged")
+    api_common._cache.clear()
+    api_common._catalog()
+    monkeypatch.setattr(catalog_cache, "REVISION", "other sources")
+    api_common._cache.clear()
+    api_common._catalog()
+    assert len(made) == 2 and len(set(made)) == 1
+
+    second = _import(store, "rear.xosc")
+    api_common._catalog()
+    assert len(list(folder.iterdir())) == 2
+    store.delete_version(second)
+    api_common._catalog()
+    assert [path.name for path in folder.iterdir()] == [f"{version.asset_id}-{version.version_id}.pickle"
+                                                       for version in store.latest()]
+
+
 def test_trace_and_decision_reuse_the_search_ranking(workbench, monkeypatch):
     client, base, version = workbench
     calls = []
@@ -58,7 +110,7 @@ def test_trace_and_decision_reuse_the_search_ranking(workbench, monkeypatch):
 def test_an_index_build_does_not_hold_the_shared_lock(workbench, monkeypatch):
     building, release = threading.Event(), threading.Event()
 
-    def slow_open(catalog, identity):
+    def slow_open(catalog, identity, structures=None):
         building.set()
         release.wait(10)
         return OpenXIndex(catalog, HashingEncoder(32))
