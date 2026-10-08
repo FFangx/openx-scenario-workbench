@@ -236,7 +236,8 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
                    ranked: Callable[[Any], None] = lambda scene: None,
                    judged: Callable[[Any], None] = lambda scene: None) -> int:
     """Rank each scene's candidates and ask the model about them, VOTES readings at once, while the next
-    scene is ranked.
+    scene is ranked. Replies are taken in between scenes, so a scene's suggestion is saved as soon as its
+    readings are in, and a failure that stops the run does so before every scene is ranked.
 
     `save(scene, record)` receives each finished suggestion; returns how many scenes failed.
     """
@@ -244,6 +245,20 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(scenes) * VOTES))) as executor:
         futures = {}
         readings: dict[int, list] = {}
+
+        def take(future) -> None:
+            nonlocal failed
+            number, reading, scene, pool = futures.pop(future)
+            done = readings.setdefault(number, [None] * VOTES)
+            done[reading] = future.result()
+            if None in done:
+                return
+            result = vote(done)
+            failed += result.judgement is None
+            save(scene, suggestion_record(pool, versions, result, digest(scene.package),
+                                          scene.revision, judge.client.config.model))
+            judged(scene)
+
         try:
             for number, scene in enumerate(scenes):
                 if judge.cancel.is_set():
@@ -253,17 +268,10 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
                 for reading in range(VOTES):
                     futures[executor.submit(judge.reading, request, len(pool), reading)] = (number, reading, scene, pool)
                 ranked(scene)
-            for future in as_completed(futures):
-                number, reading, scene, pool = futures[future]
-                done = readings.setdefault(number, [None] * VOTES)
-                done[reading] = future.result()
-                if None in done:
-                    continue
-                result = vote(done)
-                failed += result.judgement is None
-                save(scene, suggestion_record(pool, versions, result, digest(scene.package),
-                                              scene.revision, judge.client.config.model))
-                judged(scene)
+                for future in [item for item in futures if item.done()]:
+                    take(future)
+            for future in as_completed(list(futures)):
+                take(future)
         except BaseException:
             executor.shutdown(cancel_futures=True)  # calls already sent finish; their replies are cached
             raise

@@ -194,15 +194,18 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
 
     def work(job: jobs.Job) -> dict[str, Any]:
         store = BindingStore(group.pdf.assets)
-        job.update(stage="ranking", total=len(scenes))
+        job.update(stage="loading")
         efforts = judge_efforts(client)
         catalog, versions = _catalog()
-        index = _index(catalog, encoder)
+        job.note(f"素材库 {len(catalog)} 个素材 · 建立检索索引")
+        index = _index(catalog, encoder)  # texts new to the encoder are encoded first: minutes for BGE-M3 after a library change
         judge = Judge(client, group.pdf.assets.root / "model_cache", job.cancel, efforts)
         progress = {"ranked": 0, "judged": 0}
+        job.update(stage="ranking", total=len(scenes), ranked=0)
 
         def ranked(scene: StoredScene) -> None:
             progress["ranked"] += 1
+            job.update(ranked=progress["ranked"])
             if progress["ranked"] == len(scenes):
                 job.update(stage="judging")
             job.note(f"候选 {progress['ranked']}/{len(scenes)} · {scene.package.title}")

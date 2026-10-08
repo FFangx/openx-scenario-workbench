@@ -678,6 +678,7 @@ class Job(Shape):
     cancelling: bool
     saved: int | None = None
     failed: int | None = None
+    ranked: int | None = Field(None, description="Suggestions: scenes whose candidates are found; `done` counts the judged.")
     reports: list[ImportReport] | None = None
 
 

@@ -2267,6 +2267,11 @@ export interface components {
             kind: "pdf_import" | "asset_import" | "schema_update" | "binding_suggest" | "preview_batch";
             /** Messages */
             messages: string[];
+            /**
+             * Ranked
+             * @description Suggestions: scenes whose candidates are found; `done` counts the judged.
+             */
+            ranked?: number | null;
             /** Reports */
             reports?: components["schemas"]["ImportReport"][] | null;
             result: components["schemas"]["JobResult"];

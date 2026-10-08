@@ -13,8 +13,9 @@ const STAGES: Record<string, [string, string]> = {
   classifying: ["生成分类标签", "Labelling"],
   downloading: ["下载规范文件", "Downloading schemas"],
   comparing: ["对比场景库检查结论", "Comparing library verdicts"],
-  ranking: ["为每个场景找候选素材", "Finding candidate assets"],
-  judging: ["模型判断候选素材", "The model judges the candidates"],
+  loading: ["读取素材库与检索索引", "Loading the library and search index"],
+  ranking: ["找候选素材，模型同步判断", "Finding candidates; the model judges them meanwhile"],
+  judging: ["等待模型判断剩余场景", "Waiting for the model on the remaining scenes"],
 };
 
 /** Live state of a background job: stage, count, current step, recent messages, stop. */
@@ -41,7 +42,9 @@ export function JobProgress({ job, onCancel, unit }: { job: Job; onCancel: () =>
       <div className="job-head">
         <b>{running ? stage : finished[job.status]}</b>
         <span className="muted">
-          {job.total ? t(`${job.done} / ${job.total} ${unit[0]}`, `${job.done} / ${job.total} ${unit[1]}`) : ""}
+          {job.total && job.ranked != null && job.ranked < job.total
+            ? t(`候选 ${job.ranked} / ${job.total} · 建议 ${job.done} / ${job.total}`, `Candidates ${job.ranked} / ${job.total} · suggested ${job.done} / ${job.total}`)
+            : job.total ? t(`${job.done} / ${job.total} ${unit[0]}`, `${job.done} / ${job.total} ${unit[1]}`) : ""}
           {" · "}{t(`用时 ${elapsed} 秒`, `${elapsed}s`)}
         </span>
         {running && (
@@ -59,7 +62,9 @@ export function JobProgress({ job, onCancel, unit }: { job: Job; onCancel: () =>
         <div className="muted job-note">{t("停止会在当前步骤结束后生效；已保存的内容会保留。", "Stopping takes effect after the current step; saved work is kept.")}</div>
       )}
       {running && waiting >= 20 && (
-        <div className="muted job-note">{t(`当前步骤已等待 ${waiting} 秒，模型请求可能较慢。`, `The current step has waited ${waiting}s; model requests can be slow.`)}</div>
+        <div className="muted job-note">{job.stage === "loading"
+          ? t("素材有新增或标签变化后，首次需要重新建立检索索引，可能要一两分钟。", "After assets or labels change, the search index is rebuilt once; this can take a minute or two.")
+          : t(`当前步骤已等待 ${waiting} 秒，模型请求可能较慢。`, `The current step has waited ${waiting}s; model requests can be slow.`)}</div>
       )}
       {job.messages.length > 0 && (
         <pre className="job-log" aria-label={t("任务记录", "Job log")}>{job.messages.slice(-12).join("\n")}</pre>

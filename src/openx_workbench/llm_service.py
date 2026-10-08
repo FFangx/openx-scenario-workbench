@@ -7,6 +7,7 @@ import json
 import os
 import re
 from dataclasses import asdict, dataclass, field, replace
+from http.client import HTTPException
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
@@ -163,7 +164,7 @@ class ModelClient:
             hints = {401: "Key 无效", 403: "无访问权限", 404: "地址或模型不存在", 429: "额度不足或限流"}
             raise _failure(f"模型服务 HTTP {error.code}: {hints.get(error.code, '请检查地址、模型参数或服务状态')} / Model request failed.",
                            retryable=error.code == 429 or error.code >= 500) from None
-        except (URLError, OSError, TimeoutError):
+        except (URLError, OSError, TimeoutError, HTTPException):  # HTTPException: a reply cut off mid-body (IncompleteRead)
             raise _failure("模型服务连接失败或超时 / Model connection failed or timed out.", retryable=True) from None
         except ModelError:
             raise
