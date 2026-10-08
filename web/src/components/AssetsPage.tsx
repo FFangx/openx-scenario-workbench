@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Button, Collapse, Empty, Input, Select, Spin, Switch, Table, type TableColumnsType } from "antd";
-import { PictureOutlined, RobotOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
+import { PictureOutlined, SearchOutlined, TagsOutlined, UploadOutlined } from "@ant-design/icons";
 import { api, type AssetRow, type Job, type VersionRef } from "../api";
 import { dateTime, useT } from "../i18n";
 import { useJob } from "../jobs";
@@ -54,9 +54,9 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
   const previewing = previews.job?.status === "running";
 
   const busy = job?.status === "running";
-  const modelClassify = async (versions?: VersionRef[]) => {
+  const relabel = async () => {
     try {
-      setLastJob(await api.classify(versions?.map((v) => ({ asset_id: v.asset_id, version_id: v.version_id! })), !!versions));
+      setLastJob(await api.relabel());
     } catch (e) {
       setError((e as Error).message);
     }
@@ -94,8 +94,8 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
           )}
           {pending > 0 && !busy && (
             <div className="pending-strip">
-              <span>{t(`${pending} 个版本待模型复核分类`, `Versions awaiting model classification: ${pending}`)}</span>
-              <Button size="small" icon={<RobotOutlined />} onClick={() => modelClassify()}>{t("继续模型分类", "Resume model classification")}</Button>
+              <span>{t(`${pending} 个版本的分类标签需要按当前规则更新`, `${pending} versions need labels from the current rules`)}</span>
+              <Button size="small" icon={<TagsOutlined />} onClick={relabel}>{t("更新标签", "Update labels")}</Button>
             </div>
           )}
           {!rows ? <div className="center-pad"><Spin /></div> : (
@@ -114,7 +114,6 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
             onClose={() => setSelected(null)}
             onChanged={changed}
             onDeleted={() => { setSelected(null); changed(); }}
-            onModelClassify={(v) => modelClassify([v])}
             onOpenScene={onOpenScene}
           />
         ) : (

@@ -547,12 +547,14 @@ class ModelLabels(ClassificationLabels):
 
 
 class ClassificationRecord(Open):
+    # rule: read by the rules; manual_confirmed: a reviewer's. Records of the retired model review
+    # (classified, failed, rule_only) keep their model labels until the rules label them again.
     status: str
     needs_review: bool
     final: ClassificationLabels
     rule: ClassificationLabels
-    llm: ModelLabels | None
-    model: str
+    llm: ModelLabels | None = None
+    model: str = ""
     error: str | None = None
     saved_at: str | None = None
 

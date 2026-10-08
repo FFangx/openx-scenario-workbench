@@ -1,6 +1,6 @@
 """Process-owned background jobs: submit, poll a snapshot, request a stop.
 
-PDF extraction, asset import and model classification all outlive a single HTTP
+PDF extraction, asset import and reuse suggestions all outlive a single HTTP
 request. Each runs in a daemon thread that owns its state; callers only read
 snapshots and set the cancel flag, which the work checks between steps.
 """

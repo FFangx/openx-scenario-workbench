@@ -24,23 +24,27 @@ can return to the original document and scene.
 **Import assets** opens a dialog for uploads or the public esmini example. The
 import runs as a background job on the service, so closing the dialog ("Continue
 in background") or the browser tab does not stop it. A job strip above the asset
-table shows the stage, saved or reused scenario count and classification
+table shows the stage, saved or reused scenario count and labelling
 progress; its details show the current file, elapsed time, errors and SIM pairing
 reports. The last job is shown again after a reload or service restart. Saved
-assets become available before model classification finishes. The SIM summary
+assets become available before their labels are made. The SIM summary
 shows pairable versus total cases and missing road references; skipped cases are
 not reported as imported. Add the missing XODR files and reimport to include them.
 
-Only one import/classification job can run per data directory in the service.
-Stop takes effect after the current parsing or model operation returns; saved
-versions remain intact. Import classification caps the model connection/read
-timeout at 90 seconds and pauses after three consecutive failures. This is a
-socket timeout, not a guaranteed total response deadline. Resume model
-classification retries pending/failed/rule-only versions, skipping classified
-and manually confirmed versions. The selected version's **Classify with model**
-action explicitly requests a new review, including a previously classified or
-manually confirmed version. Merely browsing or filtering the library does not
-generate classification records or make model requests.
+Classification labels are read from the files by rules, no model involved:
+the function a title names (a lane-support title such as `LSS__LDW` gives the
+LDW) or a simulator command switches on (`EnableAEB`); the road the ego drives
+into, as the first curve or junction within 250 m of its start along its road
+(parking when the ego parks, or reverses where parking spaces are drawn; the
+map's name when the road file is missing); the participants and action types.
+A reviewer's confirmed labels stay final. When the rules change, or a version
+still carries labels of the retired model review, a strip above the table offers
+**Update labels** for those versions.
+
+Only one import/labelling job can run per data directory in the service.
+Stop takes effect after the current parsing step returns; saved versions remain
+intact. Merely browsing or filtering the library does not generate
+classification records.
 A service restart reports an interrupted job;
 reimporting unchanged files reuses versions. The last task summary is stored in
 `import_status.json` outside the repository. Classification edits and deletion

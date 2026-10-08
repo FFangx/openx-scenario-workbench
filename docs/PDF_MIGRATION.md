@@ -20,10 +20,9 @@
    **Requirement facts**: clauses, structure, classification and review issues.
    **Edit facts** creates a revision; original page evidence is immutable, and a
    confirmed conclusion of that clause is marked for reconfirmation.
-5. Import `.sim`, `.xosc`/`.xodr`, or ZIP assets as before. Enable model
-   classification on import, or classify a saved version later. Inspect the
-   rule/model/final audit, correct the labels, and confirm them. Classification
-   never modifies the immutable scenario or road files.
+5. Import `.sim`, `.xosc`/`.xodr`, or ZIP assets as before. Rules label each
+   version on import; correct the labels and confirm them where needed.
+   Classification never modifies the immutable scenario or road files.
 
 Old rule-extracted PDFs remain readable. **⋯ → Extraction record → Extract scenes again** creates a separate
 document result; old revisions and saved reports remain intact. The legacy parser
@@ -82,11 +81,12 @@ Additional checks reject incomplete finishes and malformed response collections
 instead of treating them as successful empty extractions. Invalid references are
 reported; a response whose scenes all have invalid anchors fails explicitly.
 
-Asset classification implements ScenarioManager's rule → model review → final
-labels/audit pattern using OpenX's parsed facts and the PDF function vocabulary.
-It is an OpenX adapter, not a port of ScenarioManager's complete SIM metadata
-extractor, dynamic vocabulary registry or classification prompt. It does not
-claim identical classification for every asset. PDF extraction also does not
+Asset classification keeps ScenarioManager's rule → final labels/audit pattern
+using OpenX's parsed facts and the PDF function vocabulary; its model review was
+retired (2026-10), since the model's labels varied between variants of one test
+and added minutes to every import. It is an OpenX adapter, not a port of
+ScenarioManager's complete SIM metadata extractor or dynamic vocabulary
+registry. It does not claim identical classification for every asset. PDF extraction also does not
 replace OpenX's existing retrieval/compatibility engine with ScenarioManager's
 full retrieval stack.
 
@@ -163,7 +163,7 @@ sizes/timeouts, and require HTTPS except on localhost. If no saved settings file
 exists, `OPENX_LLM_API_KEY`/`DEEPSEEK_API_KEY`, `OPENX_LLM_URL`, and
 `OPENX_LLM_MODEL` remain supported.
 
-One configuration is used for extraction, asset classification and grounded
+One configuration is used for extraction, reuse suggestions and grounded
 explanations. DeepSeek's thinking option is sent only to its official endpoint;
 generic compatible services receive standard Chat Completions parameters. Output
 token limit and timeout are editable for providers with different limits.

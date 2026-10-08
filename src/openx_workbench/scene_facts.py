@@ -18,7 +18,7 @@ from typing import Any
 from . import reuse_policy as policy
 from .models import ActionIR, EntityIR, ParseBundle, PositionIR
 from .reuse_geometry import _position_heading, _relative_offset
-from .road_geometry import path_curve_radius
+from .road_geometry import RoadAhead, path_curve_radius, road_ahead
 
 # Events that only operate the simulation: TurnOff switches the system under test
 # off when the scenario ends; just_for_test teleports and zeroes the ego. The
@@ -288,6 +288,30 @@ def ego_curve_radius(bundle: ParseBundle) -> float | None:
     ego = next((item for item in bundle.scenario.positions if (item.actor or "").casefold() == "ego"), None)
     pose = _world_pose(ego, bundle.road_geometry) if ego is not None else None
     return path_curve_radius(bundle.road_geometry, *pose) if pose is not None else None
+
+
+def ego_road_ahead(bundle: ParseBundle, distance: float) -> RoadAhead | None:
+    """The first curve or junction within `distance` metres ahead of where the ego starts
+    (road_geometry.road_ahead); None when the start cannot be placed on the road file."""
+    ego = next((item for item in bundle.scenario.positions if (item.actor or "").casefold() == "ego"), None)
+    pose = _world_pose(ego, bundle.road_geometry) if ego is not None else None
+    return road_ahead(bundle.road_geometry, *pose, distance) if pose is not None else None
+
+
+def scenario_reach(bundle: ParseBundle) -> float:
+    """How far (straight line, metres) from the ego's start the scenario uses a place: another
+    participant's start, or a position a condition waits for (an event's, the scenario's end);
+    0 when the start cannot be placed."""
+    roads = bundle.road_geometry
+    ego = next((item for item in bundle.scenario.positions if (item.actor or "").casefold() == "ego"), None)
+    start = _world_pose(ego, roads) if ego is not None else None
+    if start is None:
+        return 0.0
+    places = [item for item in bundle.scenario.positions if (item.actor or "").casefold() != "ego"]
+    places += [PositionIR(trigger.position["kind"], trigger.position) for trigger in bundle.scenario.triggers
+               if trigger.position.get("kind")]
+    poses = [pose for place in places if (pose := _world_pose(place, roads)) is not None]
+    return max((math.dist(start[:2], pose[:2]) for pose in poses), default=0.0)
 
 
 ROUTE_TURN_MIN = math.pi / 4  # a routing that turns the actor less than this goes straight
