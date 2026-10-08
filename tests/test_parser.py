@@ -58,3 +58,11 @@ def test_bundle_warns_when_filename_does_not_match():
 def test_parser_rejects_a_different_xml_document(parse):
     with pytest.raises(ValueError, match="root element"):
         parse("<unrelated />")
+
+
+def test_namespaced_files_read_as_their_plain_spelling():
+    for name, parse, root in (("minimal.xosc", parse_xosc, "OpenSCENARIO"), ("minimal.xodr", parse_xodr, "OpenDRIVE")):
+        plain = (FIXTURES / name).read_bytes()
+        namespaced = plain.replace(f"<{root}".encode(), f'<{root} xmlns="urn:authored"'.encode(), 1)
+        assert namespaced != plain
+        assert parse(namespaced) == parse(plain)
