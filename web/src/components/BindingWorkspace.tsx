@@ -160,6 +160,12 @@ export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esm
     return api.suggestBindings(projectId, ids).then(setInitial).catch((e: Error) => setError(e.message));
   };
   const running = job?.status === "running";
+  // Each finished suggestion appears in the table while the run goes on.
+  const suggestedSoFar = running ? job.done : 0;
+  useEffect(() => {
+    if (suggestedSoFar > 0) reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedSoFar]);
   const acceptable = rows.filter((r) => !r.binding && usable(r.suggestion) && r.suggestion.stable !== false
     && proposal(r.suggestion).status === "same").length;
   const look = rows.filter((r) => !r.binding && usable(r.suggestion) && r.suggestion.stable === false).length;

@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from openx_workbench import binding_judge
 from openx_workbench.binding_judge import JudgementInvalid, judge_request, parse_judgement
 from openx_workbench.scene_package import EvidenceRef
 from test_structured_reuse import authored_asset, requirement, search
@@ -30,6 +31,18 @@ def test_request_sends_source_text_story_and_differences_and_can_hide_names():
     assert "Library name 7.1" in named and "Library name 7.1" not in hidden
     assert '"evidence"' not in named  # the quoted evidence is left out; the source text is sent whole
     assert package.structure["participants"][0]["evidence"]  # the stored structure is untouched
+
+
+def test_a_kept_story_is_told_once_and_the_request_reads_the_same(monkeypatch):
+    package = requirement()
+    result = search(package, authored_asset(function="AEB"))[0]
+    pool = [(result.asset, result.differences)]
+    told, story = [], binding_judge.asset_story
+    monkeypatch.setattr(binding_judge, "asset_story", lambda asset: told.append(asset) or story(asset))
+    stories = {}
+    first = judge_request(package, pool, stories=stories)
+    assert judge_request(package, pool, stories=stories) == first == judge_request(package, pool)  # cached replies still match
+    assert len(told) == 2  # once for the kept stories, once for the request that keeps none
 
 
 def test_binding_keeps_only_candidates_judged_the_same_test():

@@ -4,14 +4,15 @@ import re
 import time
 from collections import Counter
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Semaphore
+from types import SimpleNamespace
 
 import pytest
 
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
-from openx_workbench import api, demo_workspace
+from openx_workbench import api, binding_suggest, demo_workspace
 from openx_workbench.asset_store import AssetStore
 from openx_workbench.binding_store import BindingStore
 from openx_workbench.binding_suggest import candidate_pool, judge_efforts, title_order
@@ -138,6 +139,7 @@ def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
     # Three readings of each of the four scenes, all at the deepest effort the model declares.
     assert job["result"]["failed"] == 0 and job["result"]["usage"]["calls"] == 12 == model.calls
     assert job["result"]["effort"] == "max" and model.efforts == {"max": 12}
+    assert job["ranked"] == job["done"] == job["total"] == 4
     rows = view["scenes"]
     assert len(rows) == 4 and all(row["binding"] is None for row in rows)
     for row in rows:
@@ -332,6 +334,35 @@ def test_replies_that_never_fit_fail_the_scene_and_a_wrong_key_fails_the_run(dem
     first = view["scenes"][0]
     response = base.suggest(scenes=[{"document_id": first["document_id"], "scene_id": first["scene_id"]}])
     assert finished(client, response.json())["status"] == "failed"
+
+
+def test_a_suggestion_is_saved_while_later_scenes_are_still_ranked(monkeypatch):
+    monkeypatch.setattr(binding_suggest, "candidate_pool", lambda index, package: [])
+    monkeypatch.setattr(binding_suggest, "judge_request", lambda package, candidates, **_: {})
+    monkeypatch.setattr(binding_suggest, "suggestion_record", lambda *args: {})
+    answered = Semaphore(0)
+
+    class Judge:
+        cancel = Event()
+        client = SimpleNamespace(config=SimpleNamespace(model="judge"))
+
+        def reading(self, request, count, number):
+            answered.release()
+            return None, "no reply"
+
+    events = []
+
+    def ranked(scene):
+        events.append(f"ranked {scene.name}")
+        if scene.name == "second":  # the first scene's readings are back before the third is ranked
+            assert all(answered.acquire(timeout=5) for _ in range(binding_suggest.VOTES))
+            time.sleep(0.2)
+
+    scenes = [SimpleNamespace(name=name, package=None, revision=1) for name in ("first", "second", "third")]
+    failed = binding_suggest.suggest_scenes(
+        scenes, None, {}, Judge(), 8, digest=lambda package: "", save=lambda scene, record: None,
+        ranked=ranked, judged=lambda scene: events.append(f"judged {scene.name}"))
+    assert failed == 3 and events.index("judged first") < events.index("ranked third")
 
 
 def test_suggestions_need_a_model(demo, monkeypatch):

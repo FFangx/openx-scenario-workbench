@@ -1,6 +1,7 @@
 import io
 import json
 from dataclasses import replace
+from http.client import IncompleteRead
 from urllib.error import HTTPError
 
 import pytest
@@ -46,6 +47,15 @@ def test_service_errors_do_not_echo_secret_or_remote_body():
     with pytest.raises(ModelError):
         base_url("http://remote.example/v1")
     assert base_url("http://localhost:9999/v1/") == "http://localhost:9999/v1"
+
+
+def test_a_reply_cut_off_mid_body_is_a_connection_failure_worth_retrying():
+    class CutOff(io.BytesIO):
+        def read(self, *args):
+            raise IncompleteRead(b"{")
+    with pytest.raises(ModelError, match="connection") as error:
+        ModelClient(ModelConfig(api_key="secret-key"), opener=lambda request, timeout: CutOff()).complete({"messages": []})
+    assert error.value.retryable
 
 
 def test_http_redirect_cannot_forward_credentials():

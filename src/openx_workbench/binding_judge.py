@@ -106,19 +106,25 @@ def requirement_block(package: ScenePackage) -> str:
 
 
 def candidate_block(number: int, asset: OpenXAsset, differences: tuple[ReuseDifference, ...], *,
-                    show_name: bool = True) -> str:
+                    show_name: bool = True, story: str | None = None) -> str:
     lines = [f"### C{number}"]
     if show_name:
         lines.append(f"名字：{asset.title or asset.xosc_name}")
-    lines += ["素材故事：", asset_story(asset), "与需求的差异："]
+    lines += ["素材故事：", asset_story(asset) if story is None else story, "与需求的差异："]
     shown = [item for item in differences if item.tier != TIER_NOTE]
     lines += [_difference_line(item) for item in shown] or ["- 无"]
     return "\n".join(lines)
 
 
 def judge_request(package: ScenePackage, candidates: list[tuple[OpenXAsset, tuple[ReuseDifference, ...]]], *,
-                  show_names: bool = True) -> dict:
-    blocks = [candidate_block(number, asset, differences, show_name=show_names)
+                  show_names: bool = True, stories: dict[str, str] | None = None) -> dict:
+    """`stories` keeps each asset's story by asset ID for the next request: a story depends on the asset
+    alone, and the stories of assets with many participants take seconds."""
+    stories = {} if stories is None else stories
+    for asset, _ in candidates:
+        if asset.asset_id not in stories:
+            stories[asset.asset_id] = asset_story(asset)
+    blocks = [candidate_block(number, asset, differences, show_name=show_names, story=stories[asset.asset_id])
               for number, (asset, differences) in enumerate(candidates, start=1)]
     user = "## 需求场景\n" + requirement_block(package) + "\n\n## 候选素材\n" + "\n\n".join(blocks)
     return {"messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
