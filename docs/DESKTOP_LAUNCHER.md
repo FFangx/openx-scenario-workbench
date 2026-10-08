@@ -26,7 +26,7 @@ Install the package with the `desktop` extra in the project's `.venv`
 `cd web && npm ci && npm run build`, then run `scripts/install_desktop.ps1`
 once. Rebuilding the bundle needs no launcher restart; Python source changes
 restart the service on the next open. The script creates the two shortcuts using
-the checkout's `pythonw.exe` and generates their icon. Normal daily use needs no
+the checkout's `pythonw.exe` and generates their icons (the stop shortcut carries a red stop badge). Normal daily use needs no
 terminal. No administrator access, PATH change, login startup or Windows service
 installation is required.
 

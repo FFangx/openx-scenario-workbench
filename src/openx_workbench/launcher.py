@@ -19,6 +19,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
+from .app_icon import app_icon
 from .asset_store import default_store_root
 from .checkout import checkout_root
 from .windows_job import WindowsJob
@@ -49,16 +50,6 @@ def source_revision():
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
-
-
-def tray_image():
-    from PIL import Image, ImageDraw
-    image = Image.new("RGB", (64, 64), "#123544")
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((10, 10, 54, 54), outline="#8ae0c2", width=7)
-    draw.line((24, 24, 40, 40), fill="white", width=5)
-    draw.line((40, 24, 24, 40), fill="white", width=5)
-    return image
 
 
 class InstanceLock:
@@ -222,7 +213,7 @@ class Launcher:
     def run(self, headless=False):
         if not headless:
             import pystray
-            self.icon = pystray.Icon("OpenX", tray_image(), "OpenX · 启动中", pystray.Menu(
+            self.icon = pystray.Icon("OpenX", app_icon(), "OpenX · 启动中", pystray.Menu(
                 pystray.MenuItem("打开工作台", lambda: self.dispatch("open"), default=True),
                 pystray.MenuItem("重启服务", lambda: self.dispatch("restart")),
                 pystray.MenuItem("查看日志", lambda: os.startfile(str(self.root))),
