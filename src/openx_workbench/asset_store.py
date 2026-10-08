@@ -229,8 +229,8 @@ class AssetStore:
         asset.asset_id = f"{version.asset_id}:{version.version_id}"
         from .classification import read_classification
         record = read_classification(self, version)
-        # Preserve accepted labels even if a later model retry failed. Pending
-        # rule/model suggestions do not certify a tested function.
+        # Rule and reviewer labels are accepted. Records of the retired model review
+        # count only where that review accepted them, until the rules label them again.
         if record.get("final_accepted", record.get("status") in {"classified", "manual_confirmed"} and not record.get("needs_review", True)):
             asset.classification = record.get("final", {})
         return asset

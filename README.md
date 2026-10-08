@@ -58,7 +58,7 @@ Similarity over the structural facts finds most right assets, but cannot say whe
 - Extracts scenario entities, selected action types, actor assignments, trigger types, and raw position attributes.
 - Extracts and classifies native or scanned PDF scenes using the migrated ScenarioManager V2 / scene-first path (prompt v10, structure read per scene with quoted evidence and, for a model that reads images, the scene's figures), preserving table cells, chapter/page evidence and review issues. Scanned pages require local OCR; configure a language model in Settings first.
 - Recommends a reusable asset for every clause with a configured language model: about twenty candidates from the rule ranking, asset names, structure text and the clause title; three independent readings at the deepest thinking effort, the most recommended asset wins and disagreement is flagged; four levels a person confirms or changes.
-- Simulation assets have optional model classification with rule/model/final audit history.
+- Simulation assets get function, road and target labels read from their files by rules, with manual correction and audit history.
 - Provides model URL/key settings, model discovery, manual model IDs and a selected-model JSON test.
 - Converts each PDF scene package into explicit scenario-family, participant, relative-position, action, trigger, road, and parameter constraints.
 - Summarizes road IDs and counts of lane elements, junctions, signals, and static objects.

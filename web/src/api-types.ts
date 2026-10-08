@@ -252,9 +252,10 @@ export interface paths {
         put?: never;
         /**
          * Classify Assets
-         * @description Model classification for the given versions, or every version still awaiting review.
+         * @description Rule labels for the given versions, or every version whose labels are missing or outdated.
          *
-         *     Reviewed versions are skipped unless `force` is set.
+         *     Versions labelled by the current rules are skipped unless `force` is set; a reviewer's labels
+         *     always stay final.
          */
         post: operations["classify_assets_api_assets_classify_post"];
         delete?: never;
@@ -1649,11 +1650,6 @@ export interface components {
         };
         /** Body_import_assets_api_assets_import_post */
         Body_import_assets_api_assets_import_post: {
-            /**
-             * Classify
-             * @default false
-             */
-            classify?: boolean;
             /** Files */
             files: string[];
         };
@@ -1851,9 +1847,12 @@ export interface components {
             /** Error */
             error?: string | null;
             final: components["schemas"]["ClassificationLabels"];
-            llm: components["schemas"]["ModelLabels"] | null;
-            /** Model */
-            model: string;
+            llm?: components["schemas"]["ModelLabels"] | null;
+            /**
+             * Model
+             * @default
+             */
+            model?: string;
             /** Needs Review */
             needs_review: boolean;
             rule: components["schemas"]["ClassificationLabels"];

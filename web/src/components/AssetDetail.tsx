@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, App, Button, Collapse, Descriptions, Form, Input, Popconfirm, Select, Spin, Table, Tabs, Tag, Tooltip } from "antd";
-import { CloseOutlined, CodeOutlined, DeleteOutlined, DownloadOutlined, ExportOutlined, RobotOutlined, TagsOutlined } from "@ant-design/icons";
+import { CloseOutlined, CodeOutlined, DeleteOutlined, DownloadOutlined, ExportOutlined, TagsOutlined } from "@ant-design/icons";
 import { api, urls, type AssetDetail as Detail, type ClassificationLabels, type StandardExportResult, type VersionRef } from "../api";
 import { dateTime, useT } from "../i18n";
 import { PREVIEW_FAILED, roadFeatureLabel, valueLabel } from "../vocab";
@@ -17,13 +17,12 @@ interface Props {
   onClose: () => void;
   onChanged: () => void;
   onDeleted: () => void;
-  onModelClassify: (v: VersionRef) => void;
   /** Opens a bound requirement scene in the workbench; without it the bound clauses are only listed. */
   onOpenScene?: (projectId: string, documentId: string, sceneId: string) => void;
 }
 
 /** One immutable asset version: preview, labels, provenance and its sibling versions. */
-export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClose, onChanged, onDeleted, onModelClassify, onOpenScene }: Props) {
+export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClose, onChanged, onDeleted, onOpenScene }: Props) {
   const { t, lang } = useT();
   const { message } = App.useApp();
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -133,7 +132,7 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
                     key: "classification",
                     label: t("分类（功能、道路、目标）", "Classification (function, road, target)"),
                     children: <ClassificationTab key={detail.classification?.saved_at ?? "none"} detail={detail} busy={busy}
-                      onChanged={() => { load(); onChanged(); }} onModel={() => onModelClassify(version)} />,
+                      onChanged={() => { load(); onChanged(); }} />,
                   },
                   { key: "checks", label: t("文件标准检查", "File standard checks"), children: <StandardChecks checks={detail.validation ?? {}} /> },
                 ]} />
@@ -176,7 +175,7 @@ export function AssetDetail({ version, busy, esmini, onSettings, onSelect, onClo
 
 let schemaCache: ReturnType<typeof api.classificationSchema> | null = null;
 
-function ClassificationTab({ detail, busy, onChanged, onModel }: { detail: Detail; busy: boolean; onChanged: () => void; onModel: () => void }) {
+function ClassificationTab({ detail, busy, onChanged }: { detail: Detail; busy: boolean; onChanged: () => void }) {
   const { t, lang } = useT();
   const { message } = App.useApp();
   const record = detail.classification;
@@ -207,19 +206,15 @@ function ClassificationTab({ detail, busy, onChanged, onModel }: { detail: Detai
   return (
     <div className="settings-form">
       {!record ? (
-        <Alert type="info" showIcon title={t("此版本尚无分类记录。可先生成规则分类，或使用已配置的模型复核。", "This version has no classification. Generate rule labels or review with your configured model.")} />
+        <Alert type="info" showIcon title={t("此版本尚无分类记录，可按规则生成。", "This version has no classification yet; rules can label it.")} />
       ) : (
         <div className="sec-head">
           <Tag className={`mtag ${record.status === "manual_confirmed" ? "direct" : record.status === "failed" ? "not" : "review"}`}>{valueLabel(record.status, lang)}</Tag>
           {record.needs_review && <span className="st warn">{t("分类待复核", "Classification needs review")}</span>}
-          {record.model && <span className="muted">{record.model}</span>}
           <a className="small-link" href={urls.classification(v)}><DownloadOutlined /> {t("下载分类记录", "Download classification record")}</a>
         </div>
       )}
       {record?.error && <Alert type="error" showIcon title={record.error} />}
-      {record?.llm && (
-        <p className="muted">{t("模型置信度", "Model confidence")} {record.llm.confidence.toFixed(2)} · {record.llm.reason}</p>
-      )}
       {labels && (
         <Form layout="vertical" className="fact-editor" disabled={busy}>
           <div className="editor-grid">
@@ -233,12 +228,11 @@ function ClassificationTab({ detail, busy, onChanged, onModel }: { detail: Detai
       )}
       <div className="settings-actions">
         {labels && <Button type="primary" loading={saving} disabled={busy} onClick={confirm}>{t("保存并确认分类", "Save and confirm classification")}</Button>}
-        {!record && <Button icon={<TagsOutlined />} disabled={busy} onClick={rules}>{t("生成规则分类", "Generate rule labels")}</Button>}
-        <Button icon={<RobotOutlined />} disabled={busy} onClick={onModel}>{t("用模型分类", "Classify with model")}</Button>
+        {record?.status !== "manual_confirmed" && <Button icon={<TagsOutlined />} disabled={busy} onClick={rules}>{t("按规则生成", "Label by rules")}</Button>}
       </div>
       <p className="muted settings-note">
         {busy ? t("导入结束后可修改分类。", "Classification can be edited after the import finishes.")
-          : t("模型复核会将场景结构与描述发送给设置中的模型。", "Model review sends scenario structure and descriptions to the model in Settings.")}
+          : t("规则从文件读出功能、道路和目标；保存后以你确认的标签为准。", "Rules read the function, road and targets from the files; once saved, your labels are final.")}
       </p>
     </div>
   );

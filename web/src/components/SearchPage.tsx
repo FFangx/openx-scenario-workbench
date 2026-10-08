@@ -110,7 +110,7 @@ export function SearchPage({ search, library, from, esmini, onBack, onSettings, 
         {open?.version_id && (
           <AssetDetail version={{ asset_id: open.asset_id, version_id: open.version_id }} busy={false} esmini={esmini} onSettings={onSettings}
             onSelect={() => undefined} onClose={() => setOpen(null)} onChanged={onLibraryChanged}
-            onDeleted={() => { setOpen(null); onLibraryChanged(); search.runSearch(); }} onModelClassify={() => undefined} />
+            onDeleted={() => { setOpen(null); onLibraryChanged(); search.runSearch(); }} />
         )}
       </Drawer>
     </main>

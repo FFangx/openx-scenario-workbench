@@ -18,7 +18,7 @@ from . import import_jobs, jobs
 from .api_schemas import Job, PendingClassification, documented
 from .asset_store import AssetStore
 from .catalog import AssetFile
-from .classification import read_classification
+from .classification import outdated, read_classification
 from .pdf_store import PdfStore
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -28,7 +28,6 @@ PDF_KIND = "pdf_import"
 # and may run OCR or the layout model locally.
 PDFS_AT_ONCE = 3
 ASSET_SUFFIXES = (".sim", ".xosc", ".xodr", ".zip")
-REVIEWED = {"classified", "manual_confirmed"}
 
 
 class VersionRef(BaseModel):
@@ -150,13 +149,13 @@ def reextract_pdf(project_id: str, document_id: str) -> dict[str, Any]:
     return _start_extraction(pdf, project_id, [(document.filename, pdf.pdf_bytes(document))], document.source_standard)
 
 
-# ---------- asset import and classification ----------
+# ---------- asset import and labels ----------
 
 @router.post("/assets/import", **documented(Job))
-def import_assets(files: list[UploadFile] = File(...), classify: bool = Form(False)) -> dict[str, Any]:
+def import_assets(files: list[UploadFile] = File(...)) -> dict[str, Any]:
     uploads = _uploads(files, ASSET_SUFFIXES, "请选择 .sim、.xosc、.xodr 或 .zip 文件 / Select .sim, .xosc, .xodr or .zip files.")
     store = AssetStore()
-    return import_jobs.start_import(store, [AssetFile(name, data) for name, data in uploads], classify=classify).snapshot()
+    return import_jobs.start_import(store, [AssetFile(name, data) for name, data in uploads]).snapshot()
 
 
 @router.post("/assets/import/demo", **documented(Job))
@@ -174,27 +173,27 @@ def import_demo() -> dict[str, Any]:
 @router.get("/assets/classification/pending", **documented(PendingClassification))
 def pending_classification() -> dict[str, Any]:
     store = AssetStore()
-    pending = [version for version in store.versions()
-               if read_classification(store, version).get("status") not in REVIEWED]
+    pending = [version for version in store.versions() if outdated(read_classification(store, version))]
     return {"count": len(pending),
             "versions": [{"asset_id": item.asset_id, "version_id": item.version_id} for item in pending]}
 
 
 @router.post("/assets/classify", **documented(Job))
 def classify_assets(request: ClassifyRequest) -> dict[str, Any]:
-    """Model classification for the given versions, or every version still awaiting review.
+    """Rule labels for the given versions, or every version whose labels are missing or outdated.
 
-    Reviewed versions are skipped unless `force` is set.
+    Versions labelled by the current rules are skipped unless `force` is set; a reviewer's labels
+    always stay final.
     """
     store = AssetStore()
     versions = store.versions()
     if request.versions is None:
-        selected = [item for item in versions if read_classification(store, item).get("status") not in REVIEWED]
+        selected = [item for item in versions if outdated(read_classification(store, item))]
     else:
         wanted = {(item.asset_id, item.version_id) for item in request.versions}
         selected = [item for item in versions if (item.asset_id, item.version_id) in wanted]
         if len(selected) != len(wanted):
             raise HTTPException(404, "Unknown asset version.")
     if not selected:
-        raise ValueError("没有待分类的资产版本 / No asset versions need classification.")
-    return import_jobs.start_import(store, [], classify=True, versions=selected, force=request.force).snapshot()
+        raise ValueError("没有需要更新标签的资产版本 / No asset versions need new labels.")
+    return import_jobs.start_import(store, [], versions=selected, force=request.force).snapshot()

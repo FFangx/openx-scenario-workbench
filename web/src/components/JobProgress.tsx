@@ -10,7 +10,7 @@ const STAGES: Record<string, [string, string]> = {
   expanding: ["展开场景文件", "Expanding archive"],
   parsing: ["解析场景与道路", "Parsing scenarios and roads"],
   saving: ["保存资产", "Saving assets"],
-  classifying: ["复核分类", "Reviewing classification"],
+  classifying: ["生成分类标签", "Labelling"],
   downloading: ["下载规范文件", "Downloading schemas"],
   comparing: ["对比场景库检查结论", "Comparing library verdicts"],
   ranking: ["为每个场景找候选素材", "Finding candidate assets"],

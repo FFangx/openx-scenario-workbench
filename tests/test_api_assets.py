@@ -39,7 +39,7 @@ def test_rule_suggestion_then_confirmed_labels(workbench):
     client, _, version = workbench
     assert client.get(version_url(version, "/classification/download")).status_code == 404
     rule = client.post(version_url(version, "/classification/rules")).json()
-    assert rule["status"] == "rule_only" and rule["needs_review"] is True
+    assert rule["status"] == "rule" and rule["needs_review"] is False
     confirmed = client.put(version_url(version, "/classification"), json=LABELS).json()
     assert confirmed["status"] == "manual_confirmed" and confirmed["final"] == LABELS
     assert client.get("/api/assets").json()[0]["function"] == "AEB"

@@ -6,7 +6,7 @@ const EN: Record<string, string> = {
   未知: "Unknown", 直道: "Straight", 弯道: "Curve", 交叉口: "Intersection", 停车场: "Parking", 环岛: "Roundabout", 匝道: "Ramp",
   乘用车: "Passenger car", 商用车: "Commercial vehicle", 两轮车: "Two-wheeler", 行人: "Pedestrian", 骑行者: "Cyclist",
   障碍物: "Obstacle", 动物: "Animal",
-  rule_only: "Rule classified", classified: "Model reviewed", manual_confirmed: "Confirmed", failed: "Failed", pending: "Pending",
+  rule: "Rule labels", rule_only: "Rule classified", classified: "Model reviewed", manual_confirmed: "Confirmed", failed: "Failed", pending: "Pending",
   not_tested: "Not tested", playable: "Playable", warning: "Warning", unsupported: "Unsupported", timeout: "Timed out",
   road_missing: "Road file missing",
   // typed requirement vocabulary (src/openx_workbench/pdf_v2/scene_schemas.py)
@@ -24,7 +24,7 @@ const EN: Record<string, string> = {
   最左侧车道: "Leftmost lane", 最右侧车道: "Rightmost lane", 中间车道: "Middle lane",
 };
 const ZH: Record<string, string> = {
-  rule_only: "规则分类", classified: "模型复核", manual_confirmed: "人工确认", failed: "失败", pending: "待分类",
+  rule: "规则生成", rule_only: "规则分类", classified: "模型复核", manual_confirmed: "人工确认", failed: "失败", pending: "待分类",
   not_tested: "未测试", playable: "可播放", warning: "有警告", unsupported: "不支持", timeout: "超时",
   road_missing: "道路文件缺失",
 };

@@ -359,3 +359,116 @@ def path_curve_radius(roads: dict[str, RoadReferenceLine], x: float, y: float, h
         visited.add(road.road_id)
         radius = _first_curve(road, None, forward)
     return round(radius) if radius is not None else None
+
+
+@dataclass(frozen=True, slots=True)
+class RoadAhead:
+    """The first feature ahead of a vehicle, how far ahead and where (x, y) it starts: a curve it
+    enters, or a junction its road runs into; neither when the stretch looked at is straight."""
+    curve_radius: float | None = None
+    junction: bool = False
+    distance: float | None = None
+    at: tuple[float, float] | None = None
+
+
+def road_ahead(roads: dict[str, RoadReferenceLine], x: float, y: float, heading: float,
+               distance: float) -> RoadAhead | None:
+    """The first curve or junction within `distance` metres ahead of a vehicle at (x, y) heading `heading`.
+
+    Follows the road the vehicle is on and the ordinary roads joined to its end, as path_curve_radius
+    does; a junction connector touching the end means the road runs into a junction. A curve is curved
+    segments in a row, together MIN_CURVE_LENGTH_M or longer: authoring tools often draw one curve as
+    many short polynomials. None: the vehicle is on no road of the file.
+    """
+    located = locate(roads, x, y)
+    if located is None:
+        return None
+    road, position, _ = located
+    reference = road.heading_at(position)
+    if reference is None:
+        return None
+    forward = abs(math.remainder(heading - reference, math.tau)) < math.pi / 2
+    walked, visited = 0.0, {road.road_id}
+    curve_start, curve_at, curve_length, radii = 0.0, None, 0.0, []
+    while True:
+        for segment in road.segments if forward else reversed(road.segments):
+            start, end = segment.s, segment.s + segment.length
+            if (end < position) if forward else (start > position):
+                continue  # already behind the vehicle
+            ahead = walked + max(0.0, start - position if forward else position - end)
+            radius = segment_radius(segment)
+            if radius is None or radius >= STRAIGHT_RADIUS_M:
+                curve_length, radii = 0.0, []
+                if ahead > distance:
+                    return RoadAhead()
+                continue
+            if not radii:
+                if ahead > distance:
+                    return RoadAhead()
+                curve_start, curve_at = ahead, segment.point_at(start if forward else end)
+            curve_length += segment.length
+            radii.append(radius)
+            if curve_length >= MIN_CURVE_LENGTH_M:
+                return RoadAhead(curve_radius=round(min(radii)), distance=round(curve_start), at=curve_at)
+        last = road.segments[-1]
+        walked += (last.s + last.length - position) if forward else position - road.segments[0].s
+        if walked > distance:
+            return RoadAhead()
+        exit_point = _ends(road)[1 if forward else 0]
+        touching = [other for other in roads.values() if other.road_id not in visited and other.segments
+                    and any(math.dist(end, exit_point) < JOIN_DISTANCE_M for end in _ends(other))]
+        if any(other.junction != "-1" for other in touching):
+            return RoadAhead(junction=True, distance=round(walked), at=exit_point)
+        joined = next((other for other in touching if other.junction == "-1"), None)
+        if joined is None:
+            return RoadAhead()
+        forward = math.dist(_ends(joined)[0], exit_point) < JOIN_DISTANCE_M
+        road, position = joined, (joined.segments[0].s if forward else joined.segments[-1].s + joined.segments[-1].length)
+        visited.add(road.road_id)
+
+
+# ---------- roundabouts ----------
+# OpenDRIVE has no roundabout element: a ring is drawn as tight curved roads and junction connectors
+# around one centre (the libraries' R15 ring: four 60-degree roads, four junctions of 30-degree
+# connectors). Turning connectors of an ordinary junction curve around different centres.
+RING_RADIUS_M = 60.0  # a tighter curve may be a piece of a ring; wider rings are roads, not roundabouts
+RING_TURN = math.radians(300)  # pieces around one centre turning together this far close a ring
+RING_CENTRE_M = 3.0  # pieces whose centres lie this close (or within a quarter of the radius) share one
+
+
+def _circle(points: list[tuple[float, float]]) -> tuple[float, float, float] | None:
+    """Centre and radius of the circle through three points; None when they lie on a line."""
+    (ax, ay), (bx, by), (cx, cy) = points
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-9:
+        return None
+    ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+    uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+    return ux, uy, math.dist((ux, uy), (ax, ay))
+
+
+def roundabouts(roads: dict[str, RoadReferenceLine]) -> list[tuple[float, float, float]]:
+    """Centre (x, y) and radius of every ring in the file: tight curved roads or connectors turning
+    the same way around one centre, together RING_TURN or more."""
+    pieces = []
+    for road in roads.values():
+        if not road.segments:
+            continue
+        first, last = road.segments[0], road.segments[-1]
+        start, end = first.s, last.s + last.length
+        points = [road.world_from_road(s, 0.0) for s in (start, (start + end) / 2, end)]
+        turn = math.remainder(last.heading_at(end) - first.heading_at(start), math.tau)
+        circle = _circle([point[:2] for point in points]) if all(points) else None
+        if circle is not None and circle[2] <= RING_RADIUS_M and abs(turn) >= math.radians(10):
+            pieces.append((circle, turn))
+    rings: list[list] = []  # [centre x, centre y, radius, turn, pieces]
+    for (x, y, radius), turn in pieces:
+        ring = next((ring for ring in rings if (ring[3] > 0) == (turn > 0)
+                     and math.dist((ring[0], ring[1]), (x, y)) <= max(RING_CENTRE_M, radius / 4)), None)
+        if ring is None:
+            rings.append([x, y, radius, turn, 1])
+        else:
+            ring[3] += turn
+            ring[4] += 1
+    return [(x, y, radius) for x, y, radius, turn, count in rings if abs(turn) >= RING_TURN and count >= 3]
+

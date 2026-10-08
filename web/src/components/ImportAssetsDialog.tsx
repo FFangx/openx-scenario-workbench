@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Checkbox, Modal, Radio, Upload, type UploadFile } from "antd";
+import { Alert, Button, Modal, Radio, Upload, type UploadFile } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import { api, type Job } from "../api";
 import { useT } from "../i18n";
@@ -21,7 +21,7 @@ export function ImportReports({ job }: { job: Job }) {
       <div className="muted job-note">
         {t(`已保存 / 复用 ${job.saved ?? 0} 个场景`, `${job.saved ?? 0} scenarios saved / reused`)}
         {cases > 0 && t(` · 来源 ${cases} 个场景 · 跳过 ${skipped}`, ` · ${cases} source cases · ${skipped} skipped`)}
-        {(job.failed ?? 0) > 0 && t(` · 分类失败 ${job.failed}`, ` · ${job.failed} classification failures`)}
+        {(job.failed ?? 0) > 0 && t(` · ${job.failed} 个未能生成标签`, ` · ${job.failed} without labels`)}
       </div>
       {reports.map((r) => (
         <div key={r.source_name} className="muted job-note">
@@ -50,8 +50,7 @@ export function ImportAssetsDialog({ open, onClose, onFinished }: Props) {
   const { t } = useT();
   const [source, setSource] = useState<"upload" | "demo">("upload");
   const [files, setFiles] = useState<UploadFile[]>([]);
-  const [classify, setClassify] = useState(false);
-  const [sent, setSent] = useState<{ files: File[]; classify: boolean } | null>(null);
+  const [sent, setSent] = useState<File[] | null>(null);
   const [initial, setInitial] = useState<Job | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +65,7 @@ export function ImportAssetsDialog({ open, onClose, onFinished }: Props) {
     }).catch(() => undefined);
   }, [open]);
 
-  const start = async (retry?: { files: File[]; classify: boolean }) => {
+  const start = async (retry?: File[]) => {
     setStarting(true);
     setError(null);
     try {
@@ -74,9 +73,9 @@ export function ImportAssetsDialog({ open, onClose, onFinished }: Props) {
         setSent(null);
         setInitial(await api.importDemo());
       } else {
-        const request = retry ?? { files: files.map((f) => f.originFileObj as File), classify };
+        const request = retry ?? files.map((f) => f.originFileObj as File);
         setSent(request);
-        setInitial(await api.importAssets(request.files, request.classify));
+        setInitial(await api.importAssets(request));
         setFiles([]);
       }
     } catch (e) {
@@ -141,9 +140,8 @@ export function ImportAssetsDialog({ open, onClose, onFinished }: Props) {
                 <p className="ant-upload-hint">{t("XOSC 需与其引用的 XODR 一起导入；ZIP 可包含目录、模型及纹理，并保留相对路径。",
                   "Import each XOSC with the XODR it references; ZIP packages may include catalogs, models and textures with relative paths.")}</p>
               </Upload.Dragger>
-              <Checkbox checked={classify} onChange={(e) => setClassify(e.target.checked)}>{t("入库时用模型复核分类", "Review classification with the model on import")}</Checkbox>
-              <p className="muted settings-note">{t("启用后会将场景结构与描述发送给已配置的模型；分类失败仍保留资产。重复内容不会产生新版本。",
-                "Sends scenario structure and descriptions to the configured model; assets are kept if classification fails. Identical content does not create a new version.")}</p>
+              <p className="muted settings-note">{t("入库时按规则从文件生成功能、道路和目标标签。重复内容不会产生新版本。",
+                "On import, rules read the function, road and target labels from the files. Identical content does not create a new version.")}</p>
             </>
           )}
           {error && <Alert type="error" showIcon title={error} />}

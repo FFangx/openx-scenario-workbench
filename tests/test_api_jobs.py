@@ -9,10 +9,9 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
-from openx_workbench import api, import_jobs
+from openx_workbench import api
 from openx_workbench.asset_store import AssetStore
 from openx_workbench.import_jobs import ImportJob
-from openx_workbench.llm_service import ModelConfig
 from openx_workbench.pdf_store import PdfStore
 from openx_workbench.project_store import ProjectStore
 
@@ -165,20 +164,16 @@ def test_asset_import_job_and_its_status_after_a_restart(client, tmp_path, monke
     assert [item["status"] for item in listed] == ["interrupted"]
 
 
-def test_model_classification_job_for_pending_versions(client, monkeypatch):
+def test_labels_job_for_versions_with_outdated_labels(client):
     finished(client, client.post("/api/assets/import", files=assets()).json())
+    assert client.get("/api/assets/classification/pending").json()["count"] == 0  # labelled on import
+    store = AssetStore()
+    version = store.versions()[0]
+    path = store.root / "assets" / version.asset_id / version.version_id / "classification.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "status": "classified", "rules": None}), encoding="utf-8")  # a model review
     pending = client.get("/api/assets/classification/pending").json()
     assert pending["count"] == 1
-
-    class Client:
-        config = ModelConfig(model="authored-review-model")
-
-        def complete(self, body):
-            result = {"function_type": "AEB", "label_road_type": "直道", "label_target_type": ["乘用车"],
-                      "label_actions": ["制动"], "scenario_intent": "Authored", "confidence": .95, "reason": "Authored"}
-            return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(result)}}]}
-
-    monkeypatch.setattr(import_jobs, "ModelClient", Client)
     assert client.post("/api/assets/classify", json={"versions": [{"asset_id": "x", "version_id": "y"}]}).status_code == 404
     job = finished(client, client.post("/api/assets/classify", json={}).json())
     assert job["status"] == "completed" and job["failed"] == 0

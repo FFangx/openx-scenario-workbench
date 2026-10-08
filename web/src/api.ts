@@ -170,10 +170,10 @@ export const api = {
   startPreviews: (retryFailed = false) => post<Job>("/api/previews", { retry_failed: retryFailed }),
   importPdfs: (pid: string, files: File[], standard: string) => call<Job>(`/api/projects/${pid}/documents`, form(files, { standard })),
   reextract: (pid: string, did: string) => post<Job>(`/api/projects/${pid}/documents/${did}/reextract`, {}),
-  importAssets: (files: File[], classify: boolean) => call<Job>("/api/assets/import", form(files, { classify: String(classify) })),
+  importAssets: (files: File[]) => call<Job>("/api/assets/import", form(files)),
   importDemo: () => post<Job>("/api/assets/import/demo", {}),
   pendingClassification: () => call<{ count: number; versions: { asset_id: string; version_id: string }[] }>("/api/assets/classification/pending"),
-  classify: (versions?: { asset_id: string; version_id: string }[], force = false) => post<Job>("/api/assets/classify", { versions, force }),
+  relabel: (versions?: { asset_id: string; version_id: string }[], force = false) => post<Job>("/api/assets/classify", { versions, force }),
 };
 
 export const urls = {
