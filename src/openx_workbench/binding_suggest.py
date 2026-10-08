@@ -245,6 +245,7 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(scenes) * VOTES))) as executor:
         futures = {}
         readings: dict[int, list] = {}
+        stories: dict[str, str] = {}  # a candidate of several scenes is described once
 
         def take(future) -> None:
             nonlocal failed
@@ -264,7 +265,8 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
                 if judge.cancel.is_set():
                     raise InterruptedError()
                 pool = candidate_pool(index, scene.package)
-                request = judge_request(scene.package, [(item.result.asset, item.result.differences) for item in pool])
+                request = judge_request(scene.package, [(item.result.asset, item.result.differences) for item in pool],
+                                        stories=stories)
                 for reading in range(VOTES):
                     futures[executor.submit(judge.reading, request, len(pool), reading)] = (number, reading, scene, pool)
                 ranked(scene)

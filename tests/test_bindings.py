@@ -338,7 +338,7 @@ def test_replies_that_never_fit_fail_the_scene_and_a_wrong_key_fails_the_run(dem
 
 def test_a_suggestion_is_saved_while_later_scenes_are_still_ranked(monkeypatch):
     monkeypatch.setattr(binding_suggest, "candidate_pool", lambda index, package: [])
-    monkeypatch.setattr(binding_suggest, "judge_request", lambda package, candidates: {})
+    monkeypatch.setattr(binding_suggest, "judge_request", lambda package, candidates, **_: {})
     monkeypatch.setattr(binding_suggest, "suggestion_record", lambda *args: {})
     answered = Semaphore(0)
 
