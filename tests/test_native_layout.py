@@ -202,7 +202,7 @@ def test_layout_cache_is_validated_and_preserves_model_provenance(tmp_path, monk
     path.write_bytes(flat_pdf())
     doc, _ = parse_pdf_structure(path)
     calls = []
-    def worker(command, log, timeout):
+    def worker(command, log, timeout, stop=None):
         pages = json.loads(Path(command[2]).read_text(encoding="utf-8"))
         payload = layout_payload()
         payload["pages"] = [{**page, "regions": []} for page in pages]
@@ -212,7 +212,8 @@ def test_layout_cache_is_validated_and_preserves_model_provenance(tmp_path, monk
     monkeypatch.setattr("openx_workbench.pdf_ocr._run_worker", worker)
     first = rescue_native_structure(path, doc, root=tmp_path)
     second = rescue_native_structure(path, doc, root=tmp_path)
-    assert len(calls) == 1
+    runs = lambda: len({Path(command[2]).parent for command in calls})  # each run may start several workers
+    assert runs() == 1
     assert not first.preprocessing["native_layout"]["cached"]
     assert second.preprocessing["native_layout"]["cached"]
     assert second.preprocessing["native_layout"]["model_sha256"] == "authored"
@@ -222,4 +223,4 @@ def test_layout_cache_is_validated_and_preserves_model_provenance(tmp_path, monk
     cache.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="coverage"):
         rescue_native_structure(path, doc, root=tmp_path)
-    assert len(calls) == 1
+    assert runs() == 1

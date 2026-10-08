@@ -1,6 +1,7 @@
 """Local OCR sidecar feeding the same anchored PDF V2 contract as native text."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import math
@@ -9,6 +10,9 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .atomic_write import write_json
@@ -18,7 +22,21 @@ from .pdf_v2.models import ParsedBlock
 OCR_VERSION = "ppstructure-server-v1"
 
 
-def _run_worker(command, log, timeout):
+class WorkerPool:
+    """A cap on worker processes running at once, shared by every PDF being extracted."""
+
+    def __init__(self, size):
+        self.size = size
+        self.slots = threading.BoundedSemaphore(size)
+
+
+# One OCR process at a time, across every PDF being extracted: one already keeps about
+# 12 cores busy and peaks near 9 GB, so three scanned PDFs at once needed about 27 GB.
+OCR_WORKERS = WorkerPool(1)
+
+
+def _run_worker(command, log, timeout, stop=None):
+    """The worker's exit code, or None once `stop` is set; its process tree never outlives this."""
     from .windows_job import WindowsJob
 
     job = WindowsJob() if os.name == "nt" else None
@@ -33,7 +51,15 @@ def _run_worker(command, log, timeout):
             job.resume(process)
         process.stdin.write(b"start\n")
         process.stdin.close()
-        return process.wait(timeout=timeout)
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                return process.wait(timeout=min(.5, max(0, deadline - time.monotonic())))
+            except subprocess.TimeoutExpired:
+                if stop is not None and stop.is_set():
+                    return None
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(command, timeout) from None
     finally:
         if job:
             job.close()
@@ -121,11 +147,14 @@ def recognize_pdf_pages(path, pages, *, root=None, progress=None):
     return run_pdf_sidecar(path, pages, root=root, progress=progress,
         identity=ocr_identity(root), worker="ocr_worker.py", parse_pages=parse_ocr_pages,
         cache_name="ocr", message="本机识别扫描页与表格 / Recognizing scanned pages and tables locally",
-        timeout=min(1800, 600 + 90 * len(pages)))
+        timeout=min(1800, 600 + 90 * len(pages)), pool=OCR_WORKERS)
 
 
-def run_pdf_sidecar(path, pages, *, root, progress, identity, worker, parse_pages, cache_name, message, timeout):
-    """Render, own and cache a bounded local provider without changing source blocks."""
+def run_pdf_sidecar(path, pages, *, root, progress, identity, worker, parse_pages, cache_name, message, timeout, pool=None):
+    """Render, own and cache a bounded local provider without changing source blocks.
+
+    With a `pool`, the pages are shared by several worker processes, merged back in page order.
+    """
     import pymupdf
 
     if Path(path).stat().st_size > 100 * 1024 * 1024:
@@ -158,26 +187,62 @@ def run_pdf_sidecar(path, pages, *, root, progress, identity, worker, parse_page
                 image.save(image_path)
                 manifest.append({"number": number, "image": str(image_path), "width": page.rect.width,
                                  "height": page.rect.height, "image_width": image.width, "image_height": image.height})
-        input_path, output = folder / "manifest.json", folder / "result.json"
-        input_path.write_text(json.dumps(manifest), encoding="utf-8")
-        log = folder / "worker.log"
-        try:
-            result = _run_worker([ocr_python(root), str(Path(__file__).with_name(worker)), str(input_path), str(output), "--wait-for-owner"],
-                                 log, timeout)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            root.mkdir(parents=True, exist_ok=True)
-            if log.exists():
-                (root / (cache_name + "_last_failure.log")).write_bytes(log.read_bytes())
-            raise ValueError(f"本机 PDF 识别无法启动或超时 / Local {cache_name} failed to start or timed out") from exc
-        if result or not output.is_file():
+        command = [ocr_python(root), str(Path(__file__).with_name(worker))]
+        workers = min(pool.size, len(manifest)) if pool else 1
+        stop = threading.Event()
+
+        def run(index):
+            # Pages are dealt out in turn, so a stretch of slow table pages is shared.
+            input_path = folder / f"manifest-{index}.json"
+            input_path.write_text(json.dumps(manifest[index::workers]), encoding="utf-8")
+            with pool.slots if pool else contextlib.nullcontext():
+                if stop.is_set():
+                    return None
+                try:
+                    code = _run_worker([*command, str(input_path), str(folder / f"result-{index}.json"), "--wait-for-owner"],
+                                       folder / f"worker-{index}.log", timeout, stop)
+                except BaseException:
+                    stop.set()
+                    raise
+            if code:
+                stop.set()  # one failed worker stops the others
+            return code
+
+        def keep_log(log):
             # Provider logs may include source text. Keep them local; expose a
             # useful setup instruction rather than raw document-bearing output.
             root.mkdir(parents=True, exist_ok=True)
-            (root / (cache_name + "_last_failure.log")).write_bytes(log.read_bytes())
-            raise ValueError(f"本机 PDF 识别失败，请检查识别引擎配置 / Local {cache_name} failed; check OPENX_OCR_PYTHON. Details: {cache_name}_last_failure.log")
-        payload = json.loads(output.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict) or not isinstance(payload.get("runtime"), dict):
+            if log.exists():
+                (root / (cache_name + "_last_failure.log")).write_bytes(log.read_bytes())
+
+        with ThreadPoolExecutor(workers) as executor:
+            futures = [executor.submit(run, index) for index in range(workers)]
+        payloads = []
+        for index, future in enumerate(futures):
+            if future.exception() is None and future.result() is None:
+                continue  # stopped after another worker failed
+            log, output = folder / f"worker-{index}.log", folder / f"result-{index}.json"
+            try:
+                result = future.result()
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                keep_log(log)
+                raise ValueError(f"本机 PDF 识别无法启动或超时 / Local {cache_name} failed to start or timed out") from exc
+            if result or not output.is_file():
+                keep_log(log)
+                raise ValueError(f"本机 PDF 识别失败，请检查识别引擎配置 / Local {cache_name} failed; check OPENX_OCR_PYTHON. Details: {cache_name}_last_failure.log")
+            payloads.append(json.loads(output.read_text(encoding="utf-8")))
+        first = payloads[0]
+        if any(not isinstance(part, dict) or not isinstance(part.get("runtime"), dict) or part["runtime"] != first["runtime"]
+               or part.get("provenance") != first.get("provenance") for part in payloads):
             raise ValueError(f"{cache_name} provider metadata is invalid")
+        merged = [None] * len(manifest)
+        for index, part in enumerate(payloads):
+            if not isinstance(part.get("pages"), list) or len(part["pages"]) != len(manifest[index::workers]):
+                raise ValueError(f"{cache_name} page coverage is incomplete or duplicated")
+            merged[index::workers] = part["pages"]
+        payload = {**first, "pages": merged}
+        if all(isinstance(part.get("seconds"), (int, float)) for part in payloads):
+            payload["seconds"] = max(part["seconds"] for part in payloads)  # the slowest worker's own time
     blocks = parse_pages(payload, pages)
     # Render paths are temporary, not persistent source evidence.
     for page in payload["pages"]:

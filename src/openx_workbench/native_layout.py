@@ -3,16 +3,20 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import re
 from pathlib import Path
 
-from .pdf_ocr import ocr_identity, run_pdf_sidecar
+from .pdf_ocr import WorkerPool, ocr_identity, run_pdf_sidecar
 from .pdf_v2.models import StructureFlag
 from .pdf_v2.numbering_chain import parse_numbering
 from .pdf_v2.parser import decode_document_headings
 
 LAYOUT_VERSION = "native-layout-v1"
 _TITLE_LABELS = {"doc_title", "document_title", "paragraph_title", "section_header"}
+# Layout processes at once, across every PDF being extracted. Each peaks near 2 GB; twelve
+# pages took 50 s in one process, 30 s in two and 26 s in three.
+WORKERS = WorkerPool(max(1, min(3, (os.cpu_count() or 1) // 4)))
 
 
 def layout_identity(root=None):
@@ -109,5 +113,5 @@ def rescue_native_structure(path, document, *, outline=(), root=None, progress=N
     regions, audit = run_pdf_sidecar(path, pages, root=root, progress=progress,
         identity=layout_identity(root), worker="layout_worker.py", parse_pages=parse_layout_pages,
         cache_name="layout", message="本机版面模型正在复核章节标题 / Reviewing native chapter headings locally",
-        timeout=min(600, 60 + 20 * len(pages)))
+        timeout=min(600, 60 + 20 * len(pages)), pool=WORKERS)
     return overlay_native_headings(document, regions, outline=outline, audit=audit)
