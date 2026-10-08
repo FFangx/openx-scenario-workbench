@@ -290,6 +290,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Serve the workbench API (and the built web UI if present).")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
+    matching.preload_encoder()
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 

@@ -286,6 +286,20 @@ uv pip install --python .venv/Scripts/python.exe '.[semantic]'
 uv pip install --python .venv/Scripts/python.exe --no-deps --index https://download.pytorch.org/whl/cpu 'torch==2.6.0+cpu'
 ```
 
+With an NVIDIA GPU, install the CUDA build instead; SentenceTransformers then encodes on
+the GPU without any setting. torch 2.8.0+cu129 loads on the same machine (RTX 3080 Ti
+Laptop): a library of several hundred assets encoded in about 30 seconds with 2.8 GiB of
+video memory, where the CPU build took about ten seconds for nine texts of mixed length. GPU and CPU vectors differ
+by under 1e-6, so vectors saved by either build stay valid for the other.
+
+```powershell
+uv pip install --python .venv/Scripts/python.exe --no-deps --index https://download.pytorch.org/whl/cu129 'torch==2.8.0+cu129'
+```
+
+The workbench saves each asset text's vector, keyed by the text, under
+`indexes/<encoder>/text-vectors.bin` in the data folder; a library change encodes only the
+texts it adds or alters, and the file keeps only the current library's texts.
+
 ## Reproducible quality gate
 
 `tests/fixtures/reuse/corpus.json` contains six original authored parser assets and

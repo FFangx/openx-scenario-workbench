@@ -10,6 +10,7 @@ from openx_workbench.retrieval import (
     HashingEncoder,
     OpenXIndex,
     SentenceTransformerEncoder,
+    VectorCache,
     bundle_to_query,
     bundle_query_text,
     rank_candidates,
@@ -415,6 +416,17 @@ def test_saved_index_rejects_a_different_encoder(tmp_path):
 
     with pytest.raises(ValueError, match="different encoder"):
         OpenXIndex.load(path, assets, HashingEncoder(dimensions=64))
+
+
+def test_saved_text_vectors_belong_to_one_encoder(tmp_path):
+    path = tmp_path / "text-vectors.bin"
+    cache = VectorCache(path, HashingEncoder(dimensions=32))
+    vectors = cache.encode_many(["Minimal cut-in", "Minimal cut-in"])
+    cache.save()
+
+    assert vectors == HashingEncoder(dimensions=32).encode_many(["Minimal cut-in"] * 2)
+    assert list(VectorCache(path, HashingEncoder(dimensions=32)).vectors.values()) == vectors[:1]
+    assert VectorCache(path, HashingEncoder(dimensions=64)).vectors == {}
 
 
 def test_sentence_transformer_encoder_batches_and_normalizes(monkeypatch):

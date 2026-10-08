@@ -31,6 +31,7 @@ from .scene_package import RetrievalQuery, query_structure_text
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}|\d+(?:\.\d+)?")
 DEFAULT_BGE_MODEL = "BAAI/bge-m3"
 INDEX_SCHEMA_VERSION = 3  # 3: binary float64 vectors instead of JSON numbers
+VECTOR_CACHE_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +203,70 @@ def build_encoder(name: str) -> TextEncoder:
     raise ValueError(f"Unknown encoder: {name}")
 
 
+def _pack(rows) -> bytes:
+    values = array("d", (value for row in rows for value in row))
+    if sys.byteorder == "big":
+        values.byteswap()
+    return values.tobytes()
+
+
+def _unpack(data: bytes, dimensions: int) -> list[tuple[float, ...]]:
+    values = array("d")
+    values.frombytes(data)
+    if sys.byteorder == "big":
+        values.byteswap()
+    return [tuple(values[start:start + dimensions]) for start in range(0, len(values), dimensions or 1)]
+
+
+class VectorCache:
+    """Every text's vector from one encoder, keyed by the SHA-256 of the exact text, so a library change
+    encodes only the texts it adds or alters. A missing, damaged or other-encoder file starts empty."""
+
+    def __init__(self, path: Path, encoder: TextEncoder) -> None:
+        self.path = path
+        self.encoder = encoder
+        self.vectors: dict[str, tuple[float, ...]] = {}
+        self.used: set[str] = set()
+        try:
+            header, _, data = path.read_bytes().partition(b"\n")
+            payload = json.loads(header)
+            keys, dimensions = payload["keys"], payload["dimensions"]
+            if (payload.get("schema_version") == VECTOR_CACHE_VERSION and payload.get("encoder_id") == encoder.encoder_id
+                    and isinstance(dimensions, int) and len(data) == 8 * dimensions * len(keys)):
+                self.vectors = dict(zip(keys, _unpack(data, dimensions)))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        self._saved = set(self.vectors)
+
+    @staticmethod
+    def key(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def encode_many(self, texts: list[str]) -> list[tuple[float, ...]]:
+        keys = [self.key(text) for text in texts]
+        missing = {key: text for key, text in zip(keys, texts) if key not in self.vectors}
+        if missing:
+            fresh = self.encoder.encode_many(list(missing.values()))
+            if len(fresh) != len(missing):
+                raise ValueError("The embedding model returned an unexpected vector count.")
+            self.vectors.update(zip(missing, fresh))
+        self.used.update(keys)
+        return [self.vectors[key] for key in keys]
+
+    def save(self) -> None:
+        """Write exactly the vectors asked for since this cache was opened, unless the file holds just those."""
+        if self.used == self._saved:
+            return
+        keys = sorted(self.used)
+        dimensions = len(self.vectors[keys[0]]) if keys else 0
+        header = {"schema_version": VECTOR_CACHE_VERSION, "encoder_id": self.encoder.encoder_id,
+                  "dimensions": dimensions, "keys": keys}
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_bytes(self.path, json.dumps(header, separators=(",", ":")).encode() + b"\n"
+                    + _pack(self.vectors[key] for key in keys))
+        self._saved = set(keys)
+
+
 class OpenXIndex:
     def __init__(
         self,
@@ -209,14 +274,19 @@ class OpenXIndex:
         encoder: TextEncoder | None = None,
         *,
         fingerprint: str | None = None,
+        cache: VectorCache | None = None,
     ) -> None:
-        """`fingerprint` is the caller's `catalog_fingerprint(assets)`, when it already has it."""
+        """`fingerprint` is the caller's `catalog_fingerprint(assets)`, when it already has it.
+
+        With a `cache`, its encoder is the index's and only texts it does not hold yet are encoded.
+        """
         self.assets = assets
-        self.encoder = encoder or HashingEncoder()
+        self.encoder = cache.encoder if cache else encoder or HashingEncoder()
         self.structures = [asset_structure_query(asset) for asset in assets]
         self.fingerprint = fingerprint or catalog_fingerprint(assets)
-        self.vectors = self.encoder.encode_many([asset_text(asset) for asset in assets])
-        self.structure_vectors = self.encoder.encode_many(
+        encode_many = (cache or self.encoder).encode_many
+        self.vectors = encode_many([asset_text(asset) for asset in assets])
+        self.structure_vectors = encode_many(
             [query_structure_text(structure) for structure in self.structures]
         )
         self._build_recall()
@@ -295,11 +365,9 @@ class OpenXIndex:
             "catalog_fingerprint": self.fingerprint,
             "dimensions": len(self.vectors[0]) if self.vectors else 0,
         }
-        values = array("d", (value for rows in (self.vectors, self.structure_vectors) for row in rows for value in row))
-        if sys.byteorder == "big":
-            values.byteswap()
         path.parent.mkdir(parents=True, exist_ok=True)
-        write_bytes(path, json.dumps(header, separators=(",", ":")).encode() + b"\n" + values.tobytes())
+        write_bytes(path, json.dumps(header, separators=(",", ":")).encode() + b"\n"
+                    + _pack([*self.vectors, *self.structure_vectors]))
 
     @classmethod
     def load(
@@ -324,13 +392,9 @@ class OpenXIndex:
                 "The asset facts or classifications changed; rebuild the index."
             )
         dimensions = payload["dimensions"]
-        values = array("d")
-        values.frombytes(data)
-        if sys.byteorder == "big":
-            values.byteswap()
-        if not isinstance(dimensions, int) or len(values) != 2 * len(assets) * dimensions:
+        if not isinstance(dimensions, int) or len(data) != 8 * 2 * len(assets) * dimensions:
             raise ValueError("The stored vectors do not match the asset catalog.")
-        rows = [tuple(values[start:start + dimensions]) for start in range(0, len(values), dimensions or 1)]
+        rows = _unpack(data, dimensions)
         index = cls.__new__(cls)
         index.assets = assets
         index.encoder = selected_encoder

@@ -252,7 +252,10 @@ def main():
         if sys.stdin.readline().strip() != "start":
             return
         import uvicorn
-        uvicorn.run("openx_workbench.api:app", host="127.0.0.1", port=args.serve, log_level="warning")
+        from .api import app
+        from .matching import preload_encoder
+        preload_encoder()  # after the app's imports, so the model's imports do not interleave with them
+        uvicorn.run(app, host="127.0.0.1", port=args.serve, log_level="warning")
         return
     if os.name != "nt":
         raise RuntimeError("This launcher currently supports Windows only.")
