@@ -10,11 +10,12 @@ from xml.etree import ElementTree as ET
 from .models import ActionIR, EntityIR, ParseBundle, PositionIR, RoadIR, ScenarioIR, TriggerIR
 from .road_geometry import parse_road_geometry
 from .parameter_resolution import resolve_parameters
-from .xml_values import local_name as _local, number
+from .xml_values import local_name as _local, number, parse_local
 
 
 def _all(root: ET.Element, name: str):
-    return (element for element in root.iter() if _local(element) == name)
+    """Elements named `name` in document order; the tree comes from `parse_local`."""
+    return root.iter(name)
 
 
 def _first(root: ET.Element, name: str) -> ET.Element | None:
@@ -153,7 +154,7 @@ def _merge_environments(readings: list[dict[str, str | float]]) -> dict[str, str
 
 
 def parse_xosc(data: bytes | str) -> ScenarioIR:
-    root = ET.fromstring(data)
+    root = parse_local(data)
     if _local(root) != "OpenSCENARIO":
         raise ValueError("Expected an OpenSCENARIO root element.")
     paths, parameters, parameter_issues, resolutions = resolve_parameters(root)
@@ -305,7 +306,7 @@ def parse_xosc(data: bytes | str) -> ScenarioIR:
 
 
 def parse_xodr(data: bytes | str) -> RoadIR:
-    root = ET.fromstring(data)
+    root = parse_local(data)
     if _local(root) != "OpenDRIVE":
         raise ValueError("Expected an OpenDRIVE root element.")
     header = _first(root, "header")

@@ -2,9 +2,9 @@
 
 The road drawing needs no simulator: it is drawn from the OpenDRIVE reference lines and lane widths
 (road_geometry), with where each participant starts. Frames come from the worker a single preview
-uses (esmini_preview), one version at a time, so the computer stays usable; the job stops between
-versions and skips versions that already have a frame. A version whose road was not imported has
-neither.
+uses (esmini_preview), a few versions at a time: each capture is mostly esmini waiting out its two
+seconds, and each has its own worker, folder and port. A stopped job starts no further version, and
+versions that already have a frame are skipped. A version whose road was not imported has neither.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import io
 import json
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event
 from typing import Any
@@ -36,6 +37,7 @@ CLOSE_UP = 400.0  # metres: a larger road network is shown around where the part
 SURROUNDINGS = 80.0  # metres kept around the participants in a close-up
 CAPTURE_SECONDS = 2  # esmini runs this long; the still frame is the tenth (1 s simulated)
 CAPTURE_TIMEOUT = 40.0
+CAPTURES_AT_ONCE = 4  # esmini captures side by side; each mostly waits out its two seconds
 
 BACKGROUND, ASPHALT, LINE, CENTRE = (32, 36, 42), (74, 80, 90), (196, 202, 210), (226, 190, 80)
 COLOURS = {"ego": (79, 140, 255), "vehicle": (240, 160, 64), "vru": (76, 195, 138), "object": (160, 164, 171)}
@@ -212,23 +214,32 @@ def _work(store: AssetStore, retry_failed: bool):
             job.note("尚未找到 esmini：只画道路图 / esmini not found: drawing roads only")
         counts = {"frames": 0, "failed": 0, "kept": 0, "road_missing": 0, "drawings": 0}
         job.update(stage="previewing", total=len(versions))
-        for index, version in enumerate(versions):
-            job.check()
-            job.update(done=index, current=version.title or version.xosc_name)
+
+        def one(version: AssetVersion) -> list[str]:
+            """The counts this version adds."""
+            job.check()  # a stopped run starts no further version
+            job.update(current=version.title or version.xosc_name)
             if version.road_missing:
-                counts["road_missing"] += 1
-                continue
-            if road_drawing(store, version) is not None:
-                counts["drawings"] += 1
+                return ["road_missing"]
+            added = ["drawings"] if road_drawing(store, version) is not None else []
             if executable is None:
-                continue
+                return added
             if read_frame(store, version) or (version.compatibility in {"failed", "timeout"} and not retry_failed):
-                counts["kept"] += 1
-                continue
+                return [*added, "kept"]
+            job.check()  # nor a capture once stopped while the road was drawn
             outcome = capture(store, version, executable, job.cancel)
-            counts["frames" if outcome == "playable" else "failed"] += 1
-            job.update(done=index + 1, result=dict(counts))
-        job.update(done=len(versions))
+            return [*added, "frames" if outcome == "playable" else "failed"]
+
+        with ThreadPoolExecutor(max_workers=CAPTURES_AT_ONCE) as pool:
+            futures = [pool.submit(one, version) for version in versions]
+            try:
+                for done, future in enumerate(as_completed(futures), 1):
+                    for key in future.result():
+                        counts[key] += 1
+                    job.update(done=done, result=dict(counts))
+            except BaseException:
+                pool.shutdown(cancel_futures=True)  # no further version; captures under way see the cancel
+                raise
         return counts
     return work
 

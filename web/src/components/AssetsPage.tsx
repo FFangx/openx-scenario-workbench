@@ -69,7 +69,7 @@ export function AssetsPage({ esmini, onSettings, onLibraryChanged, onOpenScene }
           {t("资产管理", "Asset management")}
           {rows && <span className="meta">{t(`${rows.filter((r) => r.latest).length} 个资产 · ${rows.length} 个版本`, `${rows.filter((r) => r.latest).length} assets · ${rows.length} versions`)}</span>}
           <Button icon={<PictureOutlined />} disabled={previewing} onClick={makePreviews}
-            title={t("为还没有画面的版本逐个跑 esmini 截一张图，并画出道路俯视图", "Run esmini on each version without a frame to save one, and draw each road from above")}>
+            title={t("为还没有画面的每个版本跑 esmini 截一张图，并画出道路俯视图", "Run esmini on each version without a frame to save one, and draw each road from above")}>
             {t("生成预览", "Make previews")}
           </Button>
           <Button type="primary" icon={<UploadOutlined />} onClick={() => setImporting(true)}>{t("导入资产", "Import assets")}</Button>

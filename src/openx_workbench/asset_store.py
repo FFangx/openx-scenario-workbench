@@ -87,7 +87,9 @@ class AssetStore:
                 raise InterruptedError("Import stopped; saved assets are retained.")
 
         def save_batch(expanded, source=None):
+            from .schema_validation import check_ahead
             report("parsing", source.name if source else "XOSC / XODR")
+            check_ahead(item.data for item in expanded if item.name.casefold().endswith((".xosc", ".xodr")))
             assets = build_catalog(expanded)
             for index, asset in enumerate(assets):
                 report("saving", asset.xosc_name, index, len(assets))

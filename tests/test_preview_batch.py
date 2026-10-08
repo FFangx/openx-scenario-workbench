@@ -2,6 +2,7 @@
 version (a stand-in here, no simulator)."""
 import io
 from dataclasses import replace
+import threading
 import time
 from pathlib import Path
 
@@ -82,7 +83,66 @@ def test_one_run_captures_what_has_no_frame_and_keeps_the_rest(library, monkeypa
 
     captured.clear()
     again = finished(preview_batch.start(store, retry_failed=True))
-    assert captured == [versions[1].asset_id, versions[2].asset_id] and again["result"]["frames"] == 2
+    assert sorted(captured) == sorted([versions[1].asset_id, versions[2].asset_id]) and again["result"]["frames"] == 2
+
+
+@pytest.fixture
+def larger_library(tmp_path, monkeypatch):
+    """Twice as many versions without a frame as captures run at once."""
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(preview_batch, "find_esmini", lambda value: Path("esmini.exe"))
+    store = AssetStore()
+    for number in range(2 * preview_batch.CAPTURES_AT_ONCE):
+        store.import_files(files(f"case{number}.xosc"))
+    return store
+
+
+def test_several_captures_run_at_once_and_no_more(larger_library, monkeypatch):
+    # The run only completes when CAPTURES_AT_ONCE captures are under way together.
+    together = threading.Barrier(preview_batch.CAPTURES_AT_ONCE, timeout=5)
+    lock = threading.Lock()
+    under_way, most = [0], [0]
+
+    def capture(store, version, executable, cancel):
+        with lock:
+            under_way[0] += 1
+            most[0] = max(most[0], under_way[0])
+        together.wait()
+        with lock:
+            under_way[0] -= 1
+        store.set_compatibility(version, "playable")
+        return "playable"
+    monkeypatch.setattr(preview_batch, "capture", capture)
+    result = finished(preview_batch.start(larger_library))
+    count = 2 * preview_batch.CAPTURES_AT_ONCE
+    assert result["status"] == "completed", result["error"]
+    assert result["done"] == result["total"] == count and result["result"]["frames"] == count
+    assert most[0] == preview_batch.CAPTURES_AT_ONCE
+    assert {version.compatibility for version in larger_library.latest()} == {"playable"}
+
+
+def test_a_stopped_run_starts_no_further_capture(larger_library, monkeypatch):
+    started = []
+    lock = threading.Lock()
+
+    def capture(store, version, executable, cancel):
+        with lock:
+            started.append(version.asset_id)
+        if cancel.wait(5):  # as the real capture: stop the esmini under way
+            raise InterruptedError()
+        return "playable"
+    monkeypatch.setattr(preview_batch, "capture", capture)
+    job = preview_batch.start(larger_library)
+    for _ in range(500):
+        if len(started) == preview_batch.CAPTURES_AT_ONCE:
+            break
+        time.sleep(0.01)
+    assert len(started) == preview_batch.CAPTURES_AT_ONCE
+    job.cancel.set()
+    result = finished(job)
+    time.sleep(0.2)
+    assert result["status"] == "stopped" and len(started) == preview_batch.CAPTURES_AT_ONCE
+    assert result["result"].get("frames", 0) == 0
 
 
 def test_without_esmini_only_the_roads_are_drawn(library, monkeypatch):

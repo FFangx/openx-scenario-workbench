@@ -66,9 +66,9 @@ def resolve_parameters(root: ET.Element) -> tuple[dict, list[dict], list[dict], 
 
     def visit(node, inherited, path):
         paths[node] = path
-        scope = dict(inherited)
         local = [decl for container in node if container.tag.rsplit("}", 1)[-1] == "ParameterDeclarations"
                  for decl in container if decl.tag.rsplit("}", 1)[-1] == "ParameterDeclaration"]
+        scope = dict(inherited) if local else inherited  # only a node that declares parameters changes the scope
         local_names = set()
         ambiguous_names = set()
         for declaration in local:

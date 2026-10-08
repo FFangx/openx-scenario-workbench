@@ -17,7 +17,7 @@ from .presentation import asset_display_title, asset_map_name, difference_text, 
 from .preview_frames import read_frame
 from .retrieval import OpenXIndex, RetrievalResult, catalog_fingerprint
 from .reuse_trace import review_items
-from .schema_validation import registry_stamp
+from .schema_validation import check_ahead, registry_stamp
 
 FACETS = ("function_type", "label_road_type", "label_target_type")
 RANKINGS_KEPT = 16
@@ -58,6 +58,11 @@ def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
     with _lock:
         if _cache.get("catalog_key") != key:
             parsed = _cache.get("parsed", {})
+            unparsed = [version for version, stamp in zip(latest, stamps)
+                        if (version.asset_id, version.version_id, stamp, schemas) not in parsed]
+            # After a restart or a schema switch, check the files' standards in several processes first.
+            check_ahead(store.file_bytes(version, role) for version in unparsed for role in ("scenario", "road")
+                        if role == "scenario" or not version.road_missing)
             fresh = {}
             for version, stamp in zip(latest, stamps):
                 identity = (version.asset_id, version.version_id, stamp, schemas)
