@@ -1,5 +1,5 @@
 from pathlib import Path
-from threading import Event
+from threading import Barrier, Event
 import json
 import time
 
@@ -96,6 +96,33 @@ def test_three_model_failures_stop_remaining_requests(tmp_path):
     assert job.snapshot()["status"] == "failed"
     assert job.snapshot()["done"] == 3
     assert len(store.versions()) == 4
+
+
+def test_classification_asks_together_once_the_model_has_answered(tmp_path):
+    store = AssetStore(tmp_path)
+    original = files()
+    versions = []
+    for i in range(5):
+        versions += store.import_files([AssetFile(f"case{i}.xosc", original[0].data), original[1]])
+    together = Barrier(4, timeout=5)  # breaks unless the four requests after the first wait at once
+
+    class Client:
+        config = ModelConfig()
+        calls = 0
+
+        def complete(self, body):
+            self.calls += 1
+            if self.calls > 1:
+                together.wait()
+            result = {"function_type": "AEB", "label_road_type": "直道", "label_target_type": ["乘用车"],
+                      "label_actions": ["制动"], "scenario_intent": "Authored braking", "confidence": .95,
+                      "reason": "Authored response"}
+            return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(result)}}]}
+
+    job = start_import(store, [], versions=versions, classify=True, client=Client())
+    wait(job)
+    assert job.snapshot()["status"] == "completed"
+    assert (job.snapshot()["done"], job.snapshot()["failed"]) == (5, 0)
 
 
 @pytest.mark.parametrize("confirmed", [False, True], ids=["classified", "manual_confirmed"])

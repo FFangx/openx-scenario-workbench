@@ -6,6 +6,9 @@ Every long operation answers with a job snapshot at once; clients poll
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
+from threading import Lock
 from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -21,6 +24,9 @@ from .pdf_store import PdfStore
 router = APIRouter(prefix="/api", tags=["jobs"])
 
 PDF_KIND = "pdf_import"
+# PDFs extracted at once. Each one already sends its model calls together (Settings, concurrency)
+# and may run OCR or the layout model locally.
+PDFS_AT_ONCE = 3
 ASSET_SUFFIXES = (".sim", ".xosc", ".xodr", ".zip")
 REVIEWED = {"classified", "manual_confirmed"}
 
@@ -82,16 +88,43 @@ def job_cancel(job_id: str) -> dict[str, Any]:
 
 def _extract(pdf: PdfStore, project_id: str, files: list[tuple[str, bytes]], standard: str):
     def work(job: jobs.Job) -> dict[str, Any]:
-        imported: list[str] = []
-        job.update(stage="extracting", total=len(files))
-        for index, (name, data) in enumerate(files):
-            job.check()
-            job.update(done=index)
+        unique: dict[str, tuple[str, bytes]] = {}
+        for name, data in files:  # the same file uploaded twice is one document, extracted once
+            unique.setdefault(hashlib.sha256(data).hexdigest(), (name, data))
+        several = len(unique) > 1
+        imported: list[str | None] = [None] * len(unique)  # in upload order
+        lock = Lock()
+        job.update(stage="extracting", total=len(unique))
+
+        def extracted() -> dict[str, Any]:
+            return {"project_id": project_id, "document_ids": [item for item in imported if item]}
+
+        def one(index: int, name: str, data: bytes) -> None:
+            job.check()  # a stopped job starts no further PDF
             job.note(name)
-            document = pdf.import_pdf(project_id, name, data, standard, progress=job.note)
-            imported.append(document.document_id)
-            job.update(done=index + 1, result={"project_id": project_id, "document_ids": imported})
-        return {"project_id": project_id, "document_ids": imported}
+            note = (lambda text: job.note(f"{name} · {text}")) if several else job.note
+            document = pdf.import_pdf(project_id, name, data, standard, progress=note)
+            with lock:
+                imported[index] = document.document_id
+                job.update(result=extracted())
+
+        failures: list[str] = []
+        with ThreadPoolExecutor(max_workers=min(PDFS_AT_ONCE, len(unique))) as pool:
+            futures = {pool.submit(one, index, name, data): name for index, (name, data) in enumerate(unique.values())}
+            for done, future in enumerate(as_completed(futures), 1):
+                try:
+                    future.result()
+                except InterruptedError:
+                    pass
+                except Exception as error:  # noqa: BLE001 - one PDF failing leaves the others to finish
+                    if not several:
+                        raise
+                    failures.append(f"{futures[future]}: {error}")
+                job.update(done=done)
+        job.check()
+        if failures:
+            raise ValueError("；".join(failures))  # the progress panel shows the error on one line
+        return extracted()
     return work
 
 

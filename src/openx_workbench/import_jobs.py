@@ -1,8 +1,10 @@
 """Process-owned import workers; UI reruns never own the operation."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, replace
 import json
+from threading import Lock
 import time
 
 from . import jobs, preview_batch
@@ -36,22 +38,47 @@ class ImportJob(jobs.Job):
         if classify:
             client = client or ModelClient()
             client.config = replace(client.config, timeout=min(client.config.timeout, 90))
-        consecutive_failures = 0
-        for index, version in enumerate(imported):
+        lock = Lock()
+        counts = {"done": 0, "failed": 0, "streak": 0}
+
+        def one(version):
+            """The version's classification, and whether the model was asked for it."""
             self.check()
-            self.update(current=version.xosc_name, done=index)
+            self.update(current=version.xosc_name)
             old = read_classification(self.store, version)
             if not force and (old.get("status") in {"classified", "manual_confirmed"} or (old and not classify)):
-                record = old
-            else:
-                record = classify_asset(self.store, version, use_model=classify, client=client)
+                return old, False
+            return classify_asset(self.store, version, use_model=classify, client=client), classify
+
+        def finish(record):
             failed = record.get("status") == "failed"
-            consecutive_failures = consecutive_failures + 1 if failed else 0
-            self.update(done=index + 1, failed=self.snapshot()["failed"] + int(failed),
-                        error=record.get("error", "") if failed else self.snapshot()["error"])
-            if classify and consecutive_failures >= 3:
-                # ModelClient sanitizes remote failures; never persist raw request/config objects.
-                raise ValueError("连续 3 个场景分类失败，已暂停模型请求。检查模型设置后可重试；资产已保留。 / Three consecutive classification failures; assets retained.")
+            with lock:
+                counts["done"] += 1
+                counts["failed"] += failed
+                counts["streak"] = counts["streak"] + 1 if failed else 0
+                self.update(done=counts["done"], failed=counts["failed"],
+                            **({"error": record.get("error", "")} if failed else {}))
+                if classify and counts["streak"] >= 3:
+                    # ModelClient sanitizes remote failures; never persist raw request/config objects.
+                    raise ValueError("连续 3 个场景分类失败，已暂停模型请求。检查模型设置后可重试；资产已保留。 / Three consecutive classification failures; assets retained.")
+
+        # One at a time until the model has answered once, so a wrong key or model stops after three
+        # requests; then the rest at the configured concurrency.
+        queue = list(imported)
+        answered = not classify
+        while queue and not answered:
+            record, asked = one(queue.pop(0))
+            finish(record)
+            answered = asked and record.get("status") != "failed"
+        width = client.config.concurrency if classify else 1
+        with ThreadPoolExecutor(max_workers=max(1, min(width, len(queue)))) as pool:
+            futures = [pool.submit(one, version) for version in queue]
+            try:
+                for future in as_completed(futures):
+                    finish(future.result()[0])
+            except BaseException:
+                pool.shutdown(cancel_futures=True)  # requests already sent finish; their records are kept
+                raise
         # The setting "make previews after an import"; a preview run already going is left to finish.
         if (versions is None and imported and read_preferences().get("auto_preview") is True
                 and not jobs.running(preview_batch.KIND, _scope(self.store))):
