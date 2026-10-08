@@ -96,7 +96,7 @@ class PreviewBatchRequest(BaseModel):
 
 @router.post("/previews", **documented(Job))
 def previews(request: PreviewBatchRequest) -> dict[str, Any]:
-    """Saves an esmini frame for every latest version that has none yet, one at a time, and draws each
+    """Saves an esmini frame for every latest version that has none yet, a few at a time, and draws each
     road from above. Versions whose road was not imported are skipped."""
     return preview_batch.start(_store(), retry_failed=request.retry_failed).snapshot()
 

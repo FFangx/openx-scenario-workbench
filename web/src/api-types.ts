@@ -505,7 +505,7 @@ export interface paths {
         put?: never;
         /**
          * Previews
-         * @description Saves an esmini frame for every latest version that has none yet, one at a time, and draws each
+         * @description Saves an esmini frame for every latest version that has none yet, a few at a time, and draws each
          *     road from above. Versions whose road was not imported are skipped.
          */
         post: operations["previews_api_previews_post"];

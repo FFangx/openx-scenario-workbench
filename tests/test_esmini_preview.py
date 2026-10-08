@@ -75,3 +75,28 @@ def test_terminal_result_survives_worker_http_shutdown(local_machine, monkeypatc
 
     monkeypatch.setattr("openx_workbench.esmini_preview.urlopen", closed)
     assert preview.status() == terminal
+
+
+def test_previews_started_side_by_side_each_listen_on_their_own_port(local_machine, monkeypatch):
+    # Real workers; the stand-in esmini library fails to load, which the worker reports over HTTP.
+    from openx_workbench.asset_store import AssetStore
+    from openx_workbench.catalog import AssetFile
+    from openx_workbench.esmini_preview import start_preview
+    from pathlib import Path
+    from concurrent.futures import ThreadPoolExecutor
+
+    fixtures = Path(__file__).parent / "fixtures"
+    monkeypatch.setenv("OPENX_DATA_DIR", str(local_machine / "data"))
+    store = AssetStore()
+    versions = [store.import_files([AssetFile(f"case{number}.xosc", (fixtures / "minimal.xosc").read_bytes()),
+                                    AssetFile("minimal.xodr", (fixtures / "minimal.xodr").read_bytes())])[0]
+                for number in range(3)]
+    executable = installation(local_machine / "custom")
+    with ThreadPoolExecutor(3) as pool:
+        previews = list(pool.map(lambda version: start_preview(store, version, executable, duration=1), versions))
+    try:
+        assert all(preview.status()["state"] == "failed" for preview in previews)
+        assert len({preview.url for preview in previews}) == 3
+    finally:
+        for preview in previews:
+            preview.stop()
