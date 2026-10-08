@@ -93,3 +93,32 @@ def test_xsd11_assertion_is_enforced_and_untrusted_includes_fail(tmp_path):
         manifest["sha256"]["authored.xsd"] = hashlib.sha256(schema).hexdigest()
         (tmp_path / "registry.json").write_text(json.dumps(manifest))
         assert validate_xml(XML, root=tmp_path)["status"] == "unavailable"
+
+
+def test_a_checked_file_keeps_its_verdict_until_the_registry_changes(tmp_path, monkeypatch):
+    from openx_workbench import schema_validation
+
+    root = registry(tmp_path)
+    compiled, real = [], schema_validation._load_schema
+    monkeypatch.setattr(schema_validation, "_load_schema", lambda *args: compiled.append(args) or real(*args))
+    first = validate_xml(XML, root=root)
+    assert first["status"] == "valid" and len(compiled) == 1
+    assert validate_xml(XML, root=root) == first and len(compiled) == 1
+    manifest = json.loads((root / "registry.json").read_text())
+    manifest["revision"] = "authored-2"
+    (root / "registry.json").write_text(json.dumps(manifest))
+    assert validate_xml(XML, root=root)["source_revision"] == "authored-2" and len(compiled) == 2
+
+
+def test_many_files_are_checked_ahead_in_worker_processes(tmp_path, monkeypatch):
+    from openx_workbench import schema_validation
+
+    root = registry(tmp_path)
+    monkeypatch.setattr(schema_validation, "CHECK_PROCESSES", 2)
+    monkeypatch.setattr(schema_validation, "FILES_PER_PROCESS", 2)
+    files = [XML.replace("<RequiredBody/>", f"<RequiredBody/><!-- {number} -->").encode() for number in range(3)]
+    files.append(XML.replace("<RequiredBody/>", "").encode())
+    assert schema_validation.check_ahead([*files, files[0]], root=root) == 4
+    monkeypatch.setattr(schema_validation, "_load_schema", lambda *args: pytest.fail("checked again in place"))
+    assert [validate_xml(data, root=root)["status"] for data in files] == ["valid"] * 3 + ["invalid"]
+    assert schema_validation.check_ahead(files, root=root) == 0  # nothing left to check
