@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from . import matching
+from . import catalog_cache, matching
 from .asset_store import AssetStore, AssetVersion
 from .catalog import OpenXAsset
 from .pdf_store import PdfStore, StoredScene
@@ -43,9 +43,10 @@ def _classification_stamp(store: AssetStore, version: AssetVersion) -> int:
 def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
     """The latest version of every asset, as `AssetStore.catalog` returns it.
 
-    A version's scenario and road never change, so each is parsed once and reparsed only when its
-    classification, its SIM case metadata (refreshed by a re-import) or the installed XSD registry does.
-    The catalog fingerprint is computed once per change, not per request.
+    A version's scenario and road never change, so each is parsed and described once, and again only
+    when its classification, its SIM case metadata (refreshed by a re-import) or the installed XSD
+    registry does. Each version's entry is kept on disk too (`catalog_cache`), so a restart reads them
+    instead. The catalog fingerprint is computed once per change, not per request.
     """
     store = _store()
     latest = store.latest()
@@ -58,34 +59,41 @@ def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
     with _lock:
         if _cache.get("catalog_key") != key:
             parsed = _cache.get("parsed", {})
-            unparsed = [version for version, stamp in zip(latest, stamps)
-                        if (version.asset_id, version.version_id, stamp, schemas) not in parsed]
-            # After a restart or a schema switch, check the files' standards in several processes first.
-            check_ahead(store.file_bytes(version, role) for version in unparsed for role in ("scenario", "road")
+            identities = [(version.asset_id, version.version_id, stamp, schemas) for version, stamp in zip(latest, stamps)]
+            entries = {identity: parsed.get(identity) or catalog_cache.read(store, version, identity)
+                       for version, identity in zip(latest, identities)}
+            unmade = [version for version, identity in zip(latest, identities) if entries[identity] is None]
+            # After a schema switch or an import, check the files' standards in several processes first.
+            check_ahead(store.file_bytes(version, role) for version in unmade for role in ("scenario", "road")
                         if role == "scenario" or not version.road_missing)
-            fresh = {}
-            for version, stamp in zip(latest, stamps):
-                identity = (version.asset_id, version.version_id, stamp, schemas)
-                fresh[identity] = parsed.get(identity) or store.load_asset(version)
-            assets = list(fresh.values())
-            _cache.update(parsed=fresh, catalog_key=key, catalog=(assets, {
+            for version, identity in zip(latest, identities):
+                if entries[identity] is None:
+                    entries[identity] = catalog_cache.make(store, version)
+                    catalog_cache.write(store, version, identity, entries[identity])
+            catalog_cache.prune(store, latest)
+            kept = [entries[identity] for identity in identities]
+            assets = [entry.asset for entry in kept]
+            _cache.update(parsed=entries, catalog_key=key, catalog=(assets, {
                 asset.asset_id: version for asset, version in zip(assets, latest)}),
-                catalog_fingerprint=catalog_fingerprint(assets))
+                structures=[entry.structure for entry in kept],
+                catalog_fingerprint=catalog_fingerprint(assets, [entry.fingerprint for entry in kept]))
         return _cache["catalog"]
 
 
-def _fingerprint(catalog: list[OpenXAsset]) -> str:
+def _derived(catalog: list[OpenXAsset]) -> tuple[str, list | None]:
+    """The catalog's fingerprint, and its asset structures when `_catalog` keeps them."""
     with _lock:
         cached = _cache.get("catalog")
         if cached is not None and cached[0] is catalog:
-            return _cache["catalog_fingerprint"]
-    return catalog_fingerprint(catalog)
+            return _cache["catalog_fingerprint"], _cache["structures"]
+    return catalog_fingerprint(catalog), None
 
 
 def _index(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
     """The index for this catalog and encoder. A build (minutes for BGE-M3 on a large library) holds only
     `_index_build`, so requests that need no new index are still served meanwhile."""
-    identity = matching.index_identity(catalog, encoder_name, _fingerprint(catalog))
+    fingerprint, structures = _derived(catalog)
+    identity = matching.index_identity(catalog, encoder_name, fingerprint)
     with _lock:
         if _cache.get("index_identity") == identity:
             return _cache["index"]
@@ -93,7 +101,7 @@ def _index(catalog: list[OpenXAsset], encoder_name: str) -> OpenXIndex:
         with _lock:
             if _cache.get("index_identity") == identity:
                 return _cache["index"]
-        index = matching.open_index(catalog, identity)
+        index = matching.open_index(catalog, identity, structures)
         with _lock:
             _cache.update(index_identity=identity, index=index)
         return index

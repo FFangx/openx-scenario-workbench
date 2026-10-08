@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import hmac
 import json
 import logging
@@ -21,7 +20,7 @@ from urllib.request import Request, urlopen
 
 from .app_icon import app_icon
 from .asset_store import default_store_root
-from .checkout import checkout_root
+from .checkout import checkout_root, package_revision
 from .windows_job import WindowsJob
 
 
@@ -42,14 +41,7 @@ def free_port():
 
 def source_revision():
     """Detect source updates so an open service restarts with the current code."""
-    package = Path(__file__).resolve().parent
-    digest = hashlib.sha256()
-    for path in sorted(package.rglob("*.py")):
-        digest.update(path.relative_to(package).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
+    return package_revision(Path(__file__).resolve().parent)
 
 
 class InstanceLock:
