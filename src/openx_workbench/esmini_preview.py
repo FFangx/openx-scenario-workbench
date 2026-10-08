@@ -7,7 +7,6 @@ import io
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -20,6 +19,7 @@ from urllib.request import urlopen
 from xml.etree import ElementTree as ET
 
 from .asset_store import AssetStore, AssetVersion
+from .atomic_write import write_bytes
 from .dependency_package import stage_package
 from .preview_frames import frame_path, save_frame
 
@@ -58,10 +58,9 @@ def find_esmini(value: str = "") -> Path | None:
     return None
 
 
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+# Seconds for the worker to load esmini and the scenario. Generous: a preview run starts several side
+# by side, and a start slowed by its neighbours is not the scenario's failure.
+START_TIMEOUT = 20.0
 
 
 @dataclass
@@ -76,6 +75,8 @@ class PreviewProcess:
 
     def status(self) -> dict:
         try:
+            if not self.url:  # the worker names the port the system gave it once it listens
+                self.url = f"http://127.0.0.1:{int((self.workdir / 'port').read_text())}"
             with urlopen(f"{self.url}/status?token={self.token}", timeout=1) as response:
                 status = json.load(response)
                 self._last_status = dict(status)
@@ -139,10 +140,9 @@ def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
         scenario = ET.tostring(xml, encoding="utf-8", xml_declaration=True)
         scenario_path.write_bytes(scenario)
         road_path.write_bytes(road)
-        port = _free_port()
         token = os.urandom(16).hex()
         command = [sys.executable, "-m", "openx_workbench.esmini_preview", "--worker",
-                   str(executable), str(scenario_path), str(root), str(port), token,
+                   str(executable), str(scenario_path), str(root), token,
                    str(min(max(duration, 1), 120)), str(frame_path(store, version))]
         env = os.environ.copy()
         package_root = str(Path(__file__).resolve().parents[1])
@@ -151,8 +151,9 @@ def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
         with (root / "worker.log").open("wb") as error_log:
             process = subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.DEVNULL,
                                        stderr=error_log, creationflags=flags)
-        preview = PreviewProcess(process, f"http://127.0.0.1:{port}", token, version.version_id, root, version.asset_id)
-        for _ in range(40):
+        preview = PreviewProcess(process, "", token, version.version_id, root, version.asset_id)
+        deadline = time.monotonic() + START_TIMEOUT
+        while time.monotonic() < deadline:
             status = preview.status()
             if status["state"] in {"running", "finished", "failed"}:
                 return preview
@@ -162,7 +163,7 @@ def start_preview(store: AssetStore, version: AssetVersion, executable: Path,
                 raise RuntimeError(f"Preview worker exited: {detail}")
             time.sleep(0.1)
         preview.stop()
-        raise TimeoutError("esmini preview did not start within four seconds.")
+        raise TimeoutError(f"esmini preview did not start within {START_TIMEOUT:g} seconds.")
     except Exception:
         shutil.rmtree(root, ignore_errors=True)
         raise
@@ -262,7 +263,7 @@ def _simulate(executable: Path, scenario: Path, root: Path, duration: int, state
             state.condition.notify_all()
 
 
-def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, duration: int,
+def _serve(executable: Path, scenario: Path, root: Path, token: str, duration: int,
            snapshot: Path | None = None) -> None:
     state = _State()
 
@@ -307,8 +308,11 @@ def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, 
         def log_message(self, *_args):
             return
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    # Port 0: the system picks one no other socket holds, so previews started side by side never share
+    # one. The parent reads it from `port` in this worker's own folder.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
+    write_bytes(root / "port", str(server.server_address[1]).encode(), prefix="port-", suffix=".tmp")
     threading.Thread(target=_simulate, args=(executable, scenario, root, duration, state, snapshot), daemon=True).start()
     timer = threading.Timer(duration + 20, server.shutdown)
     timer.daemon = True
@@ -322,4 +326,4 @@ def _serve(executable: Path, scenario: Path, root: Path, port: int, token: str, 
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--worker"]:
     _serve(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]),
-           int(sys.argv[5]), sys.argv[6], int(sys.argv[7]), Path(sys.argv[8]) if len(sys.argv) > 8 else None)
+           sys.argv[5], int(sys.argv[6]), Path(sys.argv[7]) if len(sys.argv) > 7 else None)
