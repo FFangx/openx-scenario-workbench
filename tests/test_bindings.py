@@ -327,6 +327,10 @@ def test_each_test_condition_gets_its_asset_and_its_own_agreement(demo):
     asked = [key for key in model.seen if "## 工况" in key]
     assert len(asked) == 1 and model.seen[asked[0]] == 3 and "另外输出 conditions" in CONDITIONS and "另外输出 conditions" in asked[0]  # only the scene with conditions
     row = view["scenes"][0]
+    assert [(item["id"], item["label"]) for item in row["test_conditions"]["items"]] == [
+        ("V1", "日间"), ("V2", "夜间"), ("V3", "预试验")]
+    assert row["test_conditions"]["dimensions"][0]["how"] == "都要做"
+    assert all(other["test_conditions"] is None for other in view["scenes"][1:])
     suggestions = BindingStore().suggestions(view["documents"][0]["pdf_sha256"])
     saved = suggestions[row["key"]]
     assert [(item["id"], item["label"], item["asset"], item["fit"], item["agree"], item["other_assets"])
@@ -360,8 +364,15 @@ def test_each_test_condition_gets_its_asset_and_its_own_agreement(demo):
         ("V2", "夜间", "modify", candidate["C2"]["asset_id"], "改为夜间", True),
         ("V3", "预试验", "none", None, "", None)]
 
-    # A person gives the pre-test the first asset as well: their own conclusion.
+    # Confirmed by hand exactly as suggested (only the conditions' assets bound): still the model's suggestion.
     first, second = candidate["C1"], candidate["C2"]
+    as_suggested = [{"id": "V1", "status": "same", "asset_id": first["asset_id"], "version_id": first["version_id"]},
+                    {"id": "V2", "status": "modify", "asset_id": second["asset_id"], "version_id": second["version_id"],
+                     "changes": "改为夜间"},
+                    {"id": "V3", "status": "none"}]
+    again = client.put(base.scene(row), json={"status": "modify", "conditions": as_suggested}).json()["binding"]
+    assert again["source"] == "suggestion" and again["status"] == "modify"
+    # A person gives the pre-test the first asset as well: their own conclusion.
     conditions = [{"id": "V1", "status": "same", "asset_id": first["asset_id"], "version_id": first["version_id"]},
                   {"id": "V2", "status": "modify", "asset_id": second["asset_id"], "version_id": second["version_id"],
                    "changes": "改为夜间"},

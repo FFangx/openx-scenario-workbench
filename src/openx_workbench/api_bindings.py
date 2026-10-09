@@ -55,6 +55,7 @@ class Group:
         self.documents: list[PdfDocument] = [known[item] for item in document_ids]
         self.scenes: list[StoredScene] = []
         self.keys: dict[tuple[str, str], str] = {}
+        self._conditions: dict[str, dict] = {}  # each document's test conditions, read once
         for document in self.documents:
             scenes = self.pdf.scenes(project_id, document.document_id)
             self.scenes.extend(scenes)
@@ -74,10 +75,22 @@ class Group:
     def select(self, refs: list[SceneRef] | None) -> list[StoredScene]:
         return self.scenes if refs is None else [self.scene(ref.document_id, ref.scene_id) for ref in refs]
 
+    def test_conditions(self, scene: StoredScene) -> dict[str, Any] | None:
+        """The scene's test conditions numbered V1, V2…; None for a scene of one run or one not read."""
+        document = scene.document.document_id
+        if document not in self._conditions:
+            self._conditions[document] = self.pdf.variants(self.project_id, document)
+        read = self._conditions[document].get(scene.scene_id)
+        if not condition_count(read):
+            return None
+        return {"dimensions": read["dimensions"], "review_flags": read.get("review_flags", []),
+                "items": [{"id": f"V{number}", "label": item["label"], "values": item.get("values", {})}
+                          for number, item in enumerate(read["variants"], 1)]}
+
     def conditions(self, scene: StoredScene) -> list[str]:
         """The labels of the scene's test conditions, V1 first; empty for a scene of one run."""
-        read = self.pdf.variants(self.project_id, scene.document.document_id).get(scene.scene_id)
-        return [item["label"] for item in read["variants"]] if condition_count(read) else []
+        read = self.test_conditions(scene)
+        return [item["label"] for item in read["items"]] if read else []
 
 
 def _latest(store: AssetStore) -> dict[str, Any]:
@@ -140,6 +153,7 @@ def _rows(group: Group, scenes: list[StoredScene]) -> list[dict[str, Any]]:
             "pages": [min(item.page_start for item in evidence), max(item.page_end for item in evidence)] if evidence else None,
             "suggestion": _suggestion_json(suggestion, scene, latest) if suggestion else None,
             "binding": _binding_json(entry, scene, latest) if entry else None,
+            "test_conditions": group.test_conditions(scene),
         })
     return rows
 
@@ -370,9 +384,12 @@ def confirm(project_id: str, document_id: str, scene_id: str, request: BindingRe
     if request.assets and not any(item["preferred"] for item in chosen):
         raise ValueError("The preferred asset must be one of the bound assets.")
     proposal = _proposal(suggestion, scene, _latest(group.pdf.assets))
-    accepted = proposal is not None and proposal[0] == status and (conditions is not None or proposal[2] == preferred) and {
-        (item["asset_id"], item["version_id"]) for item in proposal[1]} == {
-        (item.asset_id, item.version_id) for item in wanted} and _same_conditions(proposal[3], conditions)
+    if conditions is not None:  # the model's choice for every condition, whatever else is bound
+        accepted = proposal is not None and proposal[3] is not None and _same_conditions(proposal[3], conditions)
+    else:
+        accepted = proposal is not None and proposal[3] is None and proposal[0] == status and proposal[2] == preferred and {
+            (item["asset_id"], item["version_id"]) for item in proposal[1]} == {
+            (item.asset_id, item.version_id) for item in wanted}
     store.confirm(key, scene, status, chosen, changes=request.changes if conditions is None else "",
                   source="suggestion" if accepted else "manual", conditions=conditions)
     return _rows(group, [scene])[0]

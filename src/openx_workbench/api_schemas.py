@@ -840,6 +840,29 @@ class ConfirmedBinding(Shape):
         description="For a scene with test conditions, the asset of each; the status follows from them.")
 
 
+class ConditionDimension(Shape):
+    """One way a scene's test conditions differ."""
+    name: str
+    kind: str
+    how: Literal["都要做", "按被测车选一", "任选一"] = Field(
+        description="Every value is run, or the tested vehicle (or the tester) picks one.")
+    quote: str | None = Field(description="The sentence of the source it rests on.")
+    review: str | None = Field(description="Why a person should check it (its sentence was not found); null when found.")
+
+
+class TestCondition(Shape):
+    id: str = Field(description="V1, V2, … in the order the source lists them.")
+    label: str
+    values: dict[str, str] = Field(description="Its value per dimension name.")
+
+
+class SceneConditions(Shape):
+    """The test conditions (工况) the source sets for one scene: several runs whose scenario files differ."""
+    dimensions: list[ConditionDimension]
+    items: list[TestCondition]
+    review_flags: list[str]
+
+
 class SceneBinding(Shape):
     document_id: str
     filename: str
@@ -851,6 +874,7 @@ class SceneBinding(Shape):
     pages: list[int] | None
     suggestion: BindingSuggestion | None
     binding: ConfirmedBinding | None
+    test_conditions: SceneConditions | None = Field(description="Null for a scene of one run, or one not read yet.")
 
 
 class GroupBindings(Shape):

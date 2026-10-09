@@ -2027,6 +2027,32 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["VersionRef"][] | null;
         };
+        /**
+         * ConditionDimension
+         * @description One way a scene's test conditions differ.
+         */
+        ConditionDimension: {
+            /**
+             * How
+             * @description Every value is run, or the tested vehicle (or the tester) picks one.
+             * @enum {string}
+             */
+            how: "都要做" | "按被测车选一" | "任选一";
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /**
+             * Quote
+             * @description The sentence of the source it rests on.
+             */
+            quote: string | null;
+            /**
+             * Review
+             * @description Why a person should check it (its sentence was not found); null when found.
+             */
+            review: string | null;
+        };
         /** ConditionRequest */
         ConditionRequest: {
             /** Asset Id */
@@ -3272,8 +3298,22 @@ export interface components {
             /** Section Id */
             section_id: string;
             suggestion: components["schemas"]["BindingSuggestion"] | null;
+            /** @description Null for a scene of one run, or one not read yet. */
+            test_conditions: components["schemas"]["SceneConditions"] | null;
             /** Title */
             title: string;
+        };
+        /**
+         * SceneConditions
+         * @description The test conditions (工况) the source sets for one scene: several runs whose scenario files differ.
+         */
+        SceneConditions: {
+            /** Dimensions */
+            dimensions: components["schemas"]["ConditionDimension"][];
+            /** Items */
+            items: components["schemas"]["TestCondition"][];
+            /** Review Flags */
+            review_flags: string[];
         };
         /**
          * SceneFigure
@@ -3913,6 +3953,23 @@ export interface components {
             filename: string;
             /** Pdf Sha256 */
             pdf_sha256: string;
+        };
+        /** TestCondition */
+        TestCondition: {
+            /**
+             * Id
+             * @description V1, V2, … in the order the source lists them.
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Values
+             * @description Its value per dimension name.
+             */
+            values: {
+                [key: string]: string;
+            };
         };
         /**
          * Trace

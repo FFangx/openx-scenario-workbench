@@ -141,12 +141,13 @@ try {
     const name = await note.locator(".export-note").innerText();
     const folder = (await (await p.request.get(`${BASE}/api/projects`)).json()).projects.find((x) => x.project_id === project).folder;
     await note.locator(".ant-notification-notice-close").click();
+    await note.waitFor({ state: "detached" });  // gone, so the next export's notice is the only one
     return { name, file: path.join(folder, "Exports", name) };
   };
   const csv = await exported("Spreadsheet");
   const csvText = fs.existsSync(csv.file) ? fs.readFileSync(csv.file, "utf8") : "";
   check("the table exports as CSV a spreadsheet opens, into the project folder", csv.name.endsWith(".csv")
-    && csvText.startsWith("\ufeffPDF,Clause,Title,Reuse conclusion") && csvText.includes("Slow the target down")
+    && csvText.startsWith("\ufeffPDF,Clause,Title,Test condition,Reuse conclusion") && csvText.includes("Slow the target down")
     && csvText.split("\r\n").filter(Boolean).length === 5, csv.file);
   const html = await exported("Web page");
   check("the table exports as a web page", fs.existsSync(html.file) && fs.readFileSync(html.file, "utf8").includes("Clause reuse assessment"), html.file);
