@@ -138,3 +138,24 @@ def test_control_requires_token_and_duplicate_open_reuses_service(tmp_path, monk
     finally:
         launcher.done.set()
         thread.join(timeout=10)
+
+
+def test_tray_follows_the_interface_language(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from openx_workbench.preferences import save_preferences
+    monkeypatch.setenv("OPENX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr("openx_workbench.launcher.web_available", lambda: True)
+    launcher = Launcher(tmp_path, no_browser=True)
+    rebuilt = []
+    launcher.icon = SimpleNamespace(title="", update_menu=lambda: rebuilt.append(1))
+    try:
+        launcher.state = "running"
+        launcher.show()
+        assert launcher.icon.title == "OpenX · 运行中" and len(rebuilt) == 1
+        save_preferences(language="English")
+        launcher.show()
+        assert launcher.icon.title == "OpenX · Running" and len(rebuilt) == 2
+        launcher.show()
+        assert len(rebuilt) == 2  # an unchanged language keeps the menu
+    finally:
+        launcher.server.server_close()

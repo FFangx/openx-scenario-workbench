@@ -17,6 +17,11 @@ def read_preferences() -> dict[str, Any]:
         return {}
 
 
+def interface_language() -> str:
+    """"zh" or "en": preferences.json keeps the labels the desktop app has always written."""
+    return "en" if read_preferences().get("language") == "English" else "zh"
+
+
 def save_preferences(**values: Any) -> dict[str, Any]:
     data = {**read_preferences(), **values}
     write_json(AssetStore().root / "preferences.json", data, ensure_ascii=False)

@@ -8,10 +8,12 @@ The launcher starts `openx_workbench.api`, which serves the React workbench from
 `web/dist` together with its local API. If the bundle has not been built, the
 launcher stops with a message explaining how to build it.
 
-Use **OpenX - Stop** on the desktop, or **关闭 OpenX** in the tray menu, to stop
+Use **OpenX - Stop** on the desktop, or **Quit OpenX** (关闭 OpenX) in the tray menu, to stop
 the service and all preview workers it owns. Closing a browser tab leaves the
 service running. The tray also offers open, restart, and a log-folder shortcut.
-Windows may put the tray icon in the taskbar overflow menu.
+Its menu, tooltip and messages follow the interface language chosen in Settings,
+switching within a second of a change. Windows may put the tray icon in the
+taskbar overflow menu.
 
 Projects, global asset versions and saved reports remain in the existing local
 data directory. Finish saving any edits before stopping or restarting. The

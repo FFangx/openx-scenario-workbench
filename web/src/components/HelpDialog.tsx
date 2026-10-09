@@ -33,7 +33,7 @@ export function HelpDialog({ open, onClose }: { open: boolean; onClose: () => vo
           </ol>
           <p>Playing a simulation: esmini is detected automatically; choose a custom installation under Settings → Local service.</p>
           <h4>Exit</h4>
-          <p>Closing the tab leaves the service running. Use <b>OpenX - Stop</b> on the desktop or the tray's exit command.</p>
+          <p>Closing the tab leaves the service running. Use <b>OpenX - Stop</b> on the desktop or <b>Quit OpenX</b> in the tray.</p>
         </div>
       )}
     </Modal>
