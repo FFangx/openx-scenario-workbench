@@ -117,11 +117,16 @@ def catalog_progress() -> dict[str, Any]:
 
 def preload_catalog() -> None:
     """Build the catalog in the background as the service starts, so the first page need not wait as long;
-    projects kept in the old layout move into folders first."""
+    projects kept in the old layout move into folders first, and documents extracted before their test
+    conditions were read get them read."""
     def load() -> None:
+        from .api_jobs import read_unread_variants
+        from .pdf_store import PdfStore
         from .project_store import ProjectStore
         with suppress(Exception):  # the first request that needs either reports the failure
             ProjectStore(_store()).refresh()
+        with suppress(Exception):
+            read_unread_variants(PdfStore(_store()))
         with suppress(Exception):
             _catalog()
 

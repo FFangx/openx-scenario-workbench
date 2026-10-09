@@ -761,6 +761,17 @@ class SuggestedCandidate(Shape):
     latest: bool
 
 
+class SuggestedCondition(Shape):
+    """The asset the model suggests for one test condition of a scene."""
+    id: str = Field(description="V1, V2, … in the order the scene lists its test conditions.")
+    label: str
+    asset: str | None = Field(description="Candidate id; null when no candidate builds this condition.")
+    fit: Literal["直接复用", "修改复用", ""] = Field(description="As is, or after the changes named; empty without an asset.")
+    changes: str
+    agree: int = Field(description="Readings that name this asset (or none) for the condition.")
+    other_assets: list[str | None] = Field(description="What the other readings named, most often first; null: none.")
+
+
 class BindingSuggestion(Shape):
     created_at: str
     model: str
@@ -779,6 +790,9 @@ class BindingSuggestion(Shape):
     stable: bool | None = Field(description="Every reading (two at least) names the same preferred asset; "
                                             "null for a failed suggestion or one kept before readings were counted.")
     recorded: bool = Field(description="Replayed from the recording shipped with the demo, not asked of a model here.")
+    conditions: list[SuggestedCondition] = Field(
+        description="For a scene with test conditions, the asset of each; then no asset is preferred and the "
+                    "suggestion is stable only when the readings agree on every condition.")
 
 
 class BoundAssetRecord(Shape):
@@ -800,6 +814,19 @@ class BindingOrigin(Shape):
     revision: int | None
 
 
+class ConfirmedCondition(Shape):
+    """The asset a person confirmed for one test condition of a scene."""
+    id: str
+    label: str
+    status: Literal["same", "modify", "none"]
+    asset_id: str | None
+    version_id: str | None
+    version_number: int | None
+    title: str | None
+    changes: str
+    latest: bool | None = Field(description="The version is still the asset's latest; null without an asset.")
+
+
 class ConfirmedBinding(Shape):
     status: Literal["same", "modify", "none"]
     changes: str
@@ -809,6 +836,31 @@ class ConfirmedBinding(Shape):
     stale: list[Literal["scene", "asset"]] = Field(
         description="scene: the scene's facts changed since; asset: a bound asset has a newer version.")
     confirmed_in: BindingOrigin
+    conditions: list[ConfirmedCondition] = Field(
+        description="For a scene with test conditions, the asset of each; the status follows from them.")
+
+
+class ConditionDimension(Shape):
+    """One way a scene's test conditions differ."""
+    name: str
+    kind: str
+    how: Literal["都要做", "按被测车选一", "任选一"] = Field(
+        description="Every value is run, or the tested vehicle (or the tester) picks one.")
+    quote: str | None = Field(description="The sentence of the source it rests on.")
+    review: str | None = Field(description="Why a person should check it (its sentence was not found); null when found.")
+
+
+class TestCondition(Shape):
+    id: str = Field(description="V1, V2, … in the order the source lists them.")
+    label: str
+    values: dict[str, str] = Field(description="Its value per dimension name.")
+
+
+class SceneConditions(Shape):
+    """The test conditions (工况) the source sets for one scene: several runs whose scenario files differ."""
+    dimensions: list[ConditionDimension]
+    items: list[TestCondition]
+    review_flags: list[str]
 
 
 class SceneBinding(Shape):
@@ -822,6 +874,7 @@ class SceneBinding(Shape):
     pages: list[int] | None
     suggestion: BindingSuggestion | None
     binding: ConfirmedBinding | None
+    test_conditions: SceneConditions | None = Field(description="Null for a scene of one run, or one not read yet.")
 
 
 class GroupBindings(Shape):

@@ -430,6 +430,23 @@ a { color: var(--link); }
 .bind-cand .why { grid-column: 3 / -1; color: var(--text-2); font-size: 12px; line-height: 1.5; }
 .bind-cand .why b { font-weight: 500; color: var(--amber-ink); }
 .bind-form { display: flex; flex-direction: column; gap: 8px; }
+/* Test conditions (工况): sub-rows under a clause, and the per-condition editor. */
+.bind-table .bind-cond-row > td { font-size: 12px; }
+.bind-cond { color: var(--text-2); }
+.bind-cand.ro { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.bind-cand.ro .why { grid-column: 1 / -1; }
+.bind-cond-title { display: flex; align-items: center; gap: 8px; }
+.bind-cond-title .mtag.ant-tag { margin: 0; font-weight: 400; }
+.bind-conds { display: flex; flex-direction: column; gap: 4px; }
+.bind-condition { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px;
+  padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line2); cursor: pointer; }
+.bind-condition.on { background: var(--blue-bg); border-color: var(--line); }
+.bind-condition .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.bind-condition .mtag.ant-tag { margin: 0; }
+.bind-condition .asset { min-width: 0; width: 100%; }
+.bind-condition .status { white-space: nowrap; }
+.bind-condition .changes, .bind-condition .hint { grid-column: 1 / -1; }
+.bind-condition .hint { font-size: 12px; }
 .bind-clauses .ant-table-tbody > tr { cursor: pointer; }
 .ov-coverage { grid-column: 1 / -1; }
 .coverage-list { gap: 8px; }

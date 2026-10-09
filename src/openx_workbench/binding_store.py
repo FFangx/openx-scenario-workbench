@@ -3,7 +3,8 @@
 A requirement is a scene of a PDF, keyed by the PDF's content, its clause number and the title the
 extraction gave it, so the same standard imported into another project, or extracted again, finds
 its bindings. A binding names one or more asset versions (variants of the same test) with one
-preferred, and pins them like a saved report does. Nothing here changes a binding by itself: a newer
+preferred, and pins them like a saved report does; a scene with several test conditions (工况) names
+the asset of each condition instead of a preferred one. Nothing here changes a binding by itself: a newer
 asset version or an edited scene only marks it for a second look.
 
 The model's suggestions are kept next to the table, one file per PDF, so a suggestion survives the
@@ -66,6 +67,13 @@ def requirement_record(scene: StoredScene) -> dict[str, Any]:
             "revision": scene.revision, "scene_digest": scene_digest(scene.package)}
 
 
+def conditions_status(conditions: list[dict[str, Any]]) -> str:
+    """A scene's status from its test conditions': direct reuse when every one is, not applicable when
+    none has an asset, otherwise modify (some condition needs changes or an asset of its own)."""
+    statuses = {item["status"] for item in conditions}
+    return "none" if statuses == {"none"} else "same" if statuses == {"same"} else "modify"
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -92,15 +100,24 @@ class BindingStore:
         write_json(self.path, {"entries": entries}, ensure_ascii=False, indent=1, prefix="bindings-", suffix=".tmp")
 
     def confirm(self, key: str, scene: StoredScene, status: str, assets: list[dict[str, Any]], *,
-                changes: str = "", source: str = "manual") -> dict[str, Any]:
+                changes: str = "", source: str = "manual",
+                conditions: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Store what a person confirmed for the scene, replacing an earlier binding of it.
 
         `assets` lists {"version": AssetVersion, "preferred": bool, "verdict", "reason", "changes"}; the
         model's words for an asset travel with it. The named versions are pinned, those no longer named
-        released.
+        released. `conditions` lists, for a scene with test conditions, {"id", "label", "status",
+        "version": one of the assets' versions or None, "changes"}; no asset is preferred then.
         """
         if status not in STATUSES or source not in SOURCES:
             raise ValueError("Unknown binding status or source.")
+        named = {(item["version"].asset_id, item["version"].version_id) for item in assets}
+        for item in conditions or []:
+            if item["status"] not in STATUSES or (item["status"] == "none") != (item["version"] is None):
+                raise ValueError("工况结论为“不适用”时不选素材，其余结论要选一个素材 / "
+                                 "A test condition has an asset unless none is applicable.")
+            if item["version"] is not None and (item["version"].asset_id, item["version"].version_id) not in named:
+                raise ValueError("A test condition's asset must be one of the bound assets.")
         if (status == "none") != (not assets):
             raise ValueError("结论为“不适用”时不能选择素材，其余结论至少选择一个素材 / "
                              "Select assets unless no asset is applicable.")
@@ -110,7 +127,7 @@ class BindingStore:
         preferred = [item for item in assets if item.get("preferred")]
         if assets and len(preferred) > 1:
             raise ValueError("Mark one preferred asset.")
-        chosen = preferred[0] if preferred else (assets[0] if assets else None)
+        chosen = None if conditions else preferred[0] if preferred else (assets[0] if assets else None)
         with store_transaction(self.assets.root):
             versions = {(item.asset_id, item.version_id): item for item in self.assets.versions()}
             if any((item["version"].asset_id, item["version"].version_id) not in versions for item in assets):
@@ -126,6 +143,14 @@ class BindingStore:
                             "reason": _text(item.get("reason")), "changes": _text(item.get("changes"))}
                            for item in assets],
                 "source": source, "confirmed_at": _now(),
+                **({"conditions": [{
+                    "id": item["id"], "label": _text(item.get("label"), 60), "status": item["status"],
+                    "asset_id": item["version"].asset_id if item["version"] else None,
+                    "version_id": item["version"].version_id if item["version"] else None,
+                    "version_number": item["version"].version_number if item["version"] else None,
+                    "title": item["version"].title if item["version"] else None,
+                    "changes": _text(item.get("changes")) if item["status"] == "modify" else ""}
+                    for item in conditions]} if conditions else {}),
             }
             new = {(item["asset_id"], item["version_id"]) for item in entry["assets"]}
             old = {(item["asset_id"], item["version_id"]) for item in (before or {}).get("assets", [])}

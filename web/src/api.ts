@@ -67,7 +67,17 @@ export type BindingStatus = ConfirmedBinding["status"];
 export type AssetBinding = Schemas["AssetBinding"];
 export type BindingCoverage = Schemas["BindingCoverage"];
 /** What a person confirms for one scene: the bound asset versions, the preferred one, and what to change. */
-export interface BindingDraft { status: BindingStatus; assets: { asset_id: string; version_id: string }[]; preferred: string | null; changes: string }
+export type SceneConditions = Schemas["SceneConditions"];
+export type TestCondition = Schemas["TestCondition"];
+export type SuggestedCondition = Schemas["SuggestedCondition"];
+export type ConfirmedCondition = Schemas["ConfirmedCondition"];
+/** The asset a person gives one test condition (none when no asset is applicable). */
+export interface ConditionDraft { id: string; status: BindingStatus; asset_id: string | null; version_id: string | null; changes: string }
+/** With `conditions`, a scene of several test conditions: each names its asset and the status follows from them. */
+export interface BindingDraft {
+  status: BindingStatus; assets: { asset_id: string; version_id: string }[]; preferred: string | null; changes: string;
+  conditions?: ConditionDraft[] | null;
+}
 /** A scene of one of the PDFs shown together. */
 export interface SceneRef { document_id: string; scene_id: string }
 

@@ -136,9 +136,9 @@ def test_pool_starts_with_the_ranking_and_names_the_routes():
 def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
     client, base, model, _ = demo
     job, view = suggested(client, base)
-    # Three readings of each of the four scenes, all at the deepest effort the model declares.
+    # Three readings of each of the four scenes, all at the effort of the settings (here the service's default).
     assert job["result"]["failed"] == 0 and job["result"]["usage"]["calls"] == 12 == model.calls
-    assert job["result"]["effort"] == "max" and model.efforts == {"max": 12}
+    assert job["result"]["effort"] == "" and model.efforts == {"": 12}
     assert job["ranked"] == job["done"] == job["total"] == 4
     rows = view["scenes"]
     assert len(rows) == 4 and all(row["binding"] is None for row in rows)
@@ -303,33 +303,132 @@ def test_readings_that_disagree_leave_the_scene_to_a_person(demo):
     assert named["scenes"][0]["binding"]["source"] == "suggestion"  # a person accepts it by name
 
 
-def test_a_reply_cut_off_at_the_deepest_effort_is_read_again_at_the_default(demo):
+def test_each_test_condition_gets_its_asset_and_its_own_agreement(demo):
+    from openx_workbench.binding_judge import CONDITIONS
+    from openx_workbench.project_store import ProjectStore
+    client, base, model, seeded = demo
+    project, document = seeded["project_id"], base.documents[0]
+    folder = ProjectStore(AssetStore()).data(project) / "documents" / document
+    (folder / "variants.json").write_text(json.dumps({"scenes": {"scene-0001": {
+        "dimensions": [{"name": "时段", "kind": "时段", "how": "都要做"}],
+        "variants": [{"label": "日间", "values": {"时段": "日间"}}, {"label": "夜间", "values": {"时段": "夜间"}},
+                     {"label": "预试验", "values": {}}]}}}, ensure_ascii=False), encoding="utf-8")
+
+    def answer(body, _, nth):
+        data = json.loads(judged(body)["choices"][0]["message"]["content"])
+        if "## 工况" in body["messages"][1]["content"]:
+            data["conditions"] = [{"id": "V1", "asset": "C1", "fit": "直接复用"},
+                                  {"id": "V2", "asset": "C1" if nth == 3 else "C2", "fit": "修改复用", "changes": "改为夜间"},
+                                  {"id": "V3", "asset": None}]
+        return reply(data)
+
+    model.answer = answer
+    _, view = suggested(client, base)
+    asked = [key for key in model.seen if "## 工况" in key]
+    assert len(asked) == 1 and model.seen[asked[0]] == 3 and "另外输出 conditions" in CONDITIONS and "另外输出 conditions" in asked[0]  # only the scene with conditions
+    row = view["scenes"][0]
+    assert [(item["id"], item["label"]) for item in row["test_conditions"]["items"]] == [
+        ("V1", "日间"), ("V2", "夜间"), ("V3", "预试验")]
+    assert row["test_conditions"]["dimensions"][0]["how"] == "都要做"
+    assert all(other["test_conditions"] is None for other in view["scenes"][1:])
+    suggestions = BindingStore().suggestions(view["documents"][0]["pdf_sha256"])
+    saved = suggestions[row["key"]]
+    assert [(item["id"], item["label"], item["asset"], item["fit"], item["agree"], item["other_assets"])
+            for item in saved["conditions"]] == [("V1", "日间", "C1", "直接复用", 3, []),
+                                                 ("V2", "夜间", "C2", "修改复用", 2, ["C1"]),
+                                                 ("V3", "预试验", None, "", 3, [])]
+    assert saved["preferred"] is None and saved["binding"] == ["C1", "C2"]
+    assert (row["suggestion"]["readings"], row["suggestion"]["agree"], row["suggestion"]["stable"]) == (3, 2, False)
+    assert [("conditions" in item) for item in suggestions.values()].count(True) == 1
+    assert [item["asset"] for item in row["suggestion"]["conditions"]] == ["C1", "C2", None]
+    lines = client.get(base.url + "/bindings/export", params={"document_ids": base.documents, "format": "csv"}
+                       ).content.decode("utf-8-sig").splitlines()
+    clause = next(number for number, line in enumerate(lines) if ",工况 2/3 有素材,待确认," in line)
+    titles = {item["id"]: item["title"] for item in row["suggestion"]["candidates"]}
+    assert [line.split(",")[3] for line in lines[clause + 1:clause + 4]] == ["V1 日间", "V2 夜间", "V3 预试验"]
+    assert lines[clause + 1].endswith(f",{titles['C1']}（直接复用）,一致 3/3")
+    assert lines[clause + 2].endswith(f",{titles['C2']}（修改复用）,不一致 2/3")
+    assert lines[clause + 3].endswith(",不适用,一致 3/3")
+
+    # "Adopt all" leaves it (its readings disagree on V2, and not every condition is direct reuse) ...
+    view = base.accept().json()
+    assert view["scenes"][0]["binding"] is None and all(other["binding"] for other in view["scenes"][1:])
+    # ... adopted by name, each condition keeps its asset and no asset is preferred.
+    bound = base.accept(scenes=[{"document_id": row["document_id"], "scene_id": row["scene_id"]}]).json()["scenes"][0]["binding"]
+    candidate = {item["id"]: item for item in row["suggestion"]["candidates"]}
+    assert bound["status"] == "modify" and bound["source"] == "suggestion"
+    assert not any(item["preferred"] for item in bound["assets"])
+    assert [(item["id"], item["label"], item["status"], item["asset_id"], item["changes"], item["latest"])
+            for item in bound["conditions"]] == [
+        ("V1", "日间", "same", candidate["C1"]["asset_id"], "", True),
+        ("V2", "夜间", "modify", candidate["C2"]["asset_id"], "改为夜间", True),
+        ("V3", "预试验", "none", None, "", None)]
+
+    # Confirmed by hand exactly as suggested (only the conditions' assets bound): still the model's suggestion.
+    first, second = candidate["C1"], candidate["C2"]
+    as_suggested = [{"id": "V1", "status": "same", "asset_id": first["asset_id"], "version_id": first["version_id"]},
+                    {"id": "V2", "status": "modify", "asset_id": second["asset_id"], "version_id": second["version_id"],
+                     "changes": "改为夜间"},
+                    {"id": "V3", "status": "none"}]
+    again = client.put(base.scene(row), json={"status": "modify", "conditions": as_suggested}).json()["binding"]
+    assert again["source"] == "suggestion" and again["status"] == "modify"
+    # A person gives the pre-test the first asset as well: their own conclusion.
+    conditions = [{"id": "V1", "status": "same", "asset_id": first["asset_id"], "version_id": first["version_id"]},
+                  {"id": "V2", "status": "modify", "asset_id": second["asset_id"], "version_id": second["version_id"],
+                   "changes": "改为夜间"},
+                  {"id": "V3", "status": "modify", "asset_id": first["asset_id"], "version_id": first["version_id"],
+                   "changes": "去掉目标车"}]
+    saved = client.put(base.scene(row), json={"status": "none", "conditions": conditions}).json()["binding"]
+    assert saved["status"] == "modify" and saved["source"] == "manual"  # the status follows from the conditions
+    assert {item["asset_id"] for item in saved["assets"]} == {first["asset_id"], second["asset_id"]}
+    assert [item["changes"] for item in saved["conditions"]] == ["", "改为夜间", "去掉目标车"]
+    # Every condition, in order, with an asset unless none applies.
+    for wrong in (conditions[:2], [conditions[1], conditions[0], conditions[2]],
+                  [*conditions[:2], {"id": "V3", "status": "same"}]):
+        assert client.put(base.scene(row), json={"status": "same", "conditions": wrong}).status_code == 400
+    other = view["scenes"][1]
+    assert client.put(base.scene(other), json={"status": "same", "conditions": conditions}).status_code == 400
+    # The assessment lists the clause, then a line per condition with its asset.
+    lines = client.get(base.url + "/bindings/export", params={"document_ids": base.documents, "format": "csv"}
+                       ).content.decode("utf-8-sig").splitlines()
+    clause = next(number for number, line in enumerate(lines) if ",工况 3/3 有素材,修改复用," in line)
+    assert [line.split(",")[3:7] for line in lines[clause + 1:clause + 4]] == [
+        ["V1 日间", "直接复用", first["title"], ""], ["V2 夜间", "修改复用", second["title"], ""],
+        ["V3 预试验", "修改复用", first["title"], ""]]
+    assert "去掉目标车" in lines[clause + 3]
+
+
+def test_a_reply_cut_off_is_read_again_at_a_shallower_effort(demo):
     client, base, model, _ = demo
-    model.answer = lambda body, client, nth: (reply({}, finish="length") if client.config.reasoning_effort == "max"
+    # The settings keep the service's default ("high" in the model list); "low" is the next shallower.
+    model.answer = lambda body, client, nth: (reply({}, finish="length") if client.config.reasoning_effort == ""
                                               else judged(body))
     first = base.view()["scenes"][0]
     only = [{"document_id": first["document_id"], "scene_id": first["scene_id"]}]
     job = finished(client, base.suggest(scenes=only).json())
-    assert job["result"]["failed"] == 0 and model.efforts == {"max": 3, "high": 3}
+    assert job["result"]["failed"] == 0 and model.efforts == {"": 3, "low": 3}
     assert base.view()["scenes"][0]["suggestion"]["stable"]
     finished(client, base.suggest(scenes=only).json())
-    assert model.calls == 6  # the replies kept under the default effort answer the next run
+    assert model.calls == 6  # the replies kept under the shallower effort answer the next run
 
 
-def test_the_deepest_declared_effort_and_its_fallback(monkeypatch):
-    def efforts(levels=(), default="", thinking=True, fails=False):
+def test_the_settings_effort_and_its_fallback(monkeypatch):
+    def efforts(levels=(), default="", effort="max", thinking=True, fails=False):
         def catalog(self):
             if fails:
                 raise ModelError("no list")
             return [ModelInfo("judge", levels, default)]
         monkeypatch.setattr(ModelClient, "catalog", catalog)
-        return judge_efforts(ModelClient(ModelConfig(model="judge", api_key="k", thinking=thinking, reasoning_effort="low")))
+        return judge_efforts(ModelClient(ModelConfig(model="judge", api_key="k", thinking=thinking, reasoning_effort=effort)))
 
-    assert efforts(("low", "high", "max"), "high") == ("max", "high")
-    assert efforts(("max", "low", "high"), "max") == ("max", "high")  # listed in any order
-    assert efforts(("low", "medium", "high"), "") == ("high", "medium")
-    assert efforts(("high",), "high") == ("high", "high")
-    assert efforts() == efforts(fails=True) == efforts(("low", "max"), thinking=False) == ("low", "low")
+    assert efforts(("low", "high", "max"), "high") == ("max", "high")  # the model's default when shallower
+    assert efforts(("max", "low", "high"), "max") == ("max", "high")  # listed in any order; else the next shallower
+    assert efforts(("low", "medium", "high"), "", effort="high") == ("high", "medium")
+    assert efforts(("low", "high", "max"), "high", effort="") == ("", "low")  # the service's default, then shallower
+    assert efforts(("low", "high", "max"), "high", effort="low") == ("low", "low")  # nothing shallower
+    assert efforts(("high", "max"), "high", effort="xhigh") == ("xhigh", "xhigh")  # a level the model does not list
+    assert efforts(effort="low") == efforts(fails=True, effort="low") == efforts(("low", "max"), effort="low", thinking=False) \
+        == ("low", "low")
 
 
 def test_replies_that_never_fit_fail_the_scene_and_a_wrong_key_fails_the_run(demo):
@@ -359,7 +458,7 @@ def test_a_suggestion_is_saved_while_later_scenes_are_still_ranked(monkeypatch):
         cancel = Event()
         client = SimpleNamespace(config=SimpleNamespace(model="judge"))
 
-        def reading(self, request, count, number):
+        def reading(self, request, count, number, conditions=0):
             answered.release()
             return None, "no reply"
 
@@ -425,7 +524,7 @@ def test_the_binding_table_exports_as_csv_and_html(demo):
     assert response.status_code == 200 and response.headers["content-type"].startswith("text/csv")
     assert response.content.startswith("\ufeff".encode())  # a spreadsheet reads it as UTF-8
     lines = response.content.decode("utf-8-sig").splitlines()
-    assert lines[0].startswith("PDF,条款,条款标题,复用结论,首选复用素材") and len(lines) == 1 + len(rows)
+    assert lines[0].startswith("PDF,条款,条款标题,工况,复用结论,复用素材（首选）") and len(lines) == 1 + len(rows)
     first, second, third = lines[1:4]
     assert ",修改复用," in first and "把目标车改成静止" in first and ",人工指定," in first
     assert ",不适用," in second

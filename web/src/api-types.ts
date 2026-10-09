@@ -730,7 +730,7 @@ export interface paths {
         /**
          * Suggest
          * @description Asks the configured model which candidates build the same test as each scene, three times each at
-         *     the deepest thinking effort the model declares. Sends the scenes' source text and extracted facts, and
+         *     the thinking effort of the settings. Sends the scenes' source text and extracted facts, and
          *     each candidate's name, story and differences, to that model.
          */
         post: operations["suggest_api_projects__project_id__bindings_suggest_post"];
@@ -1686,6 +1686,11 @@ export interface components {
              */
             changes?: string;
             /**
+             * Conditions
+             * @description For a scene with test conditions, the asset of each, every condition in order; their assets join the bound ones, the scene's status follows from them and none is preferred.
+             */
+            conditions?: components["schemas"]["ConditionRequest"][] | null;
+            /**
              * Preferred
              * @description Asset ID of the preferred asset; the first one when omitted.
              */
@@ -1711,6 +1716,11 @@ export interface components {
             binding: string[];
             /** Candidates */
             candidates: components["schemas"]["SuggestedCandidate"][];
+            /**
+             * Conditions
+             * @description For a scene with test conditions, the asset of each; then no asset is preferred and the suggestion is stable only when the readings agree on every condition.
+             */
+            conditions: components["schemas"]["SuggestedCondition"][];
             /** Created At */
             created_at: string;
             /**
@@ -2017,12 +2027,65 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["VersionRef"][] | null;
         };
+        /**
+         * ConditionDimension
+         * @description One way a scene's test conditions differ.
+         */
+        ConditionDimension: {
+            /**
+             * How
+             * @description Every value is run, or the tested vehicle (or the tester) picks one.
+             * @enum {string}
+             */
+            how: "都要做" | "按被测车选一" | "任选一";
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /**
+             * Quote
+             * @description The sentence of the source it rests on.
+             */
+            quote: string | null;
+            /**
+             * Review
+             * @description Why a person should check it (its sentence was not found); null when found.
+             */
+            review: string | null;
+        };
+        /** ConditionRequest */
+        ConditionRequest: {
+            /** Asset Id */
+            asset_id?: string | null;
+            /**
+             * Changes
+             * @default
+             */
+            changes?: string;
+            /**
+             * Id
+             * @description V1, V2, … in the order the scene lists its test conditions.
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "same" | "modify" | "none";
+            /** Version Id */
+            version_id?: string | null;
+        };
         /** ConfirmedBinding */
         ConfirmedBinding: {
             /** Assets */
             assets: components["schemas"]["BoundAssetRecord"][];
             /** Changes */
             changes: string;
+            /**
+             * Conditions
+             * @description For a scene with test conditions, the asset of each; the status follows from them.
+             */
+            conditions: components["schemas"]["ConfirmedCondition"][];
             /** Confirmed At */
             confirmed_at: string;
             confirmed_in: components["schemas"]["BindingOrigin"];
@@ -2041,6 +2104,36 @@ export interface components {
              * @enum {string}
              */
             status: "same" | "modify" | "none";
+        };
+        /**
+         * ConfirmedCondition
+         * @description The asset a person confirmed for one test condition of a scene.
+         */
+        ConfirmedCondition: {
+            /** Asset Id */
+            asset_id: string | null;
+            /** Changes */
+            changes: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Latest
+             * @description The version is still the asset's latest; null without an asset.
+             */
+            latest: boolean | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "same" | "modify" | "none";
+            /** Title */
+            title: string | null;
+            /** Version Id */
+            version_id: string | null;
+            /** Version Number */
+            version_number: number | null;
         };
         /** CoverageScene */
         CoverageScene: {
@@ -3205,8 +3298,22 @@ export interface components {
             /** Section Id */
             section_id: string;
             suggestion: components["schemas"]["BindingSuggestion"] | null;
+            /** @description Null for a scene of one run, or one not read yet. */
+            test_conditions: components["schemas"]["SceneConditions"] | null;
             /** Title */
             title: string;
+        };
+        /**
+         * SceneConditions
+         * @description The test conditions (工况) the source sets for one scene: several runs whose scenario files differ.
+         */
+        SceneConditions: {
+            /** Dimensions */
+            dimensions: components["schemas"]["ConditionDimension"][];
+            /** Items */
+            items: components["schemas"]["TestCondition"][];
+            /** Review Flags */
+            review_flags: string[];
         };
         /**
          * SceneFigure
@@ -3777,6 +3884,42 @@ export interface components {
             /** Version Number */
             version_number: number;
         };
+        /**
+         * SuggestedCondition
+         * @description The asset the model suggests for one test condition of a scene.
+         */
+        SuggestedCondition: {
+            /**
+             * Agree
+             * @description Readings that name this asset (or none) for the condition.
+             */
+            agree: number;
+            /**
+             * Asset
+             * @description Candidate id; null when no candidate builds this condition.
+             */
+            asset: string | null;
+            /** Changes */
+            changes: string;
+            /**
+             * Fit
+             * @description As is, or after the changes named; empty without an asset.
+             * @enum {string}
+             */
+            fit: "直接复用" | "修改复用" | "";
+            /**
+             * Id
+             * @description V1, V2, … in the order the scene lists its test conditions.
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Other Assets
+             * @description What the other readings named, most often first; null: none.
+             */
+            other_assets: (string | null)[];
+        };
         /** SuggestRequest */
         SuggestRequest: {
             /**
@@ -3810,6 +3953,23 @@ export interface components {
             filename: string;
             /** Pdf Sha256 */
             pdf_sha256: string;
+        };
+        /** TestCondition */
+        TestCondition: {
+            /**
+             * Id
+             * @description V1, V2, … in the order the source lists them.
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Values
+             * @description Its value per dimension name.
+             */
+            values: {
+                [key: string]: string;
+            };
         };
         /**
          * Trace

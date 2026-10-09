@@ -1,6 +1,7 @@
 import io
 import json
 import re
+from dataclasses import asdict
 
 import pymupdf
 import pytest
@@ -61,15 +62,30 @@ def message_text(body):
     return content if isinstance(content, str) else "\n".join(part.get("text", "") for part in content)
 
 
+def variant_reply(body):
+    """A scene's test conditions: the pedestrian crossing is run by day and by night, the car once."""
+    pedestrian = message_text(body).endswith("Pedestrian crossing")
+    payload = {"dimensions": [{"name": "时段", "kind": "时段", "how": "都要做", "quote": "A pedestrian crosses the road"}],
+               "variants": [{"label": "日间", "values": {"时段": "日间"}}, {"label": "夜间", "values": {"时段": "夜间"}}]
+               } if pedestrian else {"dimensions": [], "variants": []}
+    return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(payload, ensure_ascii=False)}}],
+            "usage": {"total_tokens": 50}}
+
+
 def fake_client(*, empty=False, hallucination=False):
-    """A model answering scene lists (counted in `calls`) and structure batches (client.structure_calls)."""
+    """A model answering scene lists (counted in `calls`), structure batches (client.structure_calls)
+    and test conditions (client.variant_calls)."""
     calls = []
     structure_calls = []
+    variant_calls = []
     def opener(request, timeout):
         body = json.loads(request.data)
         if "本批场景清单" in message_text(body):
             structure_calls.append(body)
             return io.BytesIO(json.dumps(structure_reply(body)).encode())
+        if "===== 场景名 =====" in message_text(body):
+            variant_calls.append(body)
+            return io.BytesIO(json.dumps(variant_reply(body)).encode())
         calls.append(body)
         text = body["messages"][1]["content"]
         node_ids = re.findall(r"^\[([^\]]+)\]", text, flags=re.M)
@@ -87,6 +103,7 @@ def fake_client(*, empty=False, hallucination=False):
                                      "usage": {"total_tokens": 250}}).encode())
     client = ModelClient(ModelConfig(api_key="authored-test"), opener=opener)
     client.structure_calls = structure_calls
+    client.variant_calls = variant_calls
     return client, calls
 
 
@@ -311,3 +328,60 @@ def test_evidence_keeps_each_clause_heading_and_older_scenes_get_it_back(tmp_pat
     older = store.scenes(project.project_id, record.document_id)[0]
     assert older.package.evidence[0].source_text == heading
     assert all(item.source_text for item in older.package.evidence)
+
+
+def test_each_scene_test_conditions_are_read_and_kept_beside_its_facts(tmp_path):
+    client, _ = fake_client()
+    assets = AssetStore(tmp_path)
+    store = PdfStore(assets)
+    project = ProjectStore(assets).create("Conditions")
+    record = store.import_pdf(project.project_id, "authored.pdf", authored_pdf(), client=client)
+    assert len(client.variant_calls) == 6  # each scene read three times
+    read = store.variants(project.project_id, record.document_id)
+    assert read["scene-0001"] == {"dimensions": [], "variants": [], "review_flags": []}  # one run
+    assert [item["label"] for item in read["scene-0002"]["variants"]] == ["日间", "夜间"]
+    assert read["scene-0002"]["dimensions"][0]["review"] is None  # its quote is in the scene's text
+    assert store.variants_unread(project.project_id) == []
+    # Kept beside the scenes, not in them: a scene's facts (and so its confirmed assets) stay as they were.
+    assert "夜间" not in json.dumps([asdict(scene.package) for scene in store.scenes(project.project_id, record.document_id)],
+                                  ensure_ascii=False)
+
+
+def _finish(started):
+    import time
+    until = time.monotonic() + 10
+    while any(job.snapshot()["status"] == "running" for job in started) and time.monotonic() < until:
+        time.sleep(.02)
+    return [job.snapshot() for job in started]
+
+
+def test_documents_extracted_before_get_their_conditions_read_without_extracting_again(tmp_path):
+    from openx_workbench.api_jobs import read_unread_variants
+    client, calls = fake_client()
+    assets = AssetStore(tmp_path)
+    store = PdfStore(assets)
+    project = ProjectStore(assets).create("Older")
+    record = store.import_pdf(project.project_id, "authored.pdf", authored_pdf(), client=client)
+    scenes = store.scenes(project.project_id, record.document_id)
+    kept = ProjectStore(assets).data(project.project_id) / "documents" / record.document_id / "variants.json"
+    expected = store.variants(project.project_id, record.document_id)
+    kept.unlink()
+    for cached in (tmp_path / "model_cache").glob("*.json"):
+        cached.unlink()
+    assert store.variants_unread(project.project_id) == [record]
+    # Without a model key nothing starts.
+    assert read_unread_variants(store, ModelClient(ModelConfig(api_key=""))) == []
+    [job] = _finish(read_unread_variants(store, client))
+    assert job["status"] == "completed" and job["result"]["document_ids"] == [record.document_id]
+    assert len(client.variant_calls) == 12 and len(calls) == 1 and len(client.structure_calls) == 6
+    assert store.variants(project.project_id, record.document_id) == expected
+    assert store.scenes(project.project_id, record.document_id) == scenes
+    assert read_unread_variants(store, client) == []
+    # A scene no reading came back for is tried again at the next start; readings kept cost nothing.
+    payload = json.loads(kept.read_text(encoding="utf-8"))
+    payload["scenes"]["scene-0002"] = None
+    kept.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    assert store.variants_unread(project.project_id) == [record]
+    [job] = _finish(read_unread_variants(store, client))
+    assert job["status"] == "completed" and len(client.variant_calls) == 12
+    assert store.variants(project.project_id, record.document_id) == expected

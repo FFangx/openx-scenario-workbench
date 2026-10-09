@@ -2,7 +2,7 @@
 a person confirms.
 
 `POST .../bindings/suggest` starts a background job (one per project) that ranks every scene's candidates
-and asks the configured model about them, three times each at its deepest thinking; it sends the scenes'
+and asks the configured model about them, three times each at the thinking effort of the settings; it sends the scenes'
 source text and the candidates' stories to that model. Nothing enters the binding table until a person
 confirms a row, and "accept all" leaves the scenes whose readings disagree to a person.
 """
@@ -22,7 +22,8 @@ from .api_common import _catalog, _index, _store
 from .api_schemas import AssetBinding, BindingCoverage, GroupBindings, Job, SavedExport, SceneBinding, documented
 from .asset_store import AssetStore
 from .atomic_write import write_bytes
-from .binding_store import BindingStore, requirement_keys, scene_digest, section_of, stale_reasons
+from .binding_judge import condition_count
+from .binding_store import BindingStore, conditions_status, requirement_keys, scene_digest, section_of, stale_reasons
 from .binding_suggest import Judge, judge_efforts, suggest_scenes
 from .llm_service import ModelClient
 from .pdf_store import PdfDocument, PdfStore, StoredScene
@@ -54,6 +55,7 @@ class Group:
         self.documents: list[PdfDocument] = [known[item] for item in document_ids]
         self.scenes: list[StoredScene] = []
         self.keys: dict[tuple[str, str], str] = {}
+        self._conditions: dict[str, dict] = {}  # each document's test conditions, read once
         for document in self.documents:
             scenes = self.pdf.scenes(project_id, document.document_id)
             self.scenes.extend(scenes)
@@ -72,6 +74,23 @@ class Group:
 
     def select(self, refs: list[SceneRef] | None) -> list[StoredScene]:
         return self.scenes if refs is None else [self.scene(ref.document_id, ref.scene_id) for ref in refs]
+
+    def test_conditions(self, scene: StoredScene) -> dict[str, Any] | None:
+        """The scene's test conditions numbered V1, V2…; None for a scene of one run or one not read."""
+        document = scene.document.document_id
+        if document not in self._conditions:
+            self._conditions[document] = self.pdf.variants(self.project_id, document)
+        read = self._conditions[document].get(scene.scene_id)
+        if not condition_count(read):
+            return None
+        return {"dimensions": read["dimensions"], "review_flags": read.get("review_flags", []),
+                "items": [{"id": f"V{number}", "label": item["label"], "values": item.get("values", {})}
+                          for number, item in enumerate(read["variants"], 1)]}
+
+    def conditions(self, scene: StoredScene) -> list[str]:
+        """The labels of the scene's test conditions, V1 first; empty for a scene of one run."""
+        read = self.test_conditions(scene)
+        return [item["label"] for item in read["items"]] if read else []
 
 
 def _latest(store: AssetStore) -> dict[str, Any]:
@@ -100,7 +119,8 @@ def _suggestion_json(suggestion: dict[str, Any], scene: StoredScene, latest: dic
     return {key: suggestion[key] for key in ("created_at", "model", "binding", "preferred", "note", "failure")} | {
         "candidates": candidates, "outdated": outdated, "readings": suggestion.get("readings"),
         "agree": suggestion.get("agree"), "other_preferred": suggestion.get("other_preferred", []),
-        "stable": _stable(suggestion), "recorded": bool(suggestion.get("recorded"))}
+        "stable": _stable(suggestion), "recorded": bool(suggestion.get("recorded")),
+        "conditions": suggestion.get("conditions", [])}
 
 
 def _binding_json(entry: dict[str, Any], scene: StoredScene, latest: dict[str, Any]) -> dict[str, Any]:
@@ -109,7 +129,9 @@ def _binding_json(entry: dict[str, Any], scene: StoredScene, latest: dict[str, A
     return {"status": entry["status"], "changes": entry.get("changes", ""), "assets": assets,
             "source": entry["source"], "confirmed_at": entry["confirmed_at"],
             "stale": stale_reasons(entry, scene, latest),
-            "confirmed_in": {key: requirement.get(key) for key in ("project_id", "document_id", "scene_id", "revision")}}
+            "confirmed_in": {key: requirement.get(key) for key in ("project_id", "document_id", "scene_id", "revision")},
+            "conditions": [{**item, "latest": _is_latest(item, latest) if item["asset_id"] else None}
+                           for item in entry.get("conditions", [])]}
 
 
 def _rows(group: Group, scenes: list[StoredScene]) -> list[dict[str, Any]]:
@@ -131,6 +153,7 @@ def _rows(group: Group, scenes: list[StoredScene]) -> list[dict[str, Any]]:
             "pages": [min(item.page_start for item in evidence), max(item.page_end for item in evidence)] if evidence else None,
             "suggestion": _suggestion_json(suggestion, scene, latest) if suggestion else None,
             "binding": _binding_json(entry, scene, latest) if entry else None,
+            "test_conditions": group.test_conditions(scene),
         })
     return rows
 
@@ -212,7 +235,7 @@ class SuggestRequest(BaseModel):
 @router.post("/projects/{project_id}/bindings/suggest", **documented(Job))
 def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
     """Asks the configured model which candidates build the same test as each scene, three times each at
-    the deepest thinking effort the model declares. Sends the scenes' source text and extracted facts, and
+    the thinking effort of the settings. Sends the scenes' source text and extracted facts, and
     each candidate's name, story and differences, to that model."""
     group = Group(project_id, request.document_ids)
     scenes = group.select(request.scenes)
@@ -233,6 +256,8 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
         job.note(f"素材库 {len(catalog)} 个素材 · 建立检索索引")
         index = _index(catalog, encoder)  # texts new to the encoder are encoded first: minutes for BGE-M3 after a library change
         judge = Judge(client, group.pdf.assets.root / "model_cache", job.cancel, efforts)
+        conditions = {document.document_id: group.pdf.variants(project_id, document.document_id)
+                      for document in group.documents}
         progress = {"ranked": 0, "judged": 0}
         job.update(stage="ranking", total=len(scenes), ranked=0)
 
@@ -251,7 +276,8 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
         failed = suggest_scenes(
             scenes, index, versions, judge, client.config.concurrency, digest=scene_digest,
             save=lambda scene, record: store.save_suggestion(scene.document.sha256, group.key(scene), record),
-            ranked=ranked, judged=judged, language=request.lang)
+            ranked=ranked, judged=judged, language=request.lang,
+            conditions=lambda scene: conditions[scene.document.document_id].get(scene.scene_id))
         return {"project_id": project_id, "document_ids": request.document_ids, "failed": failed,
                 "effort": efforts[0], "usage": dict(judge.spent)}
 
@@ -264,6 +290,14 @@ class BoundAsset(BaseModel):
     version_id: str
 
 
+class ConditionRequest(BaseModel):
+    id: str = Field(description="V1, V2, … in the order the scene lists its test conditions.")
+    status: Literal["same", "modify", "none"]
+    asset_id: str | None = None
+    version_id: str | None = None
+    changes: str = Field("", max_length=2000)
+
+
 class BindingRequest(BaseModel):
     status: Literal["same", "modify", "none"] = Field(
         description="same: the same test, at most other values; modify: the same test after the changes named; "
@@ -271,18 +305,48 @@ class BindingRequest(BaseModel):
     assets: list[BoundAsset] = Field(default_factory=list)
     preferred: str | None = Field(None, description="Asset ID of the preferred asset; the first one when omitted.")
     changes: str = Field("", max_length=2000)
+    conditions: list[ConditionRequest] | None = Field(
+        None, description="For a scene with test conditions, the asset of each, every condition in order; their "
+                          "assets join the bound ones, the scene's status follows from them and none is preferred.")
 
 
 def _proposal(suggestion: dict[str, Any] | None, scene: StoredScene, latest: dict[str, Any]):
-    """The suggestion as a binding (status, candidates, preferred id), or None when it is outdated or failed."""
+    """The suggestion as a binding (status, candidates, preferred id, the test conditions' choices or None),
+    or None when it is outdated or failed."""
     if not suggestion or suggestion.get("failure") or _suggestion_json(suggestion, scene, latest)["outdated"]:
         return None
     by_id = {item["id"]: item for item in suggestion["candidates"]}
     chosen = [by_id[key] for key in suggestion["binding"]]
+    if suggestion.get("conditions"):
+        conditions = [{"id": item["id"], "label": item["label"],
+                       "status": "none" if not item["asset"] else "same" if item["fit"] == "直接复用" else "modify",
+                       "asset_id": by_id[item["asset"]]["asset_id"] if item["asset"] else None,
+                       "version_id": by_id[item["asset"]]["version_id"] if item["asset"] else None,
+                       "changes": item["changes"]} for item in suggestion["conditions"]]
+        return conditions_status(conditions), chosen, None, conditions
     if not chosen:
-        return "none", [], None
+        return "none", [], None, None
     preferred = by_id[suggestion["preferred"] or suggestion["binding"][0]]
-    return STATUS_OF[preferred["verdict"]], chosen, preferred["asset_id"]
+    return STATUS_OF[preferred["verdict"]], chosen, preferred["asset_id"], None
+
+
+def _same_conditions(proposed: list[dict[str, Any]] | None, confirmed: list[dict[str, Any]] | None) -> bool:
+    def key(items):
+        return [(item["id"], item["status"], item["asset_id"], item["version_id"]) for item in items or []]
+    return key(proposed) == key(confirmed)
+
+
+def _condition_versions(conditions: list[dict[str, Any]], versions: dict) -> list[dict[str, Any]]:
+    """The conditions with each asset as its stored version (None without one)."""
+    found = []
+    for item in conditions:
+        version = None
+        if item["asset_id"] is not None:
+            version = versions.get((item["asset_id"], item["version_id"]))
+            if version is None:
+                raise HTTPException(404, "Unknown asset version.")
+        found.append({**item, "version": version})
+    return found
 
 
 @router.put("/projects/{project_id}/documents/{document_id}/scenes/{scene_id}/binding", **documented(SceneBinding))
@@ -296,9 +360,21 @@ def confirm(project_id: str, document_id: str, scene_id: str, request: BindingRe
     suggestion = store.suggestions(scene.document.sha256).get(key)
     words = {(item["asset_id"], item["version_id"]): item for item in (suggestion or {}).get("candidates", [])}
     versions = {(item.asset_id, item.version_id): item for item in group.pdf.assets.versions()}
-    preferred = request.preferred or (request.assets[0].asset_id if request.assets else None)
+    status, conditions, wanted = request.status, None, list(request.assets)
+    if request.conditions is not None:
+        labels = group.conditions(scene)
+        if not labels or [item.id for item in request.conditions] != [f"V{number}" for number in range(1, len(labels) + 1)]:
+            raise ValueError("请按顺序给出本条款的每个工况 / Answer every test condition of the clause, in order.")
+        conditions = _condition_versions([{**item.model_dump(), "label": label}
+                                          for item, label in zip(request.conditions, labels)], versions)
+        for item in conditions:  # a condition's asset is bound too
+            if item["version"] and all((bound.asset_id, bound.version_id) != (item["asset_id"], item["version_id"])
+                                       for bound in wanted):
+                wanted.append(BoundAsset(asset_id=item["asset_id"], version_id=item["version_id"]))
+        status = conditions_status(conditions)
+    preferred = request.preferred or (wanted[0].asset_id if wanted else None)
     chosen = []
-    for item in request.assets:
+    for item in wanted:
         version = versions.get((item.asset_id, item.version_id))
         if version is None:
             raise HTTPException(404, "Unknown asset version.")
@@ -308,11 +384,14 @@ def confirm(project_id: str, document_id: str, scene_id: str, request: BindingRe
     if request.assets and not any(item["preferred"] for item in chosen):
         raise ValueError("The preferred asset must be one of the bound assets.")
     proposal = _proposal(suggestion, scene, _latest(group.pdf.assets))
-    accepted = proposal is not None and proposal[0] == request.status and proposal[2] == preferred and {
-        (item["asset_id"], item["version_id"]) for item in proposal[1]} == {
-        (item.asset_id, item.version_id) for item in request.assets}
-    store.confirm(key, scene, request.status, chosen, changes=request.changes,
-                  source="suggestion" if accepted else "manual")
+    if conditions is not None:  # the model's choice for every condition, whatever else is bound
+        accepted = proposal is not None and proposal[3] is not None and _same_conditions(proposal[3], conditions)
+    else:
+        accepted = proposal is not None and proposal[3] is None and proposal[0] == status and proposal[2] == preferred and {
+            (item["asset_id"], item["version_id"]) for item in proposal[1]} == {
+            (item.asset_id, item.version_id) for item in wanted}
+    store.confirm(key, scene, status, chosen, changes=request.changes if conditions is None else "",
+                  source="suggestion" if accepted else "manual", conditions=conditions)
     return _rows(group, [scene])[0]
 
 
@@ -353,14 +432,15 @@ def accept(project_id: str, request: AcceptRequest) -> dict[str, Any]:
                 raise ValueError(f"{scene.package.title}: 建议已失效或未得到有效结果，请重新生成建议 / "
                                  "The suggestion is outdated or failed; ask again.")
             continue
-        status, chosen, preferred = proposal
+        status, chosen, preferred, conditions = proposal
         if request.scenes is None and (status != "same" or _stable(suggestion) is False):
             continue
         assets = [{"version": versions[(item["asset_id"], item["version_id"])],
                    "preferred": item["asset_id"] == preferred, "verdict": item["verdict"],
                    "reason": item["reason"], "changes": item["changes"]} for item in chosen]
         changes = next((item["changes"] for item in chosen if item["asset_id"] == preferred), "")
-        store.confirm(group.key(scene), scene, status, assets, changes=changes, source="suggestion")
+        store.confirm(group.key(scene), scene, status, assets, changes=changes, source="suggestion",
+                      conditions=_condition_versions(conditions, versions) if conditions else None)
     return _view(group)
 
 

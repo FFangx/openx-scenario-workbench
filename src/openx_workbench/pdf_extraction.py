@@ -5,7 +5,7 @@ import hashlib
 import json
 import tempfile
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .atomic_write import write_json
@@ -15,20 +15,25 @@ from .pdf_v2.parser import parse_pdf_structure
 from .pdf_v2.quality import assess_structure_quality
 from .pdf_v2.section_tree import build_section_tree
 from .pdf_v2.figures import find_figures
-from .pdf_v2.scene_first import run_scene_first_extraction, scene_figures
+from .pdf_v2.models import SectionNode, SectionTree
+from .pdf_v2.scene_first import read_variants, run_scene_first_extraction, scene_figures
+from .pdf_v2.scene_schemas import SceneFirstExtraction
 from .scene_package import EvidenceRef, ScenePackage, canonical_features, clause_text, synchronize_structure
 
 ENGINE_VERSION = "openx-v2-scene-first-5"
 PROMPT_VERSION = "scene-first-prompt-v10"
 # Calls one extraction may make beyond its cache: a guard against a runaway loop, not a budget
-# (each structure call is already limited to a few attempts; a long standard needs scenes x readings).
-CALL_LIMIT = 1000
+# (each call is already limited to a few attempts; a long standard needs scenes x readings, once
+# for the structure and once for the test conditions).
+CALL_LIMIT = 2000
 
 
 @dataclass
 class ExtractionResult:
     packages: list[ScenePackage]
     audit: dict
+    # Each package's test conditions (SceneVariants as JSON), None where no reading came back.
+    variants: list[dict | None] = field(default_factory=list)
 
 
 class ExtractionError(ValueError):
@@ -85,42 +90,7 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
                 for figure in figures]}
         except Exception as error:  # a figure the renderer cannot draw must not stop the extraction
             figures, figure_audit = [], {"status": "failed", "reason": f"{type(error).__name__}: {error}"}
-    cache_root = Path(root or default_store_root()) / "model_cache"
-    calls = 0
-    requests = []
-    lock = threading.Lock()
-
-    def transport(body, *, sample=0, timeout=None):
-        nonlocal calls
-        actual = {**body, "model": client.config.model, "max_tokens": client.config.max_tokens}
-        identity = {"engine": ENGINE_VERSION, "endpoint": base_url(client.config.base_url),
-                    "thinking": client.config.thinking, "request": actual}
-        if client.config.thinking and client.config.reasoning_effort:
-            identity["reasoning_effort"] = client.config.reasoning_effort
-        if sample:
-            # Another independent reading of the same request is another response.
-            identity["sample"] = sample
-        checksum = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        cached = cache_root / (checksum + ".json")
-        with lock:
-            if cached.exists():
-                requests.append({"sha256": checksum, "cached": True})
-                return json.loads(cached.read_text(encoding="utf-8"))
-            if calls >= CALL_LIMIT:
-                raise ModelError("单文档模型调用达到上限 / Document model call limit reached.")
-            calls += 1
-            first = calls == 1
-        if first:
-            notify("模型正在识别场景 / Identifying scenes")
-        result = client.complete(actual, timeout=timeout)
-        # Cache complete responses only. Interrupted/truncated requests remain retryable.
-        with lock:
-            if result.get("choices", [{}])[0].get("finish_reason") == "stop":
-                cache_root.mkdir(parents=True, exist_ok=True)
-                _write_json(cached, result)
-            requests.append({"sha256": checksum, "cached": False})
-        return result
-
+    transport, requests = _cached_transport(client, root, lambda: notify("模型正在识别场景 / Identifying scenes"))
     run = run_scene_first_extraction(tree, texts, standard=standard or "PDF", heading_decoder="chain",
                                      model=client.config.model, prompt_version=PROMPT_VERSION,
                                      transport=transport, retry_enabled=True, flagged_node_ids=flagged_nodes,
@@ -132,6 +102,7 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
         raise ExtractionError(f"场景提取未完成 / Extraction failed ({run.status}): {run.failure_detail or ''}", audit)
     if not run.extraction.scenes and run.extraction.rejected_node_ids:
         raise ExtractionError("模型的场景引用均无效，请重新提取或检查原文 / All scene references were invalid.", audit)
+    variants = read_conditions(tree, texts, run.extraction, client=client, transport=transport, progress=notify)
     notify("校验原文引用并保存场景 / Validating evidence and saving scenes")
     nodes = {node.node_id: node for node in tree.nodes}
     sent = scene_figures(tree, texts, run.extraction, figures) if figures else {}
@@ -175,7 +146,74 @@ def extract_pdf(data: bytes, filename: str, standard: str = "", *, client=None, 
                                        "issues": [issue.model_dump(mode="json") for issue in run.validation.issues if issue.scene_id in {None, scene.scene_id}]} if run.validation else {},
                         "review_status": "pending"},
         ))
-    return ExtractionResult([synchronize_structure(package) for package in packages], audit)
+    return ExtractionResult([synchronize_structure(package) for package in packages], audit, variants)
+
+
+def read_conditions(tree: SectionTree, texts: dict[str, str], extraction: SceneFirstExtraction, *, client,
+                    transport, progress=None) -> list[dict | None]:
+    """Each scene's test conditions in scene order, None where no reading came back."""
+    (progress or (lambda message: None))("读取试验工况 / Reading test conditions")
+    found, _, _ = read_variants(tree, texts, extraction, transport=transport, model=client.config.model,
+                                concurrency=client.config.concurrency, progress=progress)
+    return [found[scene.scene_id].model_dump(mode="json") if scene.scene_id in found else None
+            for scene in extraction.scenes]
+
+
+def conditions_from_record(audit: dict, *, client, root=None, progress=None) -> list[dict | None] | None:
+    """The test conditions of a document extracted before they were read, from its extraction record:
+    the same sections and scenes, nothing extracted again. None when the record has no scenes."""
+    nodes = audit.get("nodes")
+    extraction = (audit.get("run") or {}).get("extraction")
+    if not nodes or not extraction:
+        return None
+    sections = [SectionNode(**{key: value for key, value in node.items() if key != "source_text"}) for node in nodes]
+    tree = SectionTree(nodes=tuple(sections), root_ids=tuple(node.node_id for node in sections if node.parent_id is None))
+    texts = {node["node_id"]: node.get("source_text") or "" for node in nodes}
+    transport, _ = _cached_transport(client, root)
+    return read_conditions(tree, texts, SceneFirstExtraction.model_validate(extraction), client=client,
+                           transport=transport, progress=progress)
+
+
+def _cached_transport(client, root=None, first_call=None):
+    """Model calls through the content-addressed cache, at most CALL_LIMIT beyond it; `first_call`
+    runs before the first call that is not cached. Returns the transport and its request log."""
+    cache_root = Path(root or default_store_root()) / "model_cache"
+    calls = 0
+    requests = []
+    lock = threading.Lock()
+
+    def transport(body, *, sample=0, timeout=None):
+        nonlocal calls
+        actual = {**body, "model": client.config.model, "max_tokens": client.config.max_tokens}
+        identity = {"engine": ENGINE_VERSION, "endpoint": base_url(client.config.base_url),
+                    "thinking": client.config.thinking, "request": actual}
+        if client.config.thinking and client.config.reasoning_effort:
+            identity["reasoning_effort"] = client.config.reasoning_effort
+        if sample:
+            # Another independent reading of the same request is another response.
+            identity["sample"] = sample
+        checksum = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        cached = cache_root / (checksum + ".json")
+        with lock:
+            if cached.exists():
+                requests.append({"sha256": checksum, "cached": True})
+                return json.loads(cached.read_text(encoding="utf-8"))
+            if calls >= CALL_LIMIT:
+                raise ModelError("单文档模型调用达到上限 / Document model call limit reached.")
+            calls += 1
+            first = calls == 1
+        if first and first_call:
+            first_call()
+        result = client.complete(actual, timeout=timeout)
+        # Cache complete responses only. Interrupted/truncated requests remain retryable.
+        with lock:
+            if result.get("choices", [{}])[0].get("finish_reason") == "stop":
+                cache_root.mkdir(parents=True, exist_ok=True)
+                _write_json(cached, result)
+            requests.append({"sha256": checksum, "cached": False})
+        return result
+
+    return transport, requests
 
 
 def _structure_audit(data, filename, document, quality):

@@ -20,6 +20,10 @@ from .project_store import ProjectStore
 from .scene_package import EvidenceRef, ScenePackage, clause_text, synchronize_structure
 from .store_lock import serialized
 
+# Each scene's test conditions, kept beside the scenes and not in them: reading them later changes
+# no scene's facts, so a confirmed asset stays confirmed.
+VARIANTS = "variants.json"
+
 
 @dataclass(frozen=True, slots=True)
 class PdfDocument:
@@ -133,9 +137,9 @@ class PdfStore:
                 import uuid
                 self._write_json(self.assets.root / "extraction_failures" / (uuid.uuid4().hex + ".json"), error.audit)
                 raise
-            packages, audit = result.packages, result.audit
+            packages, audit, variants = result.packages, result.audit, result.variants
         else:
-            packages = extract_scene_packages_from_pdf(data, filename, source_standard)
+            packages, variants = extract_scene_packages_from_pdf(data, filename, source_standard), []
         self.blobs.mkdir(parents=True, exist_ok=True)
         blob = self.blobs / digest
         if not blob.exists():
@@ -149,6 +153,8 @@ class PdfStore:
         for index, package in enumerate(packages, 1):
             scene_dir = folder / "scenes" / f"scene-{index:04d}"
             self._write_json(scene_dir / "0001.json", asdict(package))
+        if variants:
+            self._write_variants(folder, variants, client.config.model)
         record = PdfDocument(document_id, project_id, filename, source_standard, digest,
                              datetime.now(timezone.utc).isoformat(), page_count, len(packages),
                              audit.get("engine", "legacy-rules"))
@@ -158,6 +164,41 @@ class PdfStore:
     def extraction_audit(self, document: PdfDocument) -> dict:
         path = self._document_root(document.project_id, document.document_id) / "extraction.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+    def variants(self, project_id: str, document_id: str) -> dict[str, dict | None]:
+        """Each scene's test conditions by scene id; None for a scene no reading came back for, and
+        nothing for a document whose conditions were not read."""
+        path = self._document_root(project_id, document_id) / VARIANTS
+        try:
+            return json.loads(path.read_text(encoding="utf-8")).get("scenes", {})
+        except (OSError, ValueError, AttributeError):
+            return {}
+
+    def variants_unread(self, project_id: str) -> list[PdfDocument]:
+        """Model-extracted documents whose test conditions are not read, or not for every scene."""
+        return [document for document in self.documents(project_id)
+                if document.extraction_engine.startswith("openx-v2")
+                and (not (read := self.variants(project_id, document.document_id))
+                     or len(read) != document.scene_count or None in read.values())]
+
+    def read_variants(self, document: PdfDocument, *, client=None, progress=None) -> bool:
+        """Reads the test conditions of a document extracted before they were read, from its extraction
+        record (cached readings cost nothing). False when the record has no scenes to read."""
+        from .llm_service import ModelClient, load_config
+        from .pdf_extraction import conditions_from_record
+        client = client or ModelClient(load_config(self.root))
+        read = conditions_from_record(self.extraction_audit(document), client=client, root=self.root, progress=progress)
+        if read is None or len(read) != document.scene_count:
+            return False
+        self._write_variants(self._document_root(document.project_id, document.document_id), read, client.config.model)
+        return True
+
+    def _write_variants(self, folder: Path, variants: list[dict | None], model: str) -> None:
+        from .pdf_v2.scene_variants import VARIANT_PROMPT_VERSION
+        self._write_json(folder / VARIANTS, {
+            "prompt": VARIANT_PROMPT_VERSION, "model": model, "read_at": datetime.now(timezone.utc).isoformat(),
+            # Scenes are saved in extraction order (scene-0001 is the first).
+            "scenes": {f"scene-{index:04d}": item for index, item in enumerate(variants, 1)}})
 
     @serialized
     def publish_scene(self, scene: StoredScene) -> dict:

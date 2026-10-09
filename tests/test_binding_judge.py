@@ -81,3 +81,51 @@ def test_empty_binding_means_no_asset_fits():
 def test_replies_that_do_not_cover_the_candidates_are_refused(envelope):
     with pytest.raises(JudgementInvalid):
         parse_judgement(envelope, 2)
+
+
+CONDITIONS = {"dimensions": [{"name": "时段", "kind": "时段", "how": "都要做", "quote": "在夜间条件下重复"}],
+              "variants": [{"label": "日间", "values": {"时段": "日间"}}, {"label": "夜间", "values": {"时段": "夜间"}},
+                           {"label": "预试验", "values": {}}]}
+
+
+def test_a_scene_with_test_conditions_asks_for_an_asset_per_condition():
+    package = requirement()
+    result = search(package, authored_asset(function="AEB"))[0]
+    pool = [(result.asset, result.differences)]
+    plain = judge_request(package, pool)
+    asked = judge_request(package, pool, conditions=CONDITIONS, language="en")
+    assert asked["messages"][0]["content"] == binding_judge.SYSTEM + binding_judge.CONDITIONS + binding_judge.ENGLISH
+    assert asked["messages"][1]["content"].endswith(
+        "## 工况\n维度：时段（都要做）\n- V1 日间：时段=日间\n- V2 夜间：时段=夜间\n- V3 预试验")
+    # A scene of one run reads as before, so its cached replies still answer it.
+    one = {"dimensions": [], "variants": [{"label": "日间", "values": {}}]}
+    assert judge_request(package, pool, conditions=one) == judge_request(package, pool, conditions=None) == plain
+
+
+def test_each_condition_gets_a_candidate_of_the_binding_or_none():
+    judgement = parse_judgement(reply({
+        "candidates": candidates(C1="同一测试", C2="同一测试但要改", C3="不是"),
+        "binding": ["C1"], "preferred": "C1",
+        "conditions": [{"id": "V2", "asset": "C2", "fit": "修改复用", "changes": "改为夜间"},
+                       {"id": "V1", "asset": "C1", "fit": "直接复用", "changes": "不用改"},
+                       {"id": "V3", "asset": "C3", "fit": "直接复用"}]}), 3, 3)
+    assert [(item.id, item.asset, item.fit, item.changes) for item in judgement.conditions] == [
+        ("V1", "C1", "直接复用", "不用改"), ("V2", "C2", "修改复用", "改为夜间"), ("V3", None, "", "")]
+    assert judgement.binding == ("C1", "C2")  # a candidate given a condition joins the binding; one judged "不是" never
+    assert judgement.preferred is None  # with test conditions, no preferred asset
+    unnamed = parse_judgement(reply({"candidates": candidates(C1="同一测试"), "binding": ["C1"],
+                                     "conditions": [{"id": "V1", "asset": "C1"}, {"id": "V2", "asset": None}]}), 1, 2)
+    assert unnamed.conditions[0].fit == "修改复用"  # a fit it does not name is the cautious one
+
+
+@pytest.mark.parametrize("conditions", [
+    None,  # no list
+    [{"id": "V1", "asset": "C1"}],  # V2 not answered
+    [{"id": "V1", "asset": "C1"}, {"id": "V1", "asset": None}, {"id": "V2", "asset": None}],  # V1 twice
+    [{"id": "V1", "asset": "C9"}, {"id": "V2", "asset": None}],  # no such candidate
+    [{"id": "V1", "asset": "C1"}, {"id": "V3", "asset": None}],  # no such condition
+])
+def test_replies_that_do_not_cover_the_conditions_are_refused(conditions):
+    with pytest.raises(JudgementInvalid):
+        parse_judgement(reply({"candidates": candidates(C1="同一测试"), "binding": ["C1"],
+                               **({"conditions": conditions} if conditions is not None else {})}), 1, 2)
