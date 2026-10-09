@@ -730,7 +730,7 @@ export interface paths {
         /**
          * Suggest
          * @description Asks the configured model which candidates build the same test as each scene, three times each at
-         *     the deepest thinking effort the model declares. Sends the scenes' source text and extracted facts, and
+         *     the thinking effort of the settings. Sends the scenes' source text and extracted facts, and
          *     each candidate's name, story and differences, to that model.
          */
         post: operations["suggest_api_projects__project_id__bindings_suggest_post"];

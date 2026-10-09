@@ -136,9 +136,9 @@ def test_pool_starts_with_the_ranking_and_names_the_routes():
 def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
     client, base, model, _ = demo
     job, view = suggested(client, base)
-    # Three readings of each of the four scenes, all at the deepest effort the model declares.
+    # Three readings of each of the four scenes, all at the effort of the settings (here the service's default).
     assert job["result"]["failed"] == 0 and job["result"]["usage"]["calls"] == 12 == model.calls
-    assert job["result"]["effort"] == "max" and model.efforts == {"max": 12}
+    assert job["result"]["effort"] == "" and model.efforts == {"": 12}
     assert job["ranked"] == job["done"] == job["total"] == 4
     rows = view["scenes"]
     assert len(rows) == 4 and all(row["binding"] is None for row in rows)
@@ -398,33 +398,37 @@ def test_each_test_condition_gets_its_asset_and_its_own_agreement(demo):
     assert "去掉目标车" in lines[clause + 3]
 
 
-def test_a_reply_cut_off_at_the_deepest_effort_is_read_again_at_the_default(demo):
+def test_a_reply_cut_off_is_read_again_at_a_shallower_effort(demo):
     client, base, model, _ = demo
-    model.answer = lambda body, client, nth: (reply({}, finish="length") if client.config.reasoning_effort == "max"
+    # The settings keep the service's default ("high" in the model list); "low" is the next shallower.
+    model.answer = lambda body, client, nth: (reply({}, finish="length") if client.config.reasoning_effort == ""
                                               else judged(body))
     first = base.view()["scenes"][0]
     only = [{"document_id": first["document_id"], "scene_id": first["scene_id"]}]
     job = finished(client, base.suggest(scenes=only).json())
-    assert job["result"]["failed"] == 0 and model.efforts == {"max": 3, "high": 3}
+    assert job["result"]["failed"] == 0 and model.efforts == {"": 3, "low": 3}
     assert base.view()["scenes"][0]["suggestion"]["stable"]
     finished(client, base.suggest(scenes=only).json())
-    assert model.calls == 6  # the replies kept under the default effort answer the next run
+    assert model.calls == 6  # the replies kept under the shallower effort answer the next run
 
 
-def test_the_deepest_declared_effort_and_its_fallback(monkeypatch):
-    def efforts(levels=(), default="", thinking=True, fails=False):
+def test_the_settings_effort_and_its_fallback(monkeypatch):
+    def efforts(levels=(), default="", effort="max", thinking=True, fails=False):
         def catalog(self):
             if fails:
                 raise ModelError("no list")
             return [ModelInfo("judge", levels, default)]
         monkeypatch.setattr(ModelClient, "catalog", catalog)
-        return judge_efforts(ModelClient(ModelConfig(model="judge", api_key="k", thinking=thinking, reasoning_effort="low")))
+        return judge_efforts(ModelClient(ModelConfig(model="judge", api_key="k", thinking=thinking, reasoning_effort=effort)))
 
-    assert efforts(("low", "high", "max"), "high") == ("max", "high")
-    assert efforts(("max", "low", "high"), "max") == ("max", "high")  # listed in any order
-    assert efforts(("low", "medium", "high"), "") == ("high", "medium")
-    assert efforts(("high",), "high") == ("high", "high")
-    assert efforts() == efforts(fails=True) == efforts(("low", "max"), thinking=False) == ("low", "low")
+    assert efforts(("low", "high", "max"), "high") == ("max", "high")  # the model's default when shallower
+    assert efforts(("max", "low", "high"), "max") == ("max", "high")  # listed in any order; else the next shallower
+    assert efforts(("low", "medium", "high"), "", effort="high") == ("high", "medium")
+    assert efforts(("low", "high", "max"), "high", effort="") == ("", "low")  # the service's default, then shallower
+    assert efforts(("low", "high", "max"), "high", effort="low") == ("low", "low")  # nothing shallower
+    assert efforts(("high", "max"), "high", effort="xhigh") == ("xhigh", "xhigh")  # a level the model does not list
+    assert efforts(effort="low") == efforts(fails=True, effort="low") == efforts(("low", "max"), effort="low", thinking=False) \
+        == ("low", "low")
 
 
 def test_replies_that_never_fit_fail_the_scene_and_a_wrong_key_fails_the_run(demo):

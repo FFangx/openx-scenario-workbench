@@ -2,7 +2,7 @@
 a person confirms.
 
 `POST .../bindings/suggest` starts a background job (one per project) that ranks every scene's candidates
-and asks the configured model about them, three times each at its deepest thinking; it sends the scenes'
+and asks the configured model about them, three times each at the thinking effort of the settings; it sends the scenes'
 source text and the candidates' stories to that model. Nothing enters the binding table until a person
 confirms a row, and "accept all" leaves the scenes whose readings disagree to a person.
 """
@@ -235,7 +235,7 @@ class SuggestRequest(BaseModel):
 @router.post("/projects/{project_id}/bindings/suggest", **documented(Job))
 def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
     """Asks the configured model which candidates build the same test as each scene, three times each at
-    the deepest thinking effort the model declares. Sends the scenes' source text and extracted facts, and
+    the thinking effort of the settings. Sends the scenes' source text and extracted facts, and
     each candidate's name, story and differences, to that model."""
     group = Group(project_id, request.document_ids)
     scenes = group.select(request.scenes)

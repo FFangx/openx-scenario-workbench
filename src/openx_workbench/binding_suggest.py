@@ -4,7 +4,7 @@ Candidates come from five routes over the library: the workbench ranking, the st
 alone, the asset names, the name-free structure text and the requirement title against the asset
 names. A library whose names say little still reaches the right family through structure, one whose
 files the rules misread still through its names. The model then judges every candidate
-(binding_judge) three times at its deepest thinking, the preferred asset most readings name is the
+(binding_judge) three times at the thinking effort of the settings, the preferred asset most readings name is the
 suggestion, and a person confirms. Readings that disagree mark the suggestion for a second look.
 Replies are cached by request, so asking again about unchanged scenes and candidates calls nothing.
 """
@@ -97,22 +97,25 @@ def candidate_pool(index: OpenXIndex, package: ScenePackage) -> list[PoolCandida
 
 
 def judge_efforts(client: ModelClient) -> tuple[str, str]:
-    """The deepest thinking effort the model declares, and the one a reading falls back to when its reply
-    is cut off there (the model's default, else the next shallower). A model that declares none, or a
-    service without a model list, keeps the effort of the settings."""
+    """The thinking effort of the settings (empty: the service's default), and the one a reading falls
+    back to when its reply is cut off there: the model's default when that is shallower, else the next
+    shallower level the model declares. Without thinking, a model list or a shallower level, the
+    settings' effort for both."""
     config = client.config
+    effort = config.reasoning_effort
     if not config.thinking:
-        return config.reasoning_effort, config.reasoning_effort
+        return effort, effort
     try:
         info = next((item for item in client.catalog() if item.id == config.model), None)
     except ModelError:
         info = None
     levels = sorted((level for level in (info.effort_levels if info else ()) if level in EFFORT_DEPTH),
                     key=EFFORT_DEPTH.index)
-    if not levels:
-        return config.reasoning_effort, config.reasoning_effort
-    fallback = info.default_effort if info.default_effort in levels[:-1] else levels[max(len(levels) - 2, 0)]
-    return levels[-1], fallback
+    current = effort or (info.default_effort if info else "")
+    shallower = levels[:levels.index(current)] if current in levels else []
+    if not shallower:
+        return effort, effort
+    return effort, info.default_effort if info.default_effort in shallower else shallower[-1]
 
 
 class Judge:
