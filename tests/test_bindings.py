@@ -336,6 +336,55 @@ def test_each_test_condition_gets_its_asset_and_its_own_agreement(demo):
     assert saved["preferred"] is None and saved["binding"] == ["C1", "C2"]
     assert (row["suggestion"]["readings"], row["suggestion"]["agree"], row["suggestion"]["stable"]) == (3, 2, False)
     assert [("conditions" in item) for item in suggestions.values()].count(True) == 1
+    assert [item["asset"] for item in row["suggestion"]["conditions"]] == ["C1", "C2", None]
+    lines = client.get(base.url + "/bindings/export", params={"document_ids": base.documents, "format": "csv"}
+                       ).content.decode("utf-8-sig").splitlines()
+    clause = next(number for number, line in enumerate(lines) if ",工况 2/3 有素材,待确认," in line)
+    titles = {item["id"]: item["title"] for item in row["suggestion"]["candidates"]}
+    assert [line.split(",")[3] for line in lines[clause + 1:clause + 4]] == ["V1 日间", "V2 夜间", "V3 预试验"]
+    assert lines[clause + 1].endswith(f",{titles['C1']}（直接复用）,一致 3/3")
+    assert lines[clause + 2].endswith(f",{titles['C2']}（修改复用）,不一致 2/3")
+    assert lines[clause + 3].endswith(",不适用,一致 3/3")
+
+    # "Adopt all" leaves it (its readings disagree on V2, and not every condition is direct reuse) ...
+    view = base.accept().json()
+    assert view["scenes"][0]["binding"] is None and all(other["binding"] for other in view["scenes"][1:])
+    # ... adopted by name, each condition keeps its asset and no asset is preferred.
+    bound = base.accept(scenes=[{"document_id": row["document_id"], "scene_id": row["scene_id"]}]).json()["scenes"][0]["binding"]
+    candidate = {item["id"]: item for item in row["suggestion"]["candidates"]}
+    assert bound["status"] == "modify" and bound["source"] == "suggestion"
+    assert not any(item["preferred"] for item in bound["assets"])
+    assert [(item["id"], item["label"], item["status"], item["asset_id"], item["changes"], item["latest"])
+            for item in bound["conditions"]] == [
+        ("V1", "日间", "same", candidate["C1"]["asset_id"], "", True),
+        ("V2", "夜间", "modify", candidate["C2"]["asset_id"], "改为夜间", True),
+        ("V3", "预试验", "none", None, "", None)]
+
+    # A person gives the pre-test the first asset as well: their own conclusion.
+    first, second = candidate["C1"], candidate["C2"]
+    conditions = [{"id": "V1", "status": "same", "asset_id": first["asset_id"], "version_id": first["version_id"]},
+                  {"id": "V2", "status": "modify", "asset_id": second["asset_id"], "version_id": second["version_id"],
+                   "changes": "改为夜间"},
+                  {"id": "V3", "status": "modify", "asset_id": first["asset_id"], "version_id": first["version_id"],
+                   "changes": "去掉目标车"}]
+    saved = client.put(base.scene(row), json={"status": "none", "conditions": conditions}).json()["binding"]
+    assert saved["status"] == "modify" and saved["source"] == "manual"  # the status follows from the conditions
+    assert {item["asset_id"] for item in saved["assets"]} == {first["asset_id"], second["asset_id"]}
+    assert [item["changes"] for item in saved["conditions"]] == ["", "改为夜间", "去掉目标车"]
+    # Every condition, in order, with an asset unless none applies.
+    for wrong in (conditions[:2], [conditions[1], conditions[0], conditions[2]],
+                  [*conditions[:2], {"id": "V3", "status": "same"}]):
+        assert client.put(base.scene(row), json={"status": "same", "conditions": wrong}).status_code == 400
+    other = view["scenes"][1]
+    assert client.put(base.scene(other), json={"status": "same", "conditions": conditions}).status_code == 400
+    # The assessment lists the clause, then a line per condition with its asset.
+    lines = client.get(base.url + "/bindings/export", params={"document_ids": base.documents, "format": "csv"}
+                       ).content.decode("utf-8-sig").splitlines()
+    clause = next(number for number, line in enumerate(lines) if ",工况 3/3 有素材,修改复用," in line)
+    assert [line.split(",")[3:7] for line in lines[clause + 1:clause + 4]] == [
+        ["V1 日间", "直接复用", first["title"], ""], ["V2 夜间", "修改复用", second["title"], ""],
+        ["V3 预试验", "修改复用", first["title"], ""]]
+    assert "去掉目标车" in lines[clause + 3]
 
 
 def test_a_reply_cut_off_at_the_deepest_effort_is_read_again_at_the_default(demo):
@@ -460,7 +509,7 @@ def test_the_binding_table_exports_as_csv_and_html(demo):
     assert response.status_code == 200 and response.headers["content-type"].startswith("text/csv")
     assert response.content.startswith("\ufeff".encode())  # a spreadsheet reads it as UTF-8
     lines = response.content.decode("utf-8-sig").splitlines()
-    assert lines[0].startswith("PDF,条款,条款标题,复用结论,首选复用素材") and len(lines) == 1 + len(rows)
+    assert lines[0].startswith("PDF,条款,条款标题,工况,复用结论,复用素材（首选）") and len(lines) == 1 + len(rows)
     first, second, third = lines[1:4]
     assert ",修改复用," in first and "把目标车改成静止" in first and ",人工指定," in first
     assert ",不适用," in second
