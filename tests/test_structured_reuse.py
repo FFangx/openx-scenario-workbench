@@ -540,6 +540,17 @@ def test_the_tested_function_is_a_setting_not_a_rebuild():
     assert any(item.category == "function" and not item.verified for item in unknown.differences)
 
 
+def test_a_related_function_costs_no_more_than_an_unknown_one():
+    def function_costs(requested, offered):
+        result = search(requirement(tested_function=requested), authored_asset(function=offered))[0]
+        return [(item.cost, item.verified) for item in result.differences if item.category == "function"]
+
+    assert function_costs("FCW", "AEB") == [(0.5, True)]  # same kind of run: a setting, like an unknown one
+    assert function_costs("ELK", "LKA") == [(0.5, True)]
+    assert function_costs("FCW", "未知") == [(0.5, False)]
+    assert function_costs("FCW", "ACC") == [(2, True)]  # another kind of test
+
+
 def test_a_parking_requirement_needs_a_parking_asset():
     result = search(requirement(parking_operation="泊入"), authored_asset())[0]
     assert result.reuse_level == "new_build"

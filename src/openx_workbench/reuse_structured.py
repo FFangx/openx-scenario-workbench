@@ -27,6 +27,7 @@ from .scene_package import (
 )
 
 ENUMERATION_LIMIT = 6  # up to 6! = 720 participant pairings are enumerated; beyond, solve the assignment problem
+LONGITUDINAL = frozenset({"cruise", "speed_change", "stop", "following", "reverse"})  # the ego's speed behaviors
 VARIANT_LIMIT = 64  # combinations of alternatives compared per asset; beyond, the first ones in key order
 
 
@@ -146,13 +147,14 @@ def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: Retr
                 )
             )
         elif actual != query.tested_function:
+            related = policy.related_functions(actual, query.tested_function)
             differences.append(
                 ReuseDifference(
                     "function",
                     query.tested_function,
                     actual,
-                    "switch the tested function and its scoring",
-                    cost=policy.COST_FUNCTION,
+                    "switch to the related tested function" if related else "switch the tested function and its scoring",
+                    cost=policy.COST_PARAMETER if related else policy.COST_FUNCTION,
                 )
             )
     if "motorway" in query.road_features:
@@ -203,7 +205,12 @@ def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: Retr
         if unscripted:
             differences.append(ReuseDifference("unverified", "ego_action=lane_change", "not scripted",
                                                "confirm the system changes lanes", cost=0, verified=False))
-        if absent or (candidate.ego_actions - query.ego_actions - {"unknown"} - controlled):
+        extra = candidate.ego_actions - query.ego_actions - {"unknown"} - controlled
+        # Driving at a steady speed is how an asset reads any ego that moves; a requirement that names
+        # no longitudinal behavior (only a lane departure, or the system taking over) asks nothing of it.
+        if not query.ego_actions & LONGITUDINAL:
+            extra -= {"cruise"}
+        if absent or extra:
             differences.append(
                 ReuseDifference(
                     "ego_action",

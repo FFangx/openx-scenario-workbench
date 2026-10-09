@@ -176,7 +176,9 @@ def _ego(bundle: ParseBundle) -> list[str]:
         lines.append("driver inputs: " + ", ".join(f"{name}={value}" for name, value in overrides.items()))
     moves = []
     side = lateral_direction(bundle)
-    if side:
+    if facts["lane_departure"]:
+        moves.append(f"drifts {side} out of its lane" if side else "drifts out of its lane")
+    elif side:
         moves.append(f"moves {side}")
     turn = route_turn(bundle)
     if turn:

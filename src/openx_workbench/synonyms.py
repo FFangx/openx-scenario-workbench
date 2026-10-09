@@ -9,6 +9,7 @@ never match, so a single character cannot set off a term.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 # Behaviors: the library term, then words people use for it.
 ACTION_SYNONYMS: dict[str, tuple[str, ...]] = {
@@ -61,6 +62,73 @@ TARGET_SYNONYMS: dict[str, tuple[str, ...]] = {
     "障碍物": ("临时障碍物", "纸箱", "褐色纸箱", "掉落物", "散落物", "散落货物"),
 }
 
+# English words for library terms (2026-10-09). Libraries title their assets in Chinese and with
+# abbreviations, while the interface and many standards are English: "door open warning" found no
+# DOW asset, "roundabout" no 环岛. Each alias is matched as whole words, ignoring case and the
+# spacing of "cut-in" / "cut in", so "cut in" never fires inside "executing".
+ENGLISH_SYNONYMS: dict[str, tuple[str, ...]] = {
+    # behaviors
+    "制动": ("brake", "brakes", "braking", "decelerate", "decelerates", "deceleration"),
+    "换道": ("lane change", "lane changes", "change lanes", "changes lanes", "changing lanes",
+             "overtake", "overtakes", "overtaking"),
+    "横穿": ("crossing", "crosses", "cross the road"),
+    "前车切入": ("cut in", "cuts in", "cutting in"),
+    "前车切出": ("cut out", "cuts out", "cutting out"),
+    "跟车": ("car following", "follow the lead", "follows the lead", "following the lead", "following a lead"),
+    "启停": ("stop and go", "traffic jam", "congestion"),
+    "避障": ("evasive", "evade", "swerve", "swerves", "avoid an obstacle", "avoids an obstacle"),
+    "倒车": ("reversing", "reverses", "backing up", "backs up"),
+    # tested functions
+    "AEB": ("emergency braking",),
+    "ACC": ("adaptive cruise", "cruise control"),
+    "APA": ("automated parking", "automatic parking", "auto parking", "park assist", "parking assist",
+            "self parking", "parallel parking", "perpendicular parking", "parking space", "parking spot"),
+    "NOA": ("navigate on autopilot", "navigation on autopilot", "navigation assist", "highway pilot", "city pilot"),
+    "LKA": ("lane keeping", "lane centering", "lane centring"),
+    "LDW": ("lane departure warning",),
+    "LDP": ("lane departure prevention", "lane departure protection", "emergency lane keeping",
+            "corrective directional control", "cdcf"),
+    "ALCA": ("automatic lane change", "auto lane change", "lane change assist", "assisted lane change"),
+    "FCW": ("forward collision warning", "collision warning"),
+    "BSM": ("blind spot", "bsd"),
+    "DOW": ("door open warning", "door opening warning", "dooring", "exit warning", "safe exit"),
+    "RCTA": ("rear cross traffic", "rear crossing traffic", "cross traffic alert"),
+    "LSS": ("lane support",),
+    "TSA": ("traffic sign", "speed limit sign", "speed sign", "sign recognition"),
+    # targets
+    "乘用车": ("target car", "target vehicle", "lead vehicle", "lead car", "car ahead", "vehicle ahead"),
+    "行人": ("pedestrian", "pedestrians"),
+    "儿童": ("child", "children", "kid", "kids"),
+    "摩托车": ("motorcycle", "motorcycles", "motorbike", "motorcyclist", "moped", "scooter"),
+    "自行车": ("bicycle", "bicycles", "bike", "cyclist", "cyclists"),
+    "电动自行车": ("e-bike", "electric bicycle", "electric bike"),
+    "卡车": ("truck", "trucks", "lorry", "heavy goods vehicle"),
+    "静止": ("stationary", "standing still", "stopped", "parked"),
+    "障碍物": ("obstacle", "obstacles", "debris", "lost cargo", "fallen cargo"),
+    "交通锥": ("traffic cone", "traffic cones", "cone", "cones"),
+    "锥桶": ("traffic cone", "traffic cones", "cone", "cones"),
+    # roads and surroundings
+    "环岛": ("roundabout", "traffic circle"),
+    "交叉口": ("intersection", "junction", "crossroads"),
+    "路口": ("intersection", "junction", "crossroads"),
+    "弯道": ("curve", "curved road", "bend"),
+    "匝道": ("ramp", "slip road"),
+    "停车场": ("parking lot", "car park", "parking garage"),
+    "隧道": ("tunnel",),
+    "施工": ("construction", "roadworks", "road works", "work zone"),
+    "限速": ("speed limit",),
+    "信号灯": ("traffic light", "traffic lights", "traffic signal"),
+    "实线": ("solid line", "solid lane", "solid marking"),
+    "虚线": ("dashed", "broken line"),
+    "broken": ("dashed",),
+    # environment
+    "夜间": ("night", "nighttime", "night-time", "dark"),
+    "雨天": ("rain", "rainy", "raining"),
+    "雾天": ("fog", "foggy"),
+    "遮挡": ("occluded", "occlusion", "obscured", "hidden behind"),
+    "侧翻": ("overturned", "rolled over", "rollover"),
+}
+
 # "乘用车" after these words is the vehicle under test (M1类车, 试验车辆为乘用车), not a target.
 _GENERIC_CARS = frozenset({"乘用车", "轿车", "小车", "汽车", "小汽车"})
 _EGO_MARKERS = ("试验车辆", "主车", "本车", "自车", "ego")
@@ -88,12 +156,22 @@ def _names_a_target(text: str, label: str, aliases: tuple[str, ...]) -> bool:
     return False
 
 
+@lru_cache(maxsize=None)
+def _english(alias: str) -> re.Pattern:
+    """An English alias as whole words: "cut in" also reads "cut-in" and "cutin", never "executing"."""
+    words = [re.escape(word) for word in re.split(r"[\s\-_]+", alias.casefold().strip()) if word]
+    return re.compile(r"(?<![a-z0-9])" + r"[\s\-_]*".join(words) + r"(?![a-z0-9])")
+
+
 def query_terms(text: str) -> list[str]:
     """The library terms a search text refers to, in table order."""
     normalized = _normalize(text)
     terms = [label for table in (ACTION_SYNONYMS, FUNCTION_SYNONYMS) for label, aliases in table.items()
              if _mentions(normalized, label, aliases)]
     terms += [label for label, aliases in TARGET_SYNONYMS.items() if _names_a_target(normalized, label, aliases)]
+    folded = text.casefold()
+    terms += [label for label, aliases in ENGLISH_SYNONYMS.items()
+              if any(_english(alias).search(folded) for alias in aliases)]
     return list(dict.fromkeys(terms))
 
 

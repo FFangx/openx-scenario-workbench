@@ -46,6 +46,9 @@ ParticipantAction = Literal["静止", "匀速行驶", "变速", "刹停", "变�
 
 EgoAction = Literal[
     "匀速行驶", "变速", "刹停", "变道", "定距跟车", "倒车", "被测系统控制", "未知",
+    # The ego drifting towards or over a lane line without taking the next lane (lane departure
+    # warning, prevention and keeping tests); prompt v11 on.
+    "偏离车道",
 ]
 
 RelationKind = Literal["遮挡"]

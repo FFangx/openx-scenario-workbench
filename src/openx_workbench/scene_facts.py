@@ -29,7 +29,10 @@ DISCARDED_EVENTS = frozenset({"TurnOff", "just_for_test"})
 # Driver assistance functions switched on by a simulator command (EnableACC, ...).
 _ENABLE = re.compile(r"Enable(ACC|AEB|APA|NOA|LSS|LKA|LDW|LDP|ALCA|DOW|BSM|RCTA|FCW|TSA)", re.IGNORECASE)
 # Commands that make the system under test change lanes.
-_LANE_CHANGE_COMMANDS = ("laneoffset=", "lanechangecmd", "lanechangereq", "驾驶员触发换道指令", "alcamode=")
+_LANE_CHANGE_COMMANDS = ("lanechangecmd", "lanechangereq", "驾驶员触发换道指令", "alcamode=")
+# Commands that make the ego drift out of its lane without taking the next one (LaneOffset=left in a
+# lane departure warning or keeping test): a lane departure, not a lane change.
+_LANE_DEPARTURE_COMMANDS = ("laneoffset=",)
 # A request to engage the system under test.
 _ENGAGE_COMMANDS = ("sysengreq",)
 # The driver asking the system under test for a lane change or confirming one it proposes.
@@ -157,6 +160,7 @@ def command_facts(bundle: ParseBundle, actor: str = "ego") -> dict[str, Any]:
         "function": command_function(bundle, actor),
         "system_control": any(_ENABLE.search(text) or text.startswith(_ENGAGE_COMMANDS) for text in texts),
         "lane_change": any(marker in text for text in texts for marker in _LANE_CHANGE_COMMANDS),
+        "lane_departure": any(marker in text for text in texts for marker in _LANE_DEPARTURE_COMMANDS),
         "parking": parking,
         "door_open": any("door=open" in text for text in texts),
         "brake": any(text.startswith("brakeposition") for text in texts),
@@ -205,6 +209,8 @@ def actor_behaviors(bundle: ParseBundle, actor: str) -> set[str]:
     checked = actor.casefold() == "ego" and condition_facts(bundle)["lane_change"]
     if facts["lane_change"] or checked or any(_element(action) == "LaneChangeAction" for action in story):
         result.add("lane_change")
+    if facts["lane_departure"]:
+        result.add("lane_departure")
     if facts["system_control"]:
         result.add("system_control")
     if any(_element(action) == "LongitudinalDistanceAction" for action in story):

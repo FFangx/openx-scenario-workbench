@@ -714,6 +714,23 @@ _PROMPT_SCENE_STRUCTURE_V10 = (
     .replace(_V9_OUTPUT_REQUIREMENT, _V10_OUTPUT_REQUIREMENT)
 )
 
+# ---------- v11: a lane departure is its own ego behavior ----------
+# Lane departure warning and keeping tests drift the ego towards or over a line without taking the
+# next lane. v10 had no word for it: readings wrote 匀速行驶 (or 变道), and the comparison then took
+# every lane departure asset for a lane change.
+
+_V11_EGO_ACTIONS_BLOCK = """ego_actions（主车行为，可多选）：
+  匀速行驶 / 变速 / 刹停 / 变道 / 定距跟车 / 倒车 / 偏离车道 / 被测系统控制 / 未知
+  - 「被测系统控制」用于 AEB 介入、APA 自动泊车这类由被测系统接管主车的场景
+  - 主车匀速开着等目标出现，就是「匀速行驶」
+  - 「倒车」= 主车倒着行驶（倒车驶出车位、倒车通过通道这类），文档写明才填
+  - 「偏离车道」= 试验让主车横向漂移、驶向或越过车道线，但不换到相邻车道（车道偏离预警、
+    偏离抑制、车道保持这类试验的偏离过程）；换到相邻车道才是「变道」。偏离方向写在
+    params.lateral_direction，两侧都要做时填未知
+"""
+
+_PROMPT_SCENE_STRUCTURE_V11 = _PROMPT_SCENE_STRUCTURE_V10.replace(_V6_EGO_ACTIONS_BLOCK, _V11_EGO_ACTIONS_BLOCK)
+
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
     "scene-first-prompt-v2": _PROMPT_SCENE_FIRST_V2,
@@ -728,11 +745,14 @@ _PROMPT_REGISTRY: dict[str, str] = {
     "scene-structure-prompt-v9": _PROMPT_SCENE_STRUCTURE_V9,
     "scene-first-prompt-v10": _PROMPT_SCENE_FIRST_V1,
     "scene-structure-prompt-v10": _PROMPT_SCENE_STRUCTURE_V10,
+    "scene-first-prompt-v11": _PROMPT_SCENE_FIRST_V1,
+    "scene-structure-prompt-v11": _PROMPT_SCENE_STRUCTURE_V11,
 }
 
 # Scene prompts whose structure is read in a second step, per batch of scenes.
 STRUCTURE_PROMPTS: dict[str, str] = {"scene-first-prompt-v9": "scene-structure-prompt-v9",
-                                     "scene-first-prompt-v10": "scene-structure-prompt-v10"}
+                                     "scene-first-prompt-v10": "scene-structure-prompt-v10",
+                                     "scene-first-prompt-v11": "scene-structure-prompt-v11"}
 
 _FROZEN_PROMPT_SHA256: dict[str, str] = {
     "scene-first-prompt-v1": (
@@ -781,6 +801,14 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
 
     "scene-structure-prompt-v10": (
         "140d79943591ef131e72be4ead8dbd02b7ba246c3aee1821769373e143887b06"
+    ),
+    # The v1 scene-finding text, unchanged.
+    "scene-first-prompt-v11": (
+        "3c9b020cf9a664a8a2174b57692dbdb02f4dc6e527c0514d15144fa70659fd22"
+    ),
+
+    "scene-structure-prompt-v11": (
+        "e47e1f55b2b2f327f7767f57b40e1cb372c963145d20fbaacc27fc928e6dc660"
     ),
 }
 

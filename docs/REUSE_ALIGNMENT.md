@@ -49,6 +49,10 @@ It does not introduce a second ingestion, model or indexing stack.
   requirement that does not say who drives, and a requirement under system control
   against an asset without an engage command lists it to confirm (`COST_PARAMETER`,
   adjustable). Standards differ in whether they say it at all.
+- An asset reads any moving ego as driving at a steady speed. A requirement whose ego
+  behaviors name nothing about speed (only a lane departure, a lane change or the system
+  taking over) asks nothing of it, so the asset's steady speed is no extra behavior
+  (2026-10-09).
 - Verdicts (2026-10-04, tiers 2026-10-05): `direct`; `modify` for changes to make;
   `major_modify` when they cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus
   an extra participant removed); `review` for an unverified core fact; `new_build` for
@@ -74,7 +78,12 @@ It does not introduce a second ingestion, model or indexing stack.
   of the assets; the rest needs simulator-specific commands (`EnableXXX`) that other
   libraries may not write. So a different function is a change (`COST_FUNCTION`) and an unknown one is
   confirmed while reusing; neither blocks. A parking requirement against a driving
-  asset stays blocking through the parking operation.
+  asset stays blocking through the parking operation. Functions tested on the same kind of run
+  (2026-10-09) switch at the cost of an unknown one (`FUNCTION_FAMILIES`): lane departure warning,
+  prevention and keeping (LSS, LDW, LDP, LKA, ELK), forward collision warning and braking (FCW,
+  AEB), speed sign reading and following (TSA, ISL). Before, an asset naming a related function
+  cost more than one naming none: an emergency lane keeping clause ranked speed-limit tests above
+  every lane keeping asset.
 - Either-or participants (2026-10-06, prompt v8). A requirement may offer alternatives
   of which one takes part in a run ("a car, a tricycle or a pedestrian stands ahead"):
   they share an `alternative_group`. An asset builds one of them, so every combination
@@ -191,8 +200,9 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   step) to standstill is a stop; two distinct non-zero targets are a speed change; a
   relative target speed means moving at no stated speed. Event order is not used.
 - **Commands.** `EnableXXX` names the tested function and, like `SysEngReq`, puts the
-  ego under system control; lane-offset, lane-change-request and ALCA-mode commands
-  are lane changes; `EnableAPA` / `ParkingOut` are parking in or out; door commands
+  ego under system control; lane-change-request and ALCA-mode commands are lane changes;
+  a lane-offset command is a lane departure (the ego drifts towards or over a line without
+  taking the next lane, 2026-10-09); `EnableAPA` / `ParkingOut` are parking in or out; door commands
   and the driver's closing brake (`BrakePosition`) are recorded facts.
 - **Driver input.** Active `OverrideControllerValueAction` channels make a
   driver-intervention test; an active reverse gear is reversing.

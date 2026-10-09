@@ -126,16 +126,33 @@ def test_relative_speed_means_moving_at_no_stated_speed():
 
 def test_commands_read_function_lane_change_parking_and_door():
     xosc = scenario("", place("Ego", 0, 0, 10), group(
-        "Ego", ("on", command("EnableNOA")), ("lc", command("LaneOffset=left")),
+        "Ego", ("on", command("EnableNOA")), ("lc", command("ALCAMode=left")),
         ("door", command("FrontLeftDoor=Open"))))
     item = asset(xosc)
     facts = command_facts(item.bundle)
     assert (facts["function"], facts["lane_change"], facts["door_open"]) == ("NOA", True, True)
     assert actor_actions(item.bundle, "Ego") == {"cruise", "lane_change", "system_control"}
     assert asset_structure_query(item).tested_function == "NOA"
+    # A lane offset drifts the ego out of its lane without taking the next one: a lane departure.
+    drift = asset(scenario("", place("Ego", 0, 0, 22), group(
+        "Ego", ("on", command("EnableLDW")), ("drift", command("LaneOffset=right")))))
+    assert not command_facts(drift.bundle)["lane_change"]
+    assert actor_actions(drift.bundle, "Ego") == {"cruise", "lane_departure", "system_control"}
+    assert asset_structure_query(drift).lateral_direction == "right"
     parking = asset(scenario("", place("Ego", 0, 0, 0), group(
         "Ego", ("apa", command("EnableAPA;ParkingOut;Target=(1,2,0)")))))
     assert asset_structure_query(parking).parking_operation == "park_out"
+
+
+def test_a_lane_departure_test_matches_a_drifting_asset_not_a_cruising_one():
+    keep = scene_package_to_query(ScenePackage("REQ", "Lane keep", "", structure={
+        "tested_function": "LKA", "ego_actions": ["偏离车道"], "participants": []}))
+    assert keep.ego_actions == {"lane_departure"}
+    drift = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", ("drift", command("LaneOffset=left")))))
+    cruise = asset(scenario("", place("Ego", 0, 0, 20)))
+    ego_action = lambda item: [d.candidate for d in compare_structure(keep, item) if d.category == "ego_action"]  # noqa: E731
+    assert ego_action(drift) == []
+    assert ego_action(cruise) == ["cruise"]
 
 
 def test_driver_overrides_make_an_intervention_test_and_reverse_gear_reverses():

@@ -70,6 +70,7 @@ LABELS = {
     "verify participant placement and facing": "核对参与者位置和朝向",
     "remove additional participant behavior": "删除参与者多余的行为",
     "switch the tested function and its scoring": "更换被测功能及其评分",
+    "switch to the related tested function": "换成同类被测功能",
     "not in the file": "文件中没有", "confirm the system under test drives": "核对由被测系统驾驶",
     "build a driver-intervention test": "新建驾驶员干预试验", "build a parking test": "新建泊车试验",
     "no driving lanes read": "未读出行车道", "verify lane count": "核对车道数", "select a road with more lanes": "选择车道更多的道路",

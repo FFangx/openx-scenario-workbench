@@ -14,7 +14,7 @@ const EN: Record<string, string> = {
   三轮车: "Tricycle", 正前方: "Ahead", 正后方: "Behind", 并排同车道: "Alongside, same lane", 左前方: "Front left", 左后方: "Rear left",
   左并排: "Alongside left", 右前方: "Front right", 右后方: "Rear right", 右并排: "Alongside right", 未知方位: "Unknown bearing",
   同向: "Same direction", 对向: "Oncoming", 横向: "Crossing", 静止: "Stationary", 匀速行驶: "Constant speed", 变速: "Speed change",
-  刹停: "Brake to stop", 变道: "Lane change", 定距跟车: "Follow at distance", 倒车: "Reverse", 被测系统控制: "System under test",
+  刹停: "Brake to stop", 变道: "Lane change", 定距跟车: "Follow at distance", 倒车: "Reverse", 偏离车道: "Lane departure", 被测系统控制: "System under test",
   遮挡: "Occlusion", 相对距离: "Relative distance", 绝对距离: "Absolute distance", 车头时距: "Time headway", 速度: "Speed",
   相对速度: "Relative speed", 晴天: "Clear", 雨天: "Rain", 雾天: "Fog", 雪天: "Snow", 沙尘: "Sand or dust", 日间: "Day", 夜间: "Night",
   儿童: "Child", 成人: "Adult", 隧道: "Tunnel", 收费站: "Toll station", 服务区: "Service area", 实线: "Solid line", 虚线: "Dashed line",

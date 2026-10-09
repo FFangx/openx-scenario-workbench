@@ -41,8 +41,14 @@ details were removed; no private corpus, configuration, model responses or
 evaluation data was copied. No ScenarioManager installation is needed at runtime.
 
 OpenX owns orchestration, HTTP transport, persistence and UI. It uses the same
-default `chain` heading decoder and, since 2026-10-07, `scene-first-prompt-v10`: v9 (below) with
-the scene's figures. Standards often place a target only in a figure ("如图C.10所示"); the text
+default `chain` heading decoder and, since 2026-10-09, `scene-first-prompt-v11`: v10 with one more
+ego behavior, 偏离车道 (lane departure): the ego drifts towards or over a lane line without taking the
+next lane, as in lane departure warning, prevention and keeping tests. v10 had no word for it, so those
+tests were read as 匀速行驶 or 变道 and every lane departure asset compared as a lane change. On the
+asset side a `LaneOffset=` command is read as the same lane departure. Documents extracted with v10
+keep their structures; **⋯ → Extraction record → Extract scenes again** reads them with v11.
+
+v10 (2026-10-07) is v9 (below) with the scene's figures. Standards often place a target only in a figure ("如图C.10所示"); the text
 parser keeps only its caption. `pdf_v2/figures.py` reads captions from the page as laid out
 (a parser may fold one into a table or a heading), takes the region between a caption and the
 running text above it, cuts it to the vector drawings, pictures and labels there and renders it as

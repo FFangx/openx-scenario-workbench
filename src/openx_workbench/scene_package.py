@@ -168,6 +168,7 @@ STRUCTURE_ACTIONS = {
     "变速": "speed_change",
     "刹停": "stop",
     "变道": "lane_change",
+    "偏离车道": "lane_departure",
     "定距跟车": "following",
     "倒车": "reverse",
     "被测系统控制": "system_control",

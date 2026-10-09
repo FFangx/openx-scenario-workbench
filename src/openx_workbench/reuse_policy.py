@@ -29,6 +29,21 @@ COST_ROAD = 1.0  # select or modify the OpenDRIVE road
 COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
 COST_FIGURE = 0.5  # a fact read only from a figure that the asset does not show: check it against the figure
 
+# Functions tested on the same kind of run: the ego drifting towards a lane line (warning, prevention,
+# keeping), closing in on a target (warning, braking), passing a speed limit sign (read, followed).
+# Switching within a family sets the system and its scoring, like a function the file does not
+# state (COST_PARAMETER); an asset that names a related function must not rank below one naming none.
+FUNCTION_FAMILIES = (
+    frozenset({"LSS", "LDW", "LDP", "LKA", "ELK"}),
+    frozenset({"AEB", "FCW"}),
+    frozenset({"TSA", "ISL"}),
+)
+
+
+def related_functions(left: str, right: str) -> bool:
+    """Two tested functions of one family (see FUNCTION_FAMILIES)."""
+    return any(left in family and right in family for family in FUNCTION_FAMILIES)
+
 # ---------- difference tiers ----------
 # Which differences decide reuse. Core facts make up the scenario's story and its road
 # (who is there, what they do, what is tested, which road); an unverified core fact keeps a
