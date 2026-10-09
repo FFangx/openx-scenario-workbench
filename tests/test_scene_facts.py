@@ -153,6 +153,11 @@ def test_a_lane_departure_test_matches_a_drifting_asset_not_a_cruising_one():
     ego_action = lambda item: [d.candidate for d in compare_structure(keep, item) if d.category == "ego_action"]  # noqa: E731
     assert ego_action(drift) == []
     assert ego_action(cruise) == ["cruise"]
+    # The drift scripted as a lane change towards the next lane, beside the drift command, is still the drift.
+    scripted = asset(scenario("", place("Ego", 0, 0, 20), group(
+        "Ego", ("drift", command("LaneOffset=right")), ("lane_change", lane_change(-1)))))
+    assert actor_actions(scripted.bundle, "Ego") == {"cruise", "lane_departure"}
+    assert ego_action(scripted) == []
 
 
 def test_driver_overrides_make_an_intervention_test_and_reverse_gear_reverses():

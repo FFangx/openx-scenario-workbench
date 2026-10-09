@@ -207,7 +207,10 @@ def actor_behaviors(bundle: ParseBundle, actor: str) -> set[str]:
     facts = command_facts(bundle, actor)
     result: set[str] = set()
     checked = actor.casefold() == "ego" and condition_facts(bundle)["lane_change"]
-    if facts["lane_change"] or checked or any(_element(action) == "LaneChangeAction" for action in story):
+    # A lane departure test may script its drift as a lane change towards the next lane; beside a
+    # drift command it is that drift, not a lane change.
+    scripted = any(_element(action) == "LaneChangeAction" for action in story) and not facts["lane_departure"]
+    if facts["lane_change"] or checked or scripted:
         result.add("lane_change")
     if facts["lane_departure"]:
         result.add("lane_departure")
