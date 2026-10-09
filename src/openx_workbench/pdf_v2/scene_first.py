@@ -18,6 +18,7 @@ from .scene_proposer import (
     SceneResponseInvalid,
     SceneResponseTruncated,
     build_document_view,
+    build_language_note,
     build_scene_request,
     build_shared_container_appendix,
     build_structure_request,
@@ -477,8 +478,10 @@ def run_scene_first_extraction(
         return SceneFirstRun(**base)
 
     try:
+        # Scene names and stories in the document's own language.
+        language_note = build_language_note([*title_by_node.values(), *text_by_node.values()])
         request = build_scene_request(
-            document_view, model=model, prompt_version=prompt_version
+            document_view + language_note, model=model, prompt_version=prompt_version
         )
     except Exception as error:
         return _record("input_too_large", failure_detail=f"{type(error).__name__}: {error}")

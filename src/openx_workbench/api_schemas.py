@@ -556,7 +556,8 @@ class Overview(Shape):
     assets: int
     versions: int
     playable: int
-    unavailable: int
+    failed: int = Field(description="Latest versions that were tried and could not play.")
+    road_missing: int = Field(description="Latest versions whose road file was not imported: no preview.")
     untested: int
     recent: list[RecentVersion]
 

@@ -15,9 +15,9 @@ def client_for(monkeypatch):
 
     from openx_workbench import api
 
-    def make(target: Path, dataset: str):
+    def make(target: Path, dataset: str, language: str = "zh"):
         monkeypatch.setenv("OPENX_DATA_DIR", str(target))
-        summary = demo_workspace.seed(target, dataset)
+        summary = demo_workspace.seed(target, dataset, language=language)
         api._cache.clear()
         return TestClient(api.app, base_url="http://127.0.0.1"), summary
 
@@ -47,9 +47,11 @@ def test_benchmark_demo_reaches_the_labelled_decisions(tmp_path, client_for):
     assert len(seen) == 38
 
 
-def test_benchmark_demo_replays_the_recorded_suggestions(tmp_path, client_for):
-    client, summary = client_for(tmp_path / "demo", "benchmark")
-    recording = json.loads(demo_workspace.RECORDED.read_text(encoding="utf-8"))
+@pytest.mark.parametrize("language", ["zh", "en"])
+def test_benchmark_demo_replays_the_recorded_suggestions(tmp_path, client_for, language):
+    client, summary = client_for(tmp_path / "demo", "benchmark", language)
+    recording = json.loads(demo_workspace.RECORDED[language].read_text(encoding="utf-8"))
+    assert recording.get("language", "zh") == language
     assert summary["recorded_suggestions"] == len(recording["scenes"]) == 38
     project = summary["project_id"]
     ids = [item["document_id"] for item in summary["documents"]]
@@ -65,7 +67,7 @@ def test_benchmark_demo_replays_the_recorded_suggestions(tmp_path, client_for):
 
 
 def test_a_seed_without_the_recording_has_no_suggestions(tmp_path, client_for, monkeypatch):
-    monkeypatch.setattr(demo_workspace, "RECORDED", tmp_path / "missing.json")
+    monkeypatch.setitem(demo_workspace.RECORDED, "zh", tmp_path / "missing.json")
     client, summary = client_for(tmp_path / "demo", "benchmark")
     assert "recorded_suggestions" not in summary
 

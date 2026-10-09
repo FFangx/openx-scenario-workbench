@@ -100,6 +100,7 @@ try {
   await p.locator(".bind-table .mtag.steady").first().waitFor({ timeout: 60000 });
   await p.waitForFunction(() => document.querySelectorAll(".bind-table tr.ant-table-row .mtag.direct").length === 4, null, { timeout: 60000 });
   check("the model's suggestion shows on every clause", fake.calls() === 12, `${fake.calls()} calls`);
+  check("the model is asked for its reasons in the interface language", fake.english() === 12, `${fake.english()} in English`);
   check("assessments that agree are consistent, the clause whose assessments disagree is marked inconsistent",
     (await bindRows().filter({ hasText: "Consistent 3/3" }).count()) === 3 && (await bindRows().filter({ hasText: "Inconsistent 2/3" }).count()) === 1);
   check("a later suggestion clears the earlier error", (await p.locator(".bind-list .ant-alert-error").count()) === 0);

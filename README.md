@@ -11,7 +11,7 @@ Turn an ADAS requirement into a traceable OpenX reuse decision. OpenX Scenario W
 
 ![Clause reuse assessment: the model's suggestion and a person's confirmation for every clause, with the selected clause's source text, preferred asset and candidates](docs/images/workbench-en.jpg)
 
-*The clause reuse assessment in `openx-demo`: one row per clause with the asset the model prefers and whether its three assessments agree, the first three confirmed by a person (green check); on the right the selected clause's source evidence, an esmini frame and top-down road of the preferred asset, and each candidate's verdict and reason. The demo's suggestions are a recorded real model run, whose reasons the model writes in Chinese.*
+*The clause reuse assessment in `openx-demo`: one row per clause with the asset the model prefers and whether its three assessments agree, the first three confirmed by a person (green check); on the right the selected clause's source evidence, an esmini frame and top-down road of the preferred asset, and each candidate's verdict and reason. The demo's suggestions are a recorded real model run; the model writes its reasons in the interface language.*
 
 ![Asset management with a real esmini frame of the public cut-in example](docs/images/assets-en.jpg)
 
@@ -133,7 +133,7 @@ After the quick start install, one command starts the workbench on an authored d
 openx-demo
 ```
 
-It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed, plus the reuse suggestions of one recorded run of a real model (marked as recorded; regenerating them needs a configured model). Open a PDF to see each clause's suggested asset, or use **Search manually** on a clause to see its ranked candidates and rule verdict:
+It seeds a temporary folder with the [reuse benchmark](examples/reuse-benchmark/): 26 assets and a project with an English and a Chinese protocol PDF whose 38 requirements are already reviewed, plus the reuse suggestions of one recorded run of a real model (marked as recorded; regenerating them needs a configured model). `openx-demo --language en` opens it in English, with the suggestions the model wrote in English. Open a PDF to see each clause's suggested asset, or use **Search manually** on a clause to see its ranked candidates and rule verdict:
 
 ![openx-demo: the clause reuse assessment with recorded suggestions, then manual search through four requirements](docs/images/demo-en.gif)
 

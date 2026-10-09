@@ -2672,12 +2672,20 @@ export interface components {
         Overview: {
             /** Assets */
             assets: number;
+            /**
+             * Failed
+             * @description Latest versions that were tried and could not play.
+             */
+            failed: number;
             /** Playable */
             playable: number;
             /** Recent */
             recent: components["schemas"]["RecentVersion"][];
-            /** Unavailable */
-            unavailable: number;
+            /**
+             * Road Missing
+             * @description Latest versions whose road file was not imported: no preview.
+             */
+            road_missing: number;
             /** Untested */
             untested: number;
             /** Versions */
@@ -3781,6 +3789,13 @@ export interface components {
              * @description Retrieval backend of the candidates; the preferred one when omitted.
              */
             encoder?: string | null;
+            /**
+             * Lang
+             * @description Interface language: the model writes its reasons in it.
+             * @default zh
+             * @enum {string}
+             */
+            lang?: "zh" | "en";
             /**
              * Scenes
              * @description Only these scenes; every scene of the PDFs when omitted.

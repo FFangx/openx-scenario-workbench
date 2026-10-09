@@ -52,11 +52,14 @@ function Library({ overview, onNavigate }: { overview: Overview; onNavigate: (pa
       </div>
     );
   }
+  // Versions only once an asset has an older one: until then they equal the assets.
   const metrics: [string, number, string?][] = [
     [t("资产", "Assets"), overview.assets],
-    [t("版本", "Versions"), overview.versions],
+    ...(overview.versions > overview.assets ? [[t("版本", "Versions"), overview.versions] as [string, number]] : []),
     [t("可播放", "Playable"), overview.playable, overview.playable ? "ok" : undefined],
     [t("未检测", "Not tested"), overview.untested],
+    [t("缺道路", "No road"), overview.road_missing],
+    [t("播放失败", "Failed"), overview.failed, overview.failed ? "bad" : undefined],
   ];
   return (
     <>
@@ -69,8 +72,7 @@ function Library({ overview, onNavigate }: { overview: Overview; onNavigate: (pa
         ))}
       </div>
       <p className="muted ov-note">
-        {t(`预览失败 ${overview.unavailable} 个。导入记录和每个素材的预览在资产管理里。`,
-          `Preview failures: ${overview.unavailable}. Imports and each asset's preview are in Asset management.`)}
+        {t("导入记录和每个素材的预览在资产管理里。", "Imports and each asset's preview are in Asset management.")}
         {" "}<a onClick={() => onNavigate("assets")}>{t("前往资产管理", "Go to asset management")}</a>
       </p>
     </>

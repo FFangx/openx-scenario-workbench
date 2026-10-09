@@ -8,6 +8,7 @@ import pytest
 from openx_workbench.asset_store import AssetStore
 from openx_workbench.llm_service import ModelClient, ModelConfig
 from openx_workbench.pdf_extraction import extract_pdf
+from openx_workbench.pdf_v2.scene_proposer import build_language_note
 from openx_workbench.pdf_store import PdfStore
 from openx_workbench.project_store import ProjectStore
 
@@ -98,6 +99,7 @@ def test_v2_classification_evidence_cache_and_immutable_library(tmp_path):
     record = store.import_pdf(project.project_id, "authored.pdf", data, client=client)
     assert record.scene_count == 2
     assert record.extraction_engine.startswith("openx-v2")
+    assert calls[0]["messages"][1]["content"].endswith(build_language_note(["English text"]))  # English names
     scene = store.scenes(project.project_id, record.document_id)[0]
     assert scene.package.classification["function"] == "AEB"
     assert scene.package.structure["tested_function"] == "AEB"
@@ -128,6 +130,14 @@ def test_v2_classification_evidence_cache_and_immutable_library(tmp_path):
     assert store.library()[0]["revision"] == 2
     assert list((tmp_path / "requirements").glob("*/0001.json"))
     assert store.extraction_audit(record)["run"]["model"] == client.config.model
+
+
+def test_scene_names_follow_the_document_language():
+    english = ["2.1 Stationary car braking", "The ego vehicle approaches a stationary target car ahead at 50 km/h."]
+    chinese = ["5.1 静止目标车辆", "主车以 50 km/h 接近前方静止目标车辆，TTC 为 4 s 时 AEB 应介入（参照 ISO 22839）。"]
+    assert "name 和 story 用英文写" in build_language_note(english)
+    # A Chinese standard quoting units and abbreviations, and an empty one, keep the frozen request.
+    assert build_language_note(chinese) == build_language_note(english + chinese) == build_language_note([]) == ""
 
 
 def test_a_model_that_reads_images_gets_each_scene_figure(tmp_path):

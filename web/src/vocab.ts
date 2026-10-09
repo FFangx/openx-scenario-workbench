@@ -25,7 +25,7 @@ const EN: Record<string, string> = {
 };
 const ZH: Record<string, string> = {
   rule: "规则生成", rule_only: "规则分类", classified: "模型复核", manual_confirmed: "人工确认", failed: "失败", pending: "待分类",
-  not_tested: "未测试", playable: "可播放", warning: "有警告", unsupported: "不支持", timeout: "超时",
+  not_tested: "未检测", playable: "可播放", warning: "有警告", unsupported: "不支持", timeout: "超时",
   road_missing: "道路文件缺失",
 };
 

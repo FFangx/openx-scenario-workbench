@@ -9,11 +9,12 @@ verdicts. Results and method: [docs/EVALUATION.md](../../docs/EVALUATION.md).
 - `assets/*.xosc`, `roads/*.xodr`: rendered from `benchmark.json` by
   `python scripts/build_reuse_benchmark.py`. Do not edit them by hand; change the
   specification and re-render.
-- `suggestions.json`: the reuse suggestions of one real model run on the 38
-  requirements (model, thinking effort and date inside), which `openx-demo` replays and
-  marks as recorded so the assessment table is filled without a model. They are model
-  output, not labels. After changing the benchmark, remake them with
-  `openx-demo --record-suggestions` (calls the model of your normal settings).
+- `suggestions.json` / `suggestions.en.json`: the reuse suggestions of one real model
+  run on the 38 requirements per interface language (the model writes its reasons in the
+  language asked; model, thinking effort and date inside), which `openx-demo [--language en]`
+  replays and marks as recorded so the assessment table is filled without a model. They
+  are model output, not labels. After changing the benchmark, remake them with
+  `openx-demo --record-suggestions [--language en]` (calls the model of your normal settings).
 
 Everything here was written for this repository and is licensed under MIT. The files
 are parser and matching inputs, not certified executable scenarios. Load them in the

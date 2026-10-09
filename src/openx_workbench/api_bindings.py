@@ -206,6 +206,7 @@ class SuggestRequest(BaseModel):
     document_ids: list[str] = Field(description="The PDFs whose scenes are suggested for, in one job.")
     scenes: list[SceneRef] | None = Field(None, description="Only these scenes; every scene of the PDFs when omitted.")
     encoder: str | None = Field(None, description="Retrieval backend of the candidates; the preferred one when omitted.")
+    lang: Literal["zh", "en"] = Field("zh", description="Interface language: the model writes its reasons in it.")
 
 
 @router.post("/projects/{project_id}/bindings/suggest", **documented(Job))
@@ -250,7 +251,7 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
         failed = suggest_scenes(
             scenes, index, versions, judge, client.config.concurrency, digest=scene_digest,
             save=lambda scene, record: store.save_suggestion(scene.document.sha256, group.key(scene), record),
-            ranked=ranked, judged=judged)
+            ranked=ranked, judged=judged, language=request.lang)
         return {"project_id": project_id, "document_ids": request.document_ids, "failed": failed,
                 "effort": efforts[0], "usage": dict(judge.spent)}
 

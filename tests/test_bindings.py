@@ -164,6 +164,19 @@ def test_suggestions_are_kept_and_accepting_them_binds_and_pins(demo):
         store.delete_version(version)  # a bound version stays
 
 
+def test_the_model_writes_its_reasons_in_the_language_asked(demo):
+    client, base, model, _ = demo
+    suggested(client, base)
+    chinese = model.calls
+    assert not any("用英文写" in key for key in model.seen)
+    job = finished(client, base.suggest(lang="en").json())
+    assert job["status"] == "completed", job
+    # Asked in English, every reading is a new request: the Chinese replies do not answer it.
+    assert model.calls == 2 * chinese
+    assert sum(count for key, count in model.seen.items() if "用英文写" in key) == chinese
+    assert base.suggest(lang="fr").status_code == 422
+
+
 def test_one_job_suggests_for_several_pdfs_and_lists_them_together(demo):
     client, base, model, seeded = demo
     documents = [item["document_id"] for item in reversed(seeded["documents"])]

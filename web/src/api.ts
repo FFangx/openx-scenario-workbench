@@ -120,8 +120,8 @@ export const api = {
   batchSave: (pid: string, signature: string) => post<{ report_id: string }>(`/api/projects/${pid}/batch/save`, { signature }),
   bindings: (pid: string, dids: string[]) =>
     call<GroupBindings>(`/api/projects/${pid}/bindings?${dids.map((d) => `document_ids=${encodeURIComponent(d)}`).join("&")}`),
-  suggestBindings: (pid: string, dids: string[], scenes?: SceneRef[]) =>
-    post<Job>(`/api/projects/${pid}/bindings/suggest`, { document_ids: dids, scenes: scenes ?? null }),
+  suggestBindings: (pid: string, dids: string[], lang: Lang, scenes?: SceneRef[]) =>
+    post<Job>(`/api/projects/${pid}/bindings/suggest`, { document_ids: dids, scenes: scenes ?? null, lang }),
   acceptBindings: (pid: string, dids: string[], scenes?: SceneRef[]) =>
     post<GroupBindings>(`/api/projects/${pid}/bindings/accept`, { document_ids: dids, scenes: scenes ?? null }),
   confirmBinding: (pid: string, s: SceneRef, draft: BindingDraft) =>

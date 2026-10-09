@@ -1,12 +1,14 @@
 # Documentation images
 
 `workbench.jpg` / `workbench-en.jpg` and `assets.jpg` / `assets-en.jpg` are Chinese
-and English screenshots of the React workbench, refreshed on 2026-10-07 at
-1586×992.
+and English screenshots of the React workbench at 1586×992, refreshed on 2026-10-07;
+`workbench-en.jpg` and `demo-en.gif` again on 2026-10-09, when the model's reasons
+began to follow the interface language.
 
 The workbench shot is the clause reuse assessment of the benchmark demo workspace
-(`scripts/seed_demo_workspace.py <folder> --dataset benchmark`: authored assets, authored
-PDFs, reviewed typed requirements and the recorded model suggestions it replays), after
+(`scripts/seed_demo_workspace.py <folder> --dataset benchmark --language zh|en`: authored
+assets, authored PDFs, reviewed typed requirements and the model suggestions recorded in
+that language, which it replays), after
 **Make previews** in asset management and adopting the first three clauses: the
 preferred asset shows a real esmini frame and its road from above. The asset shot uses
 the fixtures demo workspace with the public esmini cut-in example (MPL-2.0) imported

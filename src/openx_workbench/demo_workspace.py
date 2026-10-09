@@ -8,10 +8,12 @@ Two datasets, both written for this repository (MIT) and read from the checkout:
   requirements. Small and stable; the browser checks in web/scripts use it.
 
 Nothing is downloaded and no model is called. The benchmark comes with the reuse
-suggestions of one real model run (examples/reuse-benchmark/suggestions.json,
-made with ``openx-demo --record-suggestions``), replayed and marked as recorded,
-so its assessment table is filled without a model. A workspace only ever lives
-in the folder it was seeded into, never in the normal data folder.
+suggestions of one real model run per interface language (the model writes its
+reasons in the language asked: examples/reuse-benchmark/suggestions.json in Chinese,
+suggestions.en.json in English, made with ``openx-demo --record-suggestions
+[--language en]``), replayed and marked as recorded, so its assessment table is
+filled without a model. A workspace only ever lives in the folder it was seeded
+into, never in the normal data folder.
 """
 
 from __future__ import annotations
@@ -32,7 +34,8 @@ from .checkout import checkout_root
 REPO = checkout_root()
 FIXTURES = REPO / "tests" / "fixtures"
 BENCHMARK = REPO / "examples" / "reuse-benchmark"
-RECORDED = BENCHMARK / "suggestions.json"
+RECORDED = {"zh": BENCHMARK / "suggestions.json", "en": BENCHMARK / "suggestions.en.json"}  # per interface language
+LANGUAGE_LABELS = {"zh": "中文", "en": "English"}  # as preferences.json keeps them
 MARKER = "demo-workspace.json"
 ROAD_LABELS = {"straight": "直道", "curve": "弯道"}
 
@@ -160,9 +163,9 @@ def replay_suggestions(store, pdf, project_id: str, recording: dict) -> int:
     return len(recording["scenes"])
 
 
-def seed(target: Path, dataset: str = "fixtures", recorded: bool = True) -> dict:
+def seed(target: Path, dataset: str = "fixtures", recorded: bool = True, language: str = "zh") -> dict:
     """Fill an empty folder with a demo workspace and return what was created; `recorded` replays the
-    benchmark's recorded suggestions."""
+    benchmark's suggestions recorded in `language` ("zh" or "en")."""
     if dataset not in {"fixtures", "benchmark"}:
         raise ValueError(f"Unknown demo dataset: {dataset}")
     if target.exists() and any(target.iterdir()):
@@ -178,17 +181,19 @@ def seed(target: Path, dataset: str = "fixtures", recorded: bool = True) -> dict
     pdf = PdfStore(store)
     seeder = _seed_benchmark if dataset == "benchmark" else _seed_fixtures
     result = {"data_dir": str(target), "dataset": dataset, **seeder(store, pdf, ProjectStore(store))}
-    if dataset == "benchmark" and recorded and RECORDED.is_file():
-        recording = json.loads(RECORDED.read_text(encoding="utf-8"))
+    if dataset == "benchmark" and recorded and RECORDED[language].is_file():
+        recording = json.loads(RECORDED[language].read_text(encoding="utf-8"))
         result["recorded_suggestions"] = replay_suggestions(store, pdf, result["project_id"], recording)
     (target / MARKER).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
 
 
-def record_suggestions(out: Path = RECORDED, work: Path | None = None) -> dict:
-    """Ask the model of the normal settings for the suggestions of every benchmark scene and write them to
-    `out`. The benchmark is seeded in `work` (kept, so a second run reuses its cached replies) or in a
-    temporary folder. Calls the model: 38 scenes, three readings each."""
+def record_suggestions(out: Path | None = None, work: Path | None = None, language: str = "zh") -> dict:
+    """Ask the model of the normal settings for the suggestions of every benchmark scene, with its reasons in
+    `language`, and write them to `out` (that language's recording when omitted). The benchmark is seeded
+    in `work` (kept, so a second run reuses its cached replies) or in a temporary folder. Calls the model:
+    38 scenes, three readings each."""
+    out = out or RECORDED[language]
     from .llm_service import ModelClient, load_config
 
     config = load_config()  # the normal data folder's, read before the workspace takes its place
@@ -218,14 +223,16 @@ def record_suggestions(out: Path = RECORDED, work: Path | None = None) -> dict:
         judge = Judge(client, target / "model_cache", efforts=efforts)
         records: dict[tuple[str, str], dict] = {}  # scene ids repeat across PDFs
         failed = suggest_scenes(scenes, _index(catalog, "hashing"), versions, judge, config.concurrency, digest=scene_digest,
-                                save=lambda scene, record: records.__setitem__((scene.document.document_id, scene.scene_id), record))
+                                save=lambda scene, record: records.__setitem__((scene.document.document_id, scene.scene_id), record),
+                                language=language)
         if failed:
             raise SystemExit(f"{failed} scenes got no usable reply; run again with --data-dir to keep the replies so far.")
         names = {version.asset_id: _asset_name(version) for version in versions.values()}
         recording = {
             "about": "Reuse suggestions of one real model run on this benchmark, replayed by openx-demo "
-                     "without calling a model. Remake with: openx-demo --record-suggestions",
-            "model": config.model, "effort": efforts[0], "encoder": "hashing",
+                     "without calling a model. Remake with: openx-demo --record-suggestions"
+                     + (" --language en" if language == "en" else ""),
+            "language": language, "model": config.model, "effort": efforts[0], "encoder": "hashing",
             "recorded_at": max(record["created_at"] for record in records.values()),
             "scenes": [{"document": scene.document.filename, "section_id": section_of(scene.package),
                         "title": scene.package.title, **{name: record[name] for name in SUGGESTION_KEPT},
@@ -258,13 +265,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="keep the demo workspace in this folder (seeded on first use); default: a temporary folder removed on exit")
     parser.add_argument("--port", type=int, default=8770)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--language", choices=("zh", "en"), default="zh",
+                        help="interface language of a new demo workspace, and of the recorded suggestions it replays")
     parser.add_argument("--record-suggestions", action="store_true",
                         help="for maintainers: remake the benchmark's recorded suggestions with the model of your normal "
                              "settings (calls it; --data-dir keeps the workspace and its cached replies)")
     args = parser.parse_args(argv)
     if args.record_suggestions:
-        done = record_suggestions(work=args.data_dir)
-        print(f"Recorded {done['scenes']} suggestions (effort {done['effort']}, {done['usage']}) in {RECORDED}", flush=True)
+        done = record_suggestions(work=args.data_dir, language=args.language)
+        print(f"Recorded {done['scenes']} suggestions (effort {done['effort']}, {done['usage']}) "
+              f"in {RECORDED[args.language]}", flush=True)
         return 0
 
     from .api import WEB_DIST
@@ -278,13 +288,13 @@ def main(argv: list[str] | None = None) -> int:
             os.environ["OPENX_DATA_DIR"] = str(target)
             print(f"Reusing the demo workspace in {target}", flush=True)
         else:
-            summary = seed(target, args.dataset)
+            summary = seed(target, args.dataset, language=args.language)
             print(f"Seeded the {args.dataset} demo: {summary['assets']} assets, "
                   f"{sum(item['scenes'] for item in summary['documents'])} requirements in {target}", flush=True)
             from .preferences import save_preferences
 
             # The hashing baseline needs no model download; switch to BGE-M3 in Settings if it is installed.
-            save_preferences(encoder="hashing")
+            save_preferences(encoder="hashing", language=LANGUAGE_LABELS[args.language])
         import uvicorn
 
         from .api import app
