@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import suppress
 from dataclasses import asdict
 from typing import Any
 
@@ -24,6 +25,8 @@ RANKINGS_KEPT = 16
 _lock = threading.Lock()  # guards _cache; never held while an index is built
 _index_build = threading.Lock()  # one index build at a time
 _cache: dict[str, Any] = {}
+_progress_lock = threading.Lock()
+_progress: dict[str, Any] = {"state": "idle", "stage": "", "done": 0, "total": 0, "error": ""}
 
 
 # ---------- shared state ----------
@@ -58,26 +61,71 @@ def _catalog() -> tuple[list[OpenXAsset], dict[str, AssetVersion]]:
                                  for version, stamp in zip(latest, stamps))))
     with _lock:
         if _cache.get("catalog_key") != key:
-            parsed = _cache.get("parsed", {})
-            identities = [(version.asset_id, version.version_id, stamp, schemas) for version, stamp in zip(latest, stamps)]
-            entries = {identity: parsed.get(identity) or catalog_cache.read(store, version, identity)
-                       for version, identity in zip(latest, identities)}
-            unmade = [version for version, identity in zip(latest, identities) if entries[identity] is None]
-            # After a schema switch or an import, check the files' standards in several processes first.
-            check_ahead(store.file_bytes(version, role) for version in unmade for role in ("scenario", "road")
-                        if role == "scenario" or not version.road_missing)
-            for version, identity in zip(latest, identities):
-                if entries[identity] is None:
-                    entries[identity] = catalog_cache.make(store, version)
-                    catalog_cache.write(store, version, identity, entries[identity])
-            catalog_cache.prune(store, latest)
-            kept = [entries[identity] for identity in identities]
-            assets = [entry.asset for entry in kept]
-            _cache.update(parsed=entries, catalog_key=key, catalog=(assets, {
-                asset.asset_id: version for asset, version in zip(assets, latest)}),
-                structures=[entry.structure for entry in kept],
-                catalog_fingerprint=catalog_fingerprint(assets, [entry.fingerprint for entry in kept]))
+            _report(state="loading", stage="reading", done=0, total=len(latest))
+            try:
+                _build_catalog(store, latest, stamps, schemas, key)
+            except Exception as error:
+                _report(state="failed", error=str(error))
+                raise
+            _report(state="ready", stage="", done=len(latest), total=len(latest))
         return _cache["catalog"]
+
+
+def _build_catalog(store: AssetStore, latest: list[AssetVersion], stamps: list, schemas, key) -> None:
+    parsed = _cache.get("parsed", {})
+    identities = [(version.asset_id, version.version_id, stamp, schemas) for version, stamp in zip(latest, stamps)]
+    entries = {}
+    for done, (version, identity) in enumerate(zip(latest, identities), 1):
+        entries[identity] = parsed.get(identity) or catalog_cache.read(store, version, identity)
+        _report(done=done)
+    unmade = [version for version, identity in zip(latest, identities) if entries[identity] is None]
+    if unmade:
+        # After a schema switch, an import or an update of the workbench, check the files' standards in
+        # several processes first.
+        _report(stage="checking", done=0, total=len(unmade))
+        check_ahead(store.file_bytes(version, role) for version in unmade for role in ("scenario", "road")
+                    if role == "scenario" or not version.road_missing)
+        _report(stage="parsing")
+    made = 0
+    for version, identity in zip(latest, identities):
+        if entries[identity] is None:
+            entries[identity] = catalog_cache.make(store, version)
+            catalog_cache.write(store, version, identity, entries[identity])
+            made += 1
+            _report(done=made)
+    catalog_cache.prune(store, latest)
+    kept = [entries[identity] for identity in identities]
+    assets = [entry.asset for entry in kept]
+    _cache.update(parsed=entries, catalog_key=key, catalog=(assets, {
+        asset.asset_id: version for asset, version in zip(assets, latest)}),
+        structures=[entry.structure for entry in kept],
+        catalog_fingerprint=catalog_fingerprint(assets, [entry.fingerprint for entry in kept]))
+
+
+def _report(**values: Any) -> None:
+    with _progress_lock:
+        _progress.update(values)
+
+
+def catalog_progress() -> dict[str, Any]:
+    """How far the catalog is: "idle" before anything asked for it, "loading" with the stage ("reading" the
+    kept entries, "checking" file standards, "parsing" the assets that changed) and its count, "ready"
+    or "failed". Read without `_lock`, which a build holds."""
+    with _progress_lock:
+        return dict(_progress)
+
+
+def preload_catalog() -> None:
+    """Build the catalog in the background as the service starts, so the first page need not wait as long;
+    projects kept in the old layout move into folders first."""
+    def load() -> None:
+        from .project_store import ProjectStore
+        with suppress(Exception):  # the first request that needs either reports the failure
+            ProjectStore(_store()).refresh()
+        with suppress(Exception):
+            _catalog()
+
+    threading.Thread(target=load, name="catalog-preload", daemon=True).start()
 
 
 def _derived(catalog: list[OpenXAsset]) -> tuple[str, list | None]:

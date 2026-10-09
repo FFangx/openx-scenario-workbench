@@ -52,8 +52,20 @@ are disabled while an import task is active.
 
 Data defaults to `%LOCALAPPDATA%/OpenXScenarioWorkbench` on Windows, outside
 the Git repository. Set `OPENX_DATA_DIR` to use another local directory. Never
-copy a private asset library into this public repository. The project menu in
-the header creates named local projects and restores the last selected one. Saving a PDF reuse
+copy a private asset library into this public repository.
+
+A project is a folder, by default `Documents\OpenX 项目\<name>` (the location can
+be changed when creating one): `PDF\` holds the imported PDFs as given, `导出\`
+(`Exports\` when created in English) the saved reuse assessments, and the hidden
+`.openx\` the workbench's own records. The data folder keeps `projects.json`, which
+lists where each project is and which was open last. The project menu in the header
+creates projects, opens the current project's folder, and under **Manage projects**
+renames (folder included), deletes (the folder goes to the Recycle Bin; the shared
+reuse conclusions stay) or adds a project folder moved or restored by hand. With
+`OPENX_DATA_DIR` set, projects stay inside that data folder under `projects`.
+Projects of earlier versions, kept in `<data>\projects\<id>`, move into folders on
+the first start; the originals are kept in `<data>\projects-before-folders`.
+Saving a PDF reuse
 decision writes a report under the project and pins its exact asset version.
 Pinned versions cannot be deleted from Asset management.
 Overview lists saved decisions for the selected project and offers their

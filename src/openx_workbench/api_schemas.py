@@ -86,11 +86,40 @@ class Project(Shape):
     project_id: str
     name: str
     created_at: str
+    folder: str = Field(description="The project's folder on this computer.")
+    pdf_count: int
+
+
+class MissingProject(Shape):
+    """A project whose folder was moved or deleted outside the workbench."""
+    project_id: str
+    name: str
+    folder: str
 
 
 class ProjectList(Shape):
     projects: list[Project]
+    missing: list[MissingProject]
     last_project_id: str | None
+    location: str = Field(description="The folder new projects are created in.")
+
+
+class ProjectLocation(Shape):
+    location: str
+    cancelled: bool
+
+
+class OpenedProject(Shape):
+    project: Project | None = Field(description="None when the folder dialog was cancelled.")
+
+
+class DeletedProject(Shape):
+    deleted: str
+
+
+class SavedExport(Shape):
+    filename: str
+    path: str
 
 
 class PdfDocument(Shape):
@@ -365,6 +394,25 @@ class Library(Shape):
     last_import: str | None
     encoder: str
     facets: dict[str, list[str]]
+
+
+class CatalogProgress(Shape):
+    state: Literal["idle", "loading", "ready", "failed"]
+    stage: Literal["", "reading", "checking", "parsing"] = Field(
+        description="While loading: reading kept entries, checking file standards, or parsing changed assets.")
+    done: int
+    total: int
+    error: str
+
+
+class EncoderStatus(Shape):
+    name: str
+    state: Literal["idle", "loading", "ready", "failed"]
+
+
+class LibraryStatus(Shape):
+    catalog: CatalogProgress
+    encoder: EncoderStatus
 
 
 # ---------- traces and reports ----------

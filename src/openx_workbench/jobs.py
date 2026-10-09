@@ -18,9 +18,10 @@ _registry_lock = Lock()
 
 
 class Job:
-    def __init__(self, kind: str, scope: str = ""):
+    def __init__(self, kind: str, scope: str = "", project: str = ""):
         self.kind = kind
         self.scope = scope
+        self.project = project  # the project the job writes into, which may not be renamed or deleted meanwhile
         self.lock = Lock()
         self.cancel = Event()
         self.state: dict[str, Any] = dict(
@@ -81,6 +82,12 @@ def start(job: Job, work: Callable[[Job], Any] | None = None) -> Job:
         target = job.run if work is None else (lambda: job.run(work))
         Thread(target=target, daemon=True, name=f"openx-{job.kind}").start()
         return job
+
+
+def busy(project: str) -> bool:
+    """Whether a running job writes into `project`."""
+    with _registry_lock:
+        return any(job.project == project and job.snapshot()["status"] == "running" for job in _jobs.values())
 
 
 def get(job_id: str) -> Job | None:

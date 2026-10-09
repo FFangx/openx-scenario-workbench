@@ -34,12 +34,26 @@ def preferred_encoder() -> str:
 
 
 _encoder_lock = threading.Lock()
+_encoder_states: dict[str, str] = {}
 
 
 def encoder(name: str):
     """The named encoder, built once per process; a caller arriving mid-build waits rather than loading it twice."""
+    if _encoder_states.get(name) != "ready":
+        _encoder_states[name] = "loading"
     with _encoder_lock:
-        return _build_encoder(name)
+        try:
+            built = _build_encoder(name)
+        except Exception:
+            _encoder_states[name] = "failed"
+            raise
+        _encoder_states[name] = "ready"
+        return built
+
+
+def encoder_state(name: str) -> str:
+    """"idle" until something asks for the encoder, then "loading", "ready" or "failed"."""
+    return _encoder_states.get(name, "idle")
 
 
 @lru_cache(maxsize=2)

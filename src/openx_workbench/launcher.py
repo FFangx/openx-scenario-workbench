@@ -245,8 +245,10 @@ def main():
             return
         import uvicorn
         from .api import app
+        from .api_common import preload_catalog
         from .matching import preload_encoder
         preload_encoder()  # after the app's imports, so the model's imports do not interleave with them
+        preload_catalog()
         uvicorn.run(app, host="127.0.0.1", port=args.serve, log_level="warning")
         return
     if os.name != "nt":

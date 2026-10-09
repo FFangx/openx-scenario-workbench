@@ -10,17 +10,17 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
 
 from . import matching
 from .api_assets import router as assets_router
 from .api_bindings import router as bindings_router
 from .api_common import (FACETS, DecisionRequest, MatchRequest, _cache, _catalog, _lock, _matches, _run,
-                         _scene_json, _candidate_json, _store, _trace_for, _version)
+                         _scene_json, _candidate_json, _store, _trace_for, _version, catalog_progress, preload_catalog)
 from .api_jobs import router as jobs_router
 from .api_preview import router as preview_router
-from .api_schemas import (Health, Library, Overview, PdfDocument, Project, ProjectList, Report, ReportDetail,
-                          SavedDecision, SearchResponse, SelectedProject, Trace, documented)
+from .api_projects import router as projects_router
+from .api_schemas import (Health, Library, LibraryStatus, Overview, PdfDocument, Report, ReportDetail,
+                          SavedDecision, SearchResponse, Trace, documented)
 from .api_settings import router as settings_router
 from .api_workflow import router as workflow_router
 from .checkout import checkout_root
@@ -60,6 +60,7 @@ app.include_router(assets_router)
 app.include_router(bindings_router)
 app.include_router(jobs_router)
 app.include_router(preview_router)
+app.include_router(projects_router)
 app.include_router(settings_router)
 app.include_router(workflow_router)
 
@@ -69,30 +70,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# ---------- projects and documents ----------
-
-@app.get("/api/projects", **documented(ProjectList))
-def projects() -> dict[str, Any]:
-    store = ProjectStore(_store())
-    last = store.last()
-    return {"projects": [asdict(item) for item in store.projects()],
-            "last_project_id": last.project_id if last else None}
-
-
-class ProjectRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-
-
-@app.post("/api/projects", **documented(Project))
-def create_project(request: ProjectRequest) -> dict[str, Any]:
-    return asdict(ProjectStore(_store()).create(request.name))
-
-
-@app.post("/api/projects/{project_id}/select", **documented(SelectedProject))
-def select_project(project_id: str) -> dict[str, str]:
-    ProjectStore(_store()).set_last(project_id)
-    return {"project_id": project_id}
-
+# ---------- documents ----------
 
 @app.get("/api/projects/{project_id}/documents", **documented(list[PdfDocument]))
 def documents(project_id: str) -> list[dict[str, Any]]:
@@ -162,6 +140,13 @@ def library() -> dict[str, Any]:
     imported = [version.created_at for version in versions.values()]
     return {"asset_count": len(catalog), "last_import": max(imported) if imported else None,
             "encoder": matching.preferred_encoder(), "facets": {key: sorted(values) for key, values in facets.items()}}
+
+
+@app.get("/api/library/status", **documented(LibraryStatus))
+def library_status() -> dict[str, Any]:
+    """How far the library and the search model are loaded; answers at once while either is still loading."""
+    name = matching.preferred_encoder()
+    return {"catalog": catalog_progress(), "encoder": {"name": name, "state": matching.encoder_state(name)}}
 
 
 @app.get("/api/assets/{asset_id}/versions/{version_id}/frame")
@@ -291,6 +276,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     matching.preload_encoder()
+    preload_catalog()
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 

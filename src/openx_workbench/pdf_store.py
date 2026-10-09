@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import re
+from contextlib import suppress
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -82,9 +83,10 @@ class PdfStore:
         self.blobs = self.assets.root / "pdf_blobs"
 
     def _project_root(self, project_id: str) -> Path:
-        if not any(item.project_id == project_id for item in self.projects.projects()):
-            raise ValueError("Select an existing project for PDF imports.")
-        return self.projects.root / project_id / "documents"
+        try:
+            return self.projects.data(project_id) / "documents"
+        except ValueError:
+            raise ValueError("Select an existing project for PDF imports.") from None
 
     def _document_root(self, project_id: str, document_id: str) -> Path:
         if not re.fullmatch(r"[0-9a-f]{20}", document_id):
@@ -138,6 +140,8 @@ class PdfStore:
         blob = self.blobs / digest
         if not blob.exists():
             self._write_bytes(blob, data)
+        with suppress(OSError):  # the user's copy; the workbench reads the blob
+            self.projects.keep_pdf(project_id, filename, data)
         folder = manifest.parent
         folder.mkdir(parents=True, exist_ok=True)
         if audit:

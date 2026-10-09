@@ -292,7 +292,7 @@ def test_evidence_keeps_each_clause_heading_and_older_scenes_get_it_back(tmp_pat
     heading = titles[scene.package.extraction["anchor_node_id"]]
     assert scene.package.evidence[0].source_text.startswith(heading + "\n")
     # Saved before evidence kept the heading line: a one-sentence clause had no text at all.
-    path = (tmp_path / "projects" / project.project_id / "documents" / record.document_id / "scenes"
+    path = (ProjectStore(assets).data(project.project_id) / "documents" / record.document_id / "scenes"
             / scene.scene_id / "0001.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
     for item in payload["evidence"]:

@@ -32,6 +32,59 @@ def open_folder(path: Path) -> None:
         subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(path)])
 
 
+def documents_folder() -> Path:
+    """The user's Documents folder, wherever Windows keeps it (it may be redirected, e.g. to OneDrive)."""
+    if os.name == "nt":
+        import ctypes
+        import uuid
+        from ctypes import wintypes
+
+        class GUID(ctypes.Structure):
+            _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD),
+                        ("Data4", ctypes.c_ubyte * 8)]
+
+        known = uuid.UUID("FDD39AD0-238F-46AF-ADB4-6C85480369C7")  # FOLDERID_Documents
+        guid = GUID(known.fields[0], known.fields[1], known.fields[2], (ctypes.c_ubyte * 8)(*known.bytes[8:]))
+        found = ctypes.c_wchar_p()
+        if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(found)) == 0:
+            try:
+                return Path(found.value)
+            finally:
+                ctypes.windll.ole32.CoTaskMemFree(found)
+    return Path.home() / "Documents"
+
+
+def hide(path: Path) -> None:
+    """Mark a folder hidden on Windows; elsewhere its leading dot already hides it."""
+    if os.name == "nt":
+        import ctypes
+        FILE_ATTRIBUTE_HIDDEN = 0x2
+        attributes = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+        if attributes != -1:
+            ctypes.windll.kernel32.SetFileAttributesW(str(path), attributes | FILE_ATTRIBUTE_HIDDEN)
+
+
+def recycle(path: Path) -> None:
+    """Move a file or folder to the Windows Recycle Bin, where the user can restore it."""
+    if os.name != "nt":
+        raise OSError("The Recycle Bin is only available on Windows.")
+    import ctypes
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                    ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+
+    FO_DELETE, FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 3, 0x4, 0x10, 0x40, 0x400
+    path = path.resolve(strict=True)
+    operation = SHFILEOPSTRUCTW(wFunc=FO_DELETE, pFrom=str(path) + "\0",  # the list ends with a second NUL
+                                fFlags=FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI)
+    code = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(operation))
+    if code or operation.fAnyOperationsAborted or path.exists():
+        raise OSError(f"Could not move {path} to the Recycle Bin (code {code}).")
+
+
 if __name__ == "__main__":
     import tkinter as tk
     from tkinter import filedialog
