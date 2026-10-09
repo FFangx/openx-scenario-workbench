@@ -54,6 +54,27 @@ try {
     await idle();
   };
 
+  // right after a start the library may take a while: the project and its PDFs show at once, the start page
+  // says how far the library is, and search waits for it
+  const libraryRoute = (url) => url.pathname === "/api/library";
+  const statusRoute = (url) => url.pathname === "/api/library/status";
+  let releaseLibrary;
+  const libraryHeld = new Promise((resolve) => (releaseLibrary = resolve));
+  await p.route(libraryRoute, async (route) => { await libraryHeld; await route.continue().catch(() => undefined); });
+  await p.route(statusRoute, (route) => route.fulfill({ json: {
+    catalog: { state: "loading", stage: "reading", done: 120, total: 429, error: "" }, encoder: { name: "hashing", state: "idle" } } }));
+  await p.goto(BASE + "/");
+  await p.locator(".start-doc").first().waitFor();
+  await p.locator(".start-search input").fill("cut-in");
+  await p.locator(".start-load").filter({ hasText: "Reading the library 120 / 429" }).waitFor();
+  check("the project and its PDFs show while the library loads, with its progress",
+    (await p.locator(".hbtn b").first().innerText()) === "Demo · AEB protocol" && (await p.locator(".start-doc").count()) === 2);
+  check("search waits for the library", await p.locator(".start-search .ant-btn-primary").isDisabled());
+  await p.screenshot({ path: path.join(OUT, "start-loading.png") });
+  await p.unroute(statusRoute);
+  releaseLibrary();
+  await p.unroute(libraryRoute);
+
   await p.goto(BASE + "/", { waitUntil: "networkidle" });
   // the workbench opens on the start page: text search, PDF import, and the project's PDFs
   await p.locator(".start-doc").first().waitFor();
@@ -110,17 +131,24 @@ try {
   await p.request.delete(`${BASE}/api/settings/model/key`);
   fake.stop();
 
-  // one export of the whole table
-  await p.locator(".bind-export").click();
-  const csvHref = await p.locator(".ant-dropdown:visible a").first().getAttribute("href");
-  const htmlHref = await p.locator(".ant-dropdown:visible a").nth(1).getAttribute("href");
-  await p.keyboard.press("Escape");
-  const csv = await p.request.get(BASE + csvHref);
-  const csvText = (await csv.body()).toString("utf8");
-  check("the table exports as CSV a spreadsheet opens", csv.ok() && csvText.startsWith("\ufeffPDF,Clause,Title,Reuse conclusion") && csvText.includes("Slow the target down")
-    && csvText.split("\r\n").filter(Boolean).length === 5);
-  const tableHtml = await p.request.get(BASE + htmlHref);
-  check("the table exports as a web page", tableHtml.ok() && (await tableHtml.text()).includes("Clause reuse assessment"));
+  // one export of the whole table, saved in the project folder's exports folder
+  const exported = async (label) => {
+    await p.locator(".bind-export").click();
+    await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: label }).click();
+    const note = p.locator(".ant-notification-notice").filter({ hasText: "Assessment saved in the project folder" }).last();
+    await note.waitFor();
+    const name = await note.locator(".export-note").innerText();
+    const folder = (await (await p.request.get(`${BASE}/api/projects`)).json()).projects.find((x) => x.project_id === project).folder;
+    await note.locator(".ant-notification-notice-close").click();
+    return { name, file: path.join(folder, "Exports", name) };
+  };
+  const csv = await exported("Spreadsheet");
+  const csvText = fs.existsSync(csv.file) ? fs.readFileSync(csv.file, "utf8") : "";
+  check("the table exports as CSV a spreadsheet opens, into the project folder", csv.name.endsWith(".csv")
+    && csvText.startsWith("\ufeffPDF,Clause,Title,Reuse conclusion") && csvText.includes("Slow the target down")
+    && csvText.split("\r\n").filter(Boolean).length === 5, csv.file);
+  const html = await exported("Web page");
+  check("the table exports as a web page", fs.existsSync(html.file) && fs.readFileSync(html.file, "utf8").includes("Clause reuse assessment"), html.file);
 
   // several PDFs in one table; the project files list switches back to one
   await p.locator(".bind-docs .ant-select").click();
@@ -463,6 +491,26 @@ try {
   check("a late answer for a project left behind leaves the current project's PDFs",
     (await p.locator(".hbtn b").first().innerText()) === "Verify project" && (await p.locator(".start-doc").count()) === 0,
     `${await p.locator(".start-doc").count()} PDFs`);
+
+  // manage projects: renaming renames the folder too; deleting moves the folder away and shows another project
+  await p.locator(".hbtn").first().click();
+  await p.locator(".ant-dropdown:visible .ant-dropdown-menu-item").filter({ hasText: "Manage projects" }).click();
+  const projectRow = (name) => p.locator(".proj-row").filter({ hasText: name });
+  await projectRow("Verify project").locator("button[aria-label='Rename']").click();
+  await projectRow("Verify project").locator("input").fill("Verify renamed");
+  await projectRow("Verify project").locator("input").press("Enter");
+  await projectRow("Verify renamed").locator("b").waitFor();
+  const renamed = (await (await p.request.get(`${BASE}/api/projects`)).json()).projects.find((x) => x.name === "Verify renamed");
+  check("renaming a project renames its folder", !!renamed && path.basename(renamed.folder) === "Verify renamed" && fs.existsSync(renamed.folder)
+    && (await p.locator(".hbtn b").first().innerText()) === "Verify renamed");
+  await p.screenshot({ path: path.join(OUT, "projects.png") });
+  await projectRow("Verify renamed").locator("button[aria-label='Delete']").click();
+  await p.locator(".ant-popconfirm-buttons .ant-btn-dangerous").click();
+  await p.locator(".ant-message-success").filter({ hasText: "Deleted" }).waitFor();
+  await p.waitForTimeout(400);
+  check("deleting a project moves its folder away and shows another project", !!renamed && !fs.existsSync(renamed.folder)
+    && (await projectRow("Verify renamed").count()) === 0 && (await p.locator(".hbtn b").first().innerText()) === "Demo · AEB protocol");
+  await closeModal();
 
   check("no runtime errors", errors.length === 0, errors.join(" | "));
 } catch (error) {

@@ -129,7 +129,7 @@ def _extract(pdf: PdfStore, project_id: str, files: list[tuple[str, bytes]], sta
 
 def _start_extraction(pdf: PdfStore, project_id: str, files: list[tuple[str, bytes]], standard: str) -> dict[str, Any]:
     pdf.documents(project_id)  # rejects an unknown project before any work starts
-    job = jobs.Job(PDF_KIND, str(pdf.root.resolve()))
+    job = jobs.Job(PDF_KIND, str(pdf.root.resolve()), project=project_id)
     return jobs.start(job, _extract(pdf, project_id, files, standard)).snapshot()
 
 

@@ -444,6 +444,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Library Status
+         * @description How far the library and the search model are loaded; answers at once while either is still loading.
+         */
+        get: operations["library_status_api_library_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/overview": {
         parameters: {
             query?: never;
@@ -532,6 +552,27 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Project
+         * @description Move the project's folder to the Recycle Bin; one whose folder is already gone is only removed from the list.
+         */
+        delete: operations["delete_project_api_projects__project_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Project */
+        patch: operations["rename_project_api_projects__project_id__patch"];
         trace?: never;
     };
     "/api/projects/{project_id}/batch": {
@@ -666,7 +707,11 @@ export interface paths {
          */
         get: operations["export_api_projects__project_id__bindings_export_get"];
         put?: never;
-        post?: never;
+        /**
+         * Save Export
+         * @description The same file as the download, saved in the project folder's exports folder, named with the time.
+         */
+        post: operations["save_export_api_projects__project_id__bindings_export_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -887,6 +932,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/open-folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Project Folder */
+        post: operations["open_project_folder_api_projects__project_id__open_folder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reports": {
         parameters: {
             query?: never;
@@ -972,6 +1034,46 @@ export interface paths {
         put?: never;
         /** Select Project */
         post: operations["select_project_api_projects__project_id__select_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose Location
+         * @description Choose the folder new projects go to, in the native folder dialog.
+         */
+        post: operations["choose_location_api_projects_location_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Project
+         * @description Add an existing project folder (moved by hand, or restored from the Recycle Bin) in the native dialog.
+         */
+        post: operations["open_project_api_projects_open_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1818,6 +1920,26 @@ export interface components {
             /** Trigger Count */
             trigger_count: number;
         };
+        /** CatalogProgress */
+        CatalogProgress: {
+            /** Done */
+            done: number;
+            /** Error */
+            error: string;
+            /**
+             * Stage
+             * @description While loading: reading kept entries, checking file standards, or parsing changed assets.
+             * @enum {string}
+             */
+            stage: "" | "reading" | "checking" | "parsing";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "loading" | "ready" | "failed";
+            /** Total */
+            total: number;
+        };
         /** CheckIssue */
         CheckIssue: {
             /** Line */
@@ -1984,6 +2106,11 @@ export interface components {
             /** Version Id */
             version_id: string;
         };
+        /** DeletedProject */
+        DeletedProject: {
+            /** Deleted */
+            deleted: string;
+        };
         /** DeletedVersion */
         DeletedVersion: {
             /** Deleted */
@@ -2061,6 +2188,16 @@ export interface components {
             standard: string;
             /** Unconfirmed */
             unconfirmed: number;
+        };
+        /** EncoderStatus */
+        EncoderStatus: {
+            /** Name */
+            name: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "loading" | "ready" | "failed";
         };
         /** Evidence */
         Evidence: {
@@ -2146,6 +2283,26 @@ export interface components {
             /** Version Id */
             version_id: string;
         };
+        /** ExportRequest */
+        ExportRequest: {
+            /**
+             * Document Ids
+             * @description The PDFs exported together, in this order.
+             */
+            document_ids: string[];
+            /**
+             * Format
+             * @default csv
+             * @enum {string}
+             */
+            format?: "csv" | "html";
+            /**
+             * Lang
+             * @default zh
+             * @enum {string}
+             */
+            lang?: "zh" | "en";
+        };
         /** ExtractionRecord */
         ExtractionRecord: {
             /** Current Engine */
@@ -2183,14 +2340,6 @@ export interface components {
              * @enum {string}
              */
             source: "原文" | "推出" | "图" | "未知";
-        };
-        /** FolderRequest */
-        FolderRequest: {
-            /**
-             * Target
-             * @enum {string}
-             */
-            target: "data" | "esmini";
         };
         /** GroundedExplanation */
         GroundedExplanation: {
@@ -2317,6 +2466,11 @@ export interface components {
             /** Last Import */
             last_import: string | null;
         };
+        /** LibraryStatus */
+        LibraryStatus: {
+            catalog: components["schemas"]["CatalogProgress"];
+            encoder: components["schemas"]["EncoderStatus"];
+        };
         /** MatchRequest */
         MatchRequest: {
             /** Document Id */
@@ -2348,6 +2502,18 @@ export interface components {
              * @default 8
              */
             top_k?: number;
+        };
+        /**
+         * MissingProject
+         * @description A project whose folder was moved or deleted outside the workbench.
+         */
+        MissingProject: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /** Project Id */
+            project_id: string;
         };
         /** ModelDraft */
         ModelDraft: {
@@ -2479,6 +2645,28 @@ export interface components {
         OpenedFolder: {
             /** Opened */
             opened: string;
+        };
+        /** OpenedProject */
+        OpenedProject: {
+            /** @description None when the folder dialog was cancelled. */
+            project: components["schemas"]["Project"] | null;
+        };
+        /** FolderRequest */
+        openx_workbench__api_projects__FolderRequest: {
+            /**
+             * Target
+             * @default project
+             * @enum {string}
+             */
+            target?: "project" | "exports";
+        };
+        /** FolderRequest */
+        openx_workbench__api_settings__FolderRequest: {
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "data" | "esmini";
         };
         /** Overview */
         Overview: {
@@ -2621,8 +2809,15 @@ export interface components {
         Project: {
             /** Created At */
             created_at: string;
+            /**
+             * Folder
+             * @description The project's folder on this computer.
+             */
+            folder: string;
             /** Name */
             name: string;
+            /** Pdf Count */
+            pdf_count: number;
             /** Project Id */
             project_id: string;
         };
@@ -2630,8 +2825,22 @@ export interface components {
         ProjectList: {
             /** Last Project Id */
             last_project_id: string | null;
+            /**
+             * Location
+             * @description The folder new projects are created in.
+             */
+            location: string;
+            /** Missing */
+            missing: components["schemas"]["MissingProject"][];
             /** Projects */
             projects: components["schemas"]["Project"][];
+        };
+        /** ProjectLocation */
+        ProjectLocation: {
+            /** Cancelled */
+            cancelled: boolean;
+            /** Location */
+            location: string;
         };
         /** ProjectRequest */
         ProjectRequest: {
@@ -2901,6 +3110,13 @@ export interface components {
             report_id: string;
             /** Saved To */
             saved_to: string;
+        };
+        /** SavedExport */
+        SavedExport: {
+            /** Filename */
+            filename: string;
+            /** Path */
+            path: string;
         };
         /** Scene */
         Scene: {
@@ -4473,6 +4689,26 @@ export interface operations {
             };
         };
     };
+    library_status_api_library_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryStatus"];
+                };
+            };
+        };
+    };
     overview_api_overview_get: {
         parameters: {
             query?: never;
@@ -4591,6 +4827,72 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_api_projects__project_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedProject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_project_api_projects__project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -4846,6 +5148,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_export_api_projects__project_id__bindings_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedExport"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -5332,6 +5669,41 @@ export interface operations {
             };
         };
     };
+    open_project_folder_api_projects__project_id__open_folder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["openx_workbench__api_projects__FolderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenedFolder"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reports_api_projects__project_id__reports_get: {
         parameters: {
             query?: never;
@@ -5488,6 +5860,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_location_api_projects_location_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectLocation"];
+                };
+            };
+        };
+    };
+    open_project_api_projects_open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenedProject"];
                 };
             };
         };
@@ -5744,7 +6156,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FolderRequest"];
+                "application/json": components["schemas"]["openx_workbench__api_settings__FolderRequest"];
             };
         };
         responses: {

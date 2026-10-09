@@ -6,8 +6,12 @@ export const sceneKey = (s: Scene) => `${s.document_id}/${s.scene_id}`;
 
 interface State {
   projects: Project[];
+  /** False until the project list first arrives: "no project" is only said once it has. */
+  projectsLoaded: boolean;
   projectId: string | null;
   docs: PdfDocument[];
+  /** The project `docs` belong to; another value means its PDFs are still on the way. */
+  docsFor: string | null;
   docId: string | null;
   scope: Scope;
   scenes: Scene[];
@@ -17,25 +21,31 @@ interface State {
 type Action =
   | { type: "projects"; projects: Project[]; projectId: string | null }
   | { type: "created"; project: Project }
+  | { type: "renamed"; project: Project }
   | { type: "switch"; projectId: string }
-  | { type: "docs"; docs: PdfDocument[]; docId: string | null }
+  | { type: "docs"; projectId: string; docs: PdfDocument[]; docId: string | null }
   | { type: "doc"; docId: string }
   | { type: "scope"; scope: Scope }
   | { type: "scenes"; scenes: Scene[]; selected: string | null }
   | { type: "select"; key: string | null }
   | { type: "replace"; scene: Scene };
 
-const INITIAL: State = { projects: [], projectId: null, docs: [], docId: null, scope: "pdf", scenes: [], selected: null };
+const INITIAL: State = { projects: [], projectsLoaded: false, projectId: null, docs: [], docsFor: null, docId: null, scope: "pdf", scenes: [], selected: null };
 
 /** Switching project clears its documents and scenes at once, so scenes are never requested with the previous project's document. */
-const switched = (state: State, projectId: string): State => ({ ...state, projectId, docs: [], docId: null, scope: "pdf", scenes: [], selected: null });
+const switched = (state: State, projectId: string | null): State =>
+  ({ ...state, projectId, docs: [], docsFor: null, docId: null, scope: "pdf", scenes: [], selected: null });
 
 function reduce(state: State, action: Action): State {
   switch (action.type) {
-    case "projects": return { ...state, projects: action.projects, projectId: action.projectId };
+    case "projects": {
+      const next = { ...state, projects: action.projects, projectsLoaded: true };
+      return action.projectId === state.projectId ? next : switched(next, action.projectId);
+    }
     case "created": return switched({ ...state, projects: [...state.projects, action.project] }, action.project.project_id);
+    case "renamed": return { ...state, projects: state.projects.map((p) => (p.project_id === action.project.project_id ? action.project : p)) };
     case "switch": return switched(state, action.projectId);
-    case "docs": return { ...state, docs: action.docs, docId: action.docId, scope: action.docs.length < 2 ? "pdf" : state.scope };
+    case "docs": return { ...state, docs: action.docs, docsFor: action.projectId, docId: action.docId, scope: action.docs.length < 2 ? "pdf" : state.scope };
     case "doc": return { ...state, scope: "pdf", docId: action.docId };
     case "scope": return { ...state, scope: action.scope };
     case "scenes": return { ...state, scenes: action.scenes, selected: action.selected };
@@ -67,7 +77,7 @@ export function useRequirements({ onEnter, onError }: { onEnter: (scene: Scene) 
       if (seq !== docsSeq.current) return;
       const wanted = select ?? pendingDoc.current;
       pendingDoc.current = null;
-      dispatch({ type: "docs", docs: d, docId: wanted && d.some((x) => x.document_id === wanted) ? wanted : d[0]?.document_id ?? null });
+      dispatch({ type: "docs", projectId: pid, docs: d, docId: wanted && d.some((x) => x.document_id === wanted) ? wanted : d[0]?.document_id ?? null });
     }).catch((e: Error) => seq === docsSeq.current && handlers.current.onError(e.message));
   }, []);
 
@@ -100,10 +110,13 @@ export function useRequirements({ onEnter, onError }: { onEnter: (scene: Scene) 
     ...state,
     scene,
     doc,
+    docsLoading: !state.projectsLoaded || (!!projectId && state.docsFor !== projectId),
     loadDocs,
     loadScenes,
+    /** The project list, with the project to show: the current one is kept when it is the same. */
     setProjects: (projects: Project[], current: string | null) => dispatch({ type: "projects", projects, projectId: current }),
     projectCreated: (project: Project) => dispatch({ type: "created", project }),
+    projectRenamed: (project: Project) => dispatch({ type: "renamed", project }),
     switchProject: (id: string) => dispatch({ type: "switch", projectId: id }),
     chooseDoc: (id: string) => dispatch({ type: "doc", docId: id }),
     setScope: (value: Scope) => dispatch({ type: "scope", scope: value }),

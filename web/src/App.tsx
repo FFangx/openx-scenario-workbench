@@ -4,7 +4,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { buildTheme } from "./theme";
-import { api, type Library, type PdfDocument, type Preferences, type Project, type Scene } from "./api";
+import { api, type Library, type LibraryStatus, type MissingProject, type PdfDocument, type Preferences, type Project, type Scene } from "./api";
 import { sceneKey, useRequirements, type Scope } from "./useRequirements";
 import { useMatching } from "./useMatching";
 import { LangContext, useT } from "./i18n";
@@ -20,6 +20,7 @@ import { DecisionPanel } from "./components/DecisionPanel";
 import { StartPage } from "./components/StartPage";
 import { BindingWorkspace } from "./components/BindingWorkspace";
 import { SearchPage } from "./components/SearchPage";
+import { NewProjectDialog, ProjectsDialog } from "./components/ProjectsDialog";
 
 function useSystemDark() {
   const q = "(prefers-color-scheme: dark)";
@@ -90,9 +91,14 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   const { t } = useT();
   const lang = prefs.language;
   const [page, setPage] = useState<Page>("workbench");
-  const [dialog, setDialog] = useState<"help" | "settings" | null>(null);
+  const [dialog, setDialog] = useState<"help" | "settings" | "projects" | null>(null);
+  const [creating, setCreating] = useState(false);
   const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
   const [library, setLibrary] = useState<Library | null>(null);
+  const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
+  // Projects whose folder is gone, and the folder new projects go to.
+  const [missing, setMissing] = useState<MissingProject[]>([]);
+  const [location, setLocation] = useState("");
   const [online, setOnline] = useState<boolean | null>(null);
   const [esmini, setEsmini] = useState<boolean>(false);
   const [libraryStamp, setLibraryStamp] = useState(0);
@@ -116,18 +122,40 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
 
   const loadLibrary = useCallback(() => api.library().then(setLibrary), []);
   const loadTools = useCallback(() => api.settings().then((s) => setEsmini(!!s.preview.executable)).catch(() => undefined), []);
+  const shown = useRef<string | null>(null);
+  shown.current = projectId;
+  /** Reload the project list; show `select`, else keep the project shown, else the last one opened, else the first. */
+  const loadProjects = useCallback((select?: string) => api.projects().then((p) => {
+    setMissing(p.missing);
+    setLocation(p.location);
+    const ids = p.projects.map((x) => x.project_id);
+    const next = [select, shown.current, p.last_project_id, ids[0]].find((id) => id && ids.includes(id)) ?? null;
+    req.setProjects(p.projects, next);
+    return next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
 
+  // The project list answers at once; the library can take a while after the service starts, so the two
+  // load apart, and the start page shows how far the library is meanwhile.
   useEffect(() => {
-    Promise.all([api.projects(), loadLibrary()])
-      .then(([p]) => {
-        req.setProjects(p.projects, p.last_project_id ?? p.projects[0]?.project_id ?? null);
-        setOnline(true);
-      })
+    loadProjects()
+      .then(() => setOnline(true))
       .catch((e: Error) => {
         setOnline(false);
         message.error(t(`无法连接工作台服务：${e.message}`, `Cannot reach the workbench API: ${e.message}`));
       });
+    loadLibrary().catch(() => undefined);  // the start page says why, from the status below
     loadTools();
+    let timer = 0;
+    let stopped = false;
+    const poll = () => api.libraryStatus().then((s) => {
+      if (stopped) return;
+      setLibraryStatus(s);
+      const busy = s.catalog.state === "idle" || s.catalog.state === "loading" || s.encoder.state === "loading";
+      if (busy) timer = window.setTimeout(poll, 400);
+    }).catch(() => { if (!stopped) timer = window.setTimeout(poll, 1500); });
+    poll();
+    return () => { stopped = true; window.clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);
 
@@ -214,6 +242,10 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
   }, [loadLibrary]);
   /** A clause's row in the binding table, of this project or another one. */
   const openSceneIn = (pid: string, documentId: string, sceneId: string) => {
+    if (!req.projects.some((p) => p.project_id === pid)) {
+      message.warning(t("这个条款所在的项目已删除或找不到文件夹。", "The project this clause belongs to was deleted or its folder is missing."));
+      return;
+    }
     setPage("workbench");
     setBindDocs([documentId]);
     setBindFocus(`${documentId}/${sceneId}`);
@@ -232,7 +264,20 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
     setMode("start");
     match.clear();
     match.setQuery("");
+    setDialog(null);
   };
+  /** After a project was deleted or added: when another project is shown now, start from its start page. */
+  const projectsChanged = (select?: string) => {
+    const before = projectId;
+    loadProjects(select).then((next) => {
+      if (next === before) return;
+      match.clear();
+      match.setQuery("");
+      setMode("start");
+      if (next) api.selectProject(next).catch(() => undefined);
+    }).catch((e: Error) => message.error(e.message));
+  };
+  const openProjectFolder = () => projectId && api.openProjectFolder(projectId).catch((e: Error) => message.error(e.message));
   const sceneChanged = (s: Scene) => {
     req.replaceScene(s);
     req.loadScenes(sceneKey(s));
@@ -246,17 +291,25 @@ function Workbench({ prefs, onPrefs }: { prefs: Preferences; onPrefs: (p: Partia
         onPage={setPage}
         onLang={(language) => onPrefs({ language })}
         projects={req.projects}
+        projectsLoaded={req.projectsLoaded}
+        missingCount={missing.length}
         projectId={projectId}
         onProject={pickProject}
-        onCreated={projectCreated}
+        onNewProject={() => setCreating(true)}
+        onManageProjects={() => setDialog("projects")}
+        onOpenFolder={openProjectFolder}
         onHelp={() => setDialog("help")}
         onSettings={() => setDialog("settings")}
         onHome={goHome}
       />
       <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />
       <SettingsDialog open={dialog === "settings"} onClose={() => { setDialog(null); loadTools(); }} preferences={prefs} onPreferences={onPrefs} />
+      <ProjectsDialog open={dialog === "projects"} onClose={() => setDialog(null)} projects={req.projects} missing={missing} currentId={projectId}
+        onChanged={projectsChanged} onRenamed={req.projectRenamed} onNew={() => setCreating(true)} />
+      <NewProjectDialog open={creating} location={location} onLocation={setLocation} onClose={() => setCreating(false)} onCreated={projectCreated} />
       {page === "workbench" && mode === "start" && (
-        <StartPage projectId={projectId} docs={req.docs} library={library} onSearch={startSearch} onOpenDoc={enterWorkflow}
+        <StartPage projectId={projectId} projectsLoaded={req.projectsLoaded} docs={req.docs} docsLoading={req.docsLoading} library={library}
+          status={libraryStatus} onSearch={startSearch} onOpenDoc={enterWorkflow} onNewProject={() => setCreating(true)}
           onImported={(ids) => {
             if (projectId) req.loadDocs(projectId, ids[ids.length - 1]);
             setBindDocs(ids.slice(-1));

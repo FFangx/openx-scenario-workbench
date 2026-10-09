@@ -1,15 +1,17 @@
 import { Fragment, useEffect, useState } from "react";
-import { App, Button, Dropdown, Empty, Form, Input, Modal, Popover, Tooltip, type MenuProps } from "antd";
+import { Button, Dropdown, Empty, Popover, Tooltip, type MenuProps } from "antd";
 import {
   CheckOutlined,
   DownloadOutlined,
   DownOutlined,
+  FolderOpenOutlined,
   FolderOutlined,
+  LoadingOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { api, urls, type Lang, type PdfDocument, type Project } from "../api";
+import { urls, type Lang, type PdfDocument, type Project } from "../api";
 import { useT } from "../i18n";
 
 export type Page = "workbench" | "overview" | "assets";
@@ -19,9 +21,15 @@ interface TopBarProps {
   onPage: (p: Page) => void;
   onLang: (l: Lang) => void;
   projects: Project[];
+  /** False until the project list first arrives. */
+  projectsLoaded: boolean;
+  /** Projects whose folder is gone, flagged on "Manage projects". */
+  missingCount: number;
   projectId: string | null;
   onProject: (id: string) => void;
-  onCreated: (p: Project) => void;
+  onNewProject: () => void;
+  onManageProjects: () => void;
+  onOpenFolder: () => void;
   onHelp: () => void;
   onSettings: () => void;
   /** Back to the workbench start page. */
@@ -30,18 +38,28 @@ interface TopBarProps {
 
 const check = (on: boolean) => (on ? <CheckOutlined /> : <span style={{ width: 14 }} />);
 
-export function TopBar({ page, onPage, onLang, projects, projectId, onProject, onCreated, onHelp, onSettings, onHome }: TopBarProps) {
+export function TopBar({ page, onPage, onLang, projects, projectsLoaded, missingCount, projectId, onProject, onNewProject, onManageProjects,
+  onOpenFolder, onHelp, onSettings, onHome }: TopBarProps) {
   const { t, lang } = useT();
-  const [creating, setCreating] = useState(false);
   const project = projects.find((p) => p.project_id === projectId);
 
   const projectMenu: MenuProps = {
     items: [
       ...projects.map((p) => ({ key: p.project_id, label: p.name, icon: check(p.project_id === projectId) })),
       ...(projects.length ? [{ type: "divider" as const }] : []),
+      ...(project ? [{ key: "__folder", label: t("打开项目文件夹", "Open project folder"), icon: <FolderOpenOutlined /> }] : []),
       { key: "__new", label: t("新建项目…", "New project…"), icon: <PlusOutlined /> },
+      {
+        key: "__manage", icon: <SettingOutlined />,
+        label: <>{t("管理项目…", "Manage projects…")}{missingCount > 0 && <span className="menu-warn">{t(`${missingCount} 个找不到文件夹`, `${missingCount} not found`)}</span>}</>,
+      },
     ],
-    onClick: ({ key }) => (key === "__new" ? setCreating(true) : onProject(key)),
+    onClick: ({ key }) => {
+      if (key === "__new") onNewProject();
+      else if (key === "__manage") onManageProjects();
+      else if (key === "__folder") onOpenFolder();
+      else onProject(key);
+    },
   };
 
   const pages: [Page, string][] = [
@@ -68,8 +86,10 @@ export function TopBar({ page, onPage, onLang, projects, projectId, onProject, o
       </nav>
       <div className="right">
         <Dropdown menu={projectMenu} trigger={["click"]}>
-          <button className="hbtn">
-            {t("项目", "Project")} <b>{project?.name ?? t("尚无项目", "None yet")}</b> <DownOutlined />
+          <button className="hbtn" aria-busy={!projectsLoaded}>
+            {t("项目", "Project")}{" "}
+            {projectsLoaded ? <b>{project?.name ?? t("尚无项目", "None yet")}</b> : <b className="loading"><LoadingOutlined /> {t("加载中…", "Loading…")}</b>}{" "}
+            <DownOutlined />
           </button>
         </Dropdown>
         <span className="ox-sep" />
@@ -95,53 +115,7 @@ export function TopBar({ page, onPage, onLang, projects, projectId, onProject, o
           <button className={lang === "zh" ? "on" : ""} onClick={() => onLang("zh")}>中文</button>
         </span>
       </div>
-      <NewProject open={creating} onClose={() => setCreating(false)} onCreated={onCreated} />
     </header>
-  );
-}
-
-function NewProject({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (p: Project) => void }) {
-  const { t } = useT();
-  const { message } = App.useApp();
-  const [form] = Form.useForm<{ name: string }>();
-  const [busy, setBusy] = useState(false);
-
-  const submit = async ({ name }: { name: string }) => {
-    setBusy(true);
-    try {
-      const project = await api.createProject(name.trim());
-      form.resetFields();
-      onCreated(project);
-      onClose();
-      message.success(t(`已创建项目“${project.name}”`, `Created project “${project.name}”`));
-    } catch (e) {
-      message.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal
-      title={t("新建项目", "New project")}
-      open={open}
-      onCancel={onClose}
-      okText={t("创建项目", "Create project")}
-      onOk={() => form.submit()}
-      confirmLoading={busy}
-      destroyOnHidden
-    >
-      <p className="muted">{t("项目保存 PDF 及需求事实修订；资产库与复用评估结论由所有项目共用。", "A project keeps PDFs and fact revisions. The asset library and the reuse conclusions are shared by all projects.")}</p>
-      <Form form={form} layout="vertical" onFinish={submit} preserve={false}>
-        <Form.Item
-          name="name"
-          label={t("项目名称", "Project name")}
-          rules={[{ required: true, whitespace: true, message: t("请输入项目名称", "Enter a project name") }, { max: 120 }]}
-        >
-          <Input autoFocus maxLength={120} />
-        </Form.Item>
-      </Form>
-    </Modal>
   );
 }
 

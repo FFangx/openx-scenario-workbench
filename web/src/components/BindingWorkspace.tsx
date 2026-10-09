@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Checkbox, Dropdown, Empty, Input, Radio, Select, Spin, Table, Tag, Tooltip, type TableColumnsType } from "antd";
-import { CheckCircleFilled, CheckOutlined, DownloadOutlined, DownOutlined, EllipsisOutlined, RobotOutlined, SearchOutlined } from "@ant-design/icons";
+import { Alert, App, Button, Checkbox, Dropdown, Empty, Input, Radio, Select, Spin, Table, Tag, Tooltip, type TableColumnsType } from "antd";
+import { CheckCircleFilled, CheckOutlined, DownloadOutlined, DownOutlined, EllipsisOutlined, FolderOpenOutlined, RobotOutlined, SearchOutlined } from "@ant-design/icons";
 import { api, urls, type AssetDetail, type BindingDraft, type BindingStatus, type BindingSuggestion, type ConfirmedBinding, type GroupBindings,
   type Job, type PdfDocument, type Scene, type SceneBinding, type SceneRef, type SuggestedCandidate } from "../api";
 import { dateTime, useT } from "../i18n";
@@ -103,6 +103,7 @@ interface Props {
 /** The main screen of a PDF: every clause with the assets the model suggests for it, confirmed by a person, exported as one table. */
 export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esmini, onSettings, onDocsChanged, onManual }: Props) {
   const { t, lang } = useT();
+  const { notification } = App.useApp();
   const shown = docs.filter((d) => picked.includes(d.document_id));
   const ids = (shown.length ? shown : docs.slice(0, 1)).map((d) => d.document_id);
   const idsKey = ids.join("|");
@@ -152,6 +153,21 @@ export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esm
   };
   /** Every row of the PDFs shown. */
   const act = (key: string, work: () => Promise<GroupBindings>) => run(key, work, setView);
+  /** The assessment is saved in the project folder's exports folder, which the notice opens. */
+  const saveExport = (format: "csv" | "html") => run("export", () => api.saveExport(projectId, ids, format, lang), (saved) => {
+    const key = `export-${saved.filename}`;
+    notification.success({
+      key,
+      title: t("评估表已保存到项目文件夹", "Assessment saved in the project folder"),
+      description: <span className="export-note">{saved.filename}</span>,
+      actions: (
+        <Button size="small" type="primary" icon={<FolderOpenOutlined />} onClick={() => {
+          notification.destroy(key);
+          api.openProjectFolder(projectId, "exports").catch((e: Error) => setError(e.message));
+        }}>{t("打开文件夹", "Open folder")}</Button>
+      ),
+    });
+  });
   /** One row: the reply replaces that row only. */
   const actRow = (key: string, work: () => Promise<SceneBinding>) => run(key, work, (r) =>
     setView((v) => v && { ...v, scenes: v.scenes.map((s) => (rowKey(s) === rowKey(r) ? r : s)) }));
@@ -297,13 +313,16 @@ export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esm
               onClick={() => act("accept-all", () => api.acceptBindings(projectId, ids))}>
               {t(`采纳全部一致的“直接复用”建议（${acceptable}）`, `Adopt consistent direct reuse (${acceptable})`)}
             </Button>
-            <Dropdown trigger={["click"]} disabled={!rows.length} menu={{
+            <Dropdown trigger={["click"]} disabled={!rows.length || busy === "export"} menu={{
               items: [
-                { key: "csv", label: <a href={urls.bindingsExport(projectId, ids, "csv", lang)} download>{t("表格（CSV，可用 Excel 打开）", "Spreadsheet (CSV, opens in Excel)")}</a> },
-                { key: "html", label: <a href={urls.bindingsExport(projectId, ids, "html", lang)} download>{t("网页（HTML）", "Web page (HTML)")}</a> },
+                { key: "csv", label: t("表格（CSV，可用 Excel 打开）", "Spreadsheet (CSV, opens in Excel)") },
+                { key: "html", label: t("网页（HTML）", "Web page (HTML)") },
               ],
+              onClick: ({ key }) => saveExport(key as "csv" | "html"),
             }}>
-              <Button className="bind-export" icon={<DownloadOutlined />} disabled={!rows.length}>{t("导出复用评估表", "Export assessment")} <DownOutlined /></Button>
+              <Button className="bind-export" icon={<DownloadOutlined />} disabled={!rows.length} loading={busy === "export"}>
+                {t("导出复用评估表", "Export assessment")} <DownOutlined />
+              </Button>
             </Dropdown>
             <Input size="small" allowClear prefix={<SearchOutlined />} value={find} onChange={(e) => setFind(e.target.value)} className="bind-find"
               placeholder={t("条款号或标题", "Clause or title")} aria-label={t("查找条款", "Find a clause")} />

@@ -5,6 +5,9 @@ import type { components } from "./api-types";
 type Schemas = components["schemas"];
 
 export type Project = Schemas["Project"];
+export type ProjectList = Schemas["ProjectList"];
+export type MissingProject = Schemas["MissingProject"];
+export type LibraryStatus = Schemas["LibraryStatus"];
 export type PdfDocument = Schemas["PdfDocument"];
 export type Evidence = Schemas["Evidence"];
 /** A scene as the review queue lists it; a search response carries the same scene without queue state. */
@@ -93,8 +96,17 @@ function form(files: File[], fields: Record<string, string> = {}) {
 }
 
 export const api = {
-  projects: () => call<{ projects: Project[]; last_project_id: string | null }>("/api/projects"),
+  projects: () => call<ProjectList>("/api/projects"),
   selectProject: (id: string) => post<{ project_id: string }>(`/api/projects/${id}/select`, {}),
+  renameProject: (id: string, name: string) => send<Project>("PATCH", `/api/projects/${id}`, { name }),
+  deleteProject: (id: string) => send<{ deleted: string }>("DELETE", `/api/projects/${id}`),
+  /** Both open the folder dialog on this computer. */
+  addProject: () => post<Schemas["OpenedProject"]>("/api/projects/open", {}),
+  chooseProjectLocation: () => post<Schemas["ProjectLocation"]>("/api/projects/location", {}),
+  openProjectFolder: (id: string, target: "project" | "exports" = "project") =>
+    post<{ opened: string }>(`/api/projects/${id}/open-folder`, { target }),
+  saveExport: (pid: string, dids: string[], format: "csv" | "html", lang: Lang) =>
+    post<Schemas["SavedExport"]>(`/api/projects/${pid}/bindings/export`, { document_ids: dids, format, lang }),
   documents: (pid: string) => call<PdfDocument[]>(`/api/projects/${pid}/documents`),
   allScenes: (pid: string) => call<Scene[]>(`/api/projects/${pid}/scenes`),
   sceneSchema: () => call<SceneSchema>("/api/scene-schema"),
@@ -139,6 +151,7 @@ export const api = {
   previewStop: () => post<PreviewStatus>("/api/preview/stop", {}),
   scenes: (pid: string, did: string) => call<Scene[]>(`/api/projects/${pid}/documents/${did}/scenes`),
   library: () => call<Library>("/api/library"),
+  libraryStatus: () => call<LibraryStatus>("/api/library/status"),
   search: (req: MatchRequest) => post<SearchResponse>("/api/search", req),
   trace: (req: DecisionReq) => post<Record<string, unknown>>("/api/trace", req),
   createProject: (name: string) => post<Project>("/api/projects", { name }),

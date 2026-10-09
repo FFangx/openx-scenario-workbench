@@ -255,6 +255,17 @@ class AssetStore:
         """Release only the caller's reference after a failed report write."""
         self._update_reference(reference_id, version, add=False)
 
+    @serialized
+    def release_references(self, reference_ids: set[str]) -> None:
+        """Release these references from every version, as when the project holding the reports is deleted."""
+        path = self.root / "version_references.json"
+        if not reference_ids or not path.exists():
+            return
+        references = json.loads(path.read_text(encoding="utf-8"))
+        kept = {key: sorted(set(refs) - reference_ids) for key, refs in references.items()}
+        write_json(path, {key: refs for key, refs in kept.items() if refs}, ensure_ascii=False, indent=2,
+                   prefix="references-", suffix=".tmp")
+
     def _update_reference(self, reference_id: str, version: AssetVersion, *, add: bool) -> None:
         path = self.root / "version_references.json"
         references = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}

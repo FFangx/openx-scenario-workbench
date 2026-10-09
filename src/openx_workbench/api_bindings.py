@@ -9,6 +9,7 @@ confirms a row, and "accept all" leaves the scenes whose readings disagree to a 
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -18,12 +19,14 @@ from pydantic import BaseModel, Field
 
 from . import binding_export, jobs, matching
 from .api_common import _catalog, _index, _store
-from .api_schemas import AssetBinding, BindingCoverage, GroupBindings, Job, SceneBinding, documented
+from .api_schemas import AssetBinding, BindingCoverage, GroupBindings, Job, SavedExport, SceneBinding, documented
 from .asset_store import AssetStore
+from .atomic_write import write_bytes
 from .binding_store import BindingStore, requirement_keys, scene_digest, section_of, stale_reasons
 from .binding_suggest import Judge, judge_efforts, suggest_scenes
 from .llm_service import ModelClient
 from .pdf_store import PdfDocument, PdfStore, StoredScene
+from .project_store import ProjectStore, folder_name
 
 router = APIRouter(prefix="/api", tags=["bindings"])
 
@@ -153,16 +156,45 @@ def export(project_id: str, document_ids: list[str] = Query(description="The PDF
     """The reuse assessment of the selected PDFs as a file: every clause with the assets confirmed for reuse, or
     the model's suggestion while none is confirmed. CSV opens in a spreadsheet; HTML reads in a browser."""
     group = Group(project_id, document_ids)
-    lines = binding_export.table(_rows(group, group.scenes), lang)
-    stem = group.documents[0].filename.rsplit(".", 1)[0] + (f"+{len(group.documents) - 1}" if len(group.documents) > 1 else "")
-    name = f"{stem}-reuse-assessment.{format}"
-    if format == "csv":
-        content, media = binding_export.to_csv(lines), "text/csv; charset=utf-8"
-    else:
-        content = binding_export.to_html(lines, [item.filename for item in group.documents], lang)
-        media = "text/html; charset=utf-8"
+    content = _export(group, format, lang)
+    name = f"{_export_stem(group)}-reuse-assessment.{format}"
+    media = "text/csv; charset=utf-8" if format == "csv" else "text/html; charset=utf-8"
     return Response(content, media_type=media,
                     headers={"Content-Disposition": f"attachment; filename=\"reuse-assessment.{format}\"; filename*=UTF-8''{quote(name)}"})
+
+
+class ExportRequest(BaseModel):
+    document_ids: list[str] = Field(description="The PDFs exported together, in this order.")
+    format: Literal["csv", "html"] = "csv"
+    lang: Literal["zh", "en"] = "zh"
+
+
+@router.post("/projects/{project_id}/bindings/export", **documented(SavedExport))
+def save_export(project_id: str, request: ExportRequest) -> dict[str, str]:
+    """The same file as the download, saved in the project folder's exports folder, named with the time."""
+    group = Group(project_id, request.document_ids)
+    content = _export(group, request.format, request.lang)
+    folder = ProjectStore(group.pdf.assets).exports(project_id, request.lang)
+    label = "复用评估表" if request.lang == "zh" else "reuse assessment"
+    path = folder / f"{_export_stem(group)} {label} {datetime.now().strftime('%Y-%m-%d %H%M')}.{request.format}"
+    try:
+        write_bytes(path, content, prefix="writing-", suffix=".tmp")
+    except PermissionError:
+        raise ValueError("同名文件正被其他程序打开（例如 Excel），请关闭后重试。/ "
+                         "A file of that name is open in another program (such as Excel); close it and try again.") from None
+    return {"filename": path.name, "path": str(path)}
+
+
+def _export(group: Group, format: str, lang: str) -> bytes:
+    lines = binding_export.table(_rows(group, group.scenes), lang)
+    if format == "csv":
+        return binding_export.to_csv(lines)
+    return binding_export.to_html(lines, [item.filename for item in group.documents], lang)
+
+
+def _export_stem(group: Group) -> str:
+    stem = group.documents[0].filename.rsplit(".", 1)[0]
+    return folder_name(stem + (f"+{len(group.documents) - 1}" if len(group.documents) > 1 else ""))
 
 
 class SceneRef(BaseModel):
@@ -222,7 +254,7 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
         return {"project_id": project_id, "document_ids": request.document_ids, "failed": failed,
                 "effort": efforts[0], "usage": dict(judge.spent)}
 
-    job = jobs.Job(KIND, _scope(group.pdf.assets, project_id))
+    job = jobs.Job(KIND, _scope(group.pdf.assets, project_id), project=project_id)
     return jobs.start(job, work).snapshot()
 
 
