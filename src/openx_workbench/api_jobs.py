@@ -24,6 +24,7 @@ from .pdf_store import PdfStore
 router = APIRouter(prefix="/api", tags=["jobs"])
 
 PDF_KIND = "pdf_import"
+VARIANTS_KIND = "pdf_variants"
 # PDFs extracted at once. Each one already sends its model calls together (Settings, concurrency)
 # and may run OCR or the layout model locally.
 PDFS_AT_ONCE = 3
@@ -147,6 +148,36 @@ def reextract_pdf(project_id: str, document_id: str) -> dict[str, Any]:
     if document is None:
         raise HTTPException(404, "Unknown PDF document.")
     return _start_extraction(pdf, project_id, [(document.filename, pdf.pdf_bytes(document))], document.source_standard)
+
+
+def read_unread_variants(pdf: PdfStore | None = None, client=None) -> list[jobs.Job]:
+    """Reads the test conditions of documents extracted before they were read, as the service starts:
+    one background job per project, its documents one after another. Nothing is extracted again and no
+    scene changes. Without a model key nothing starts; a scene no reading came back for is tried again
+    at the next start."""
+    from .llm_service import ModelClient, load_config
+    pdf = pdf or PdfStore()
+    client = client or ModelClient(load_config(pdf.root))
+    if not client.config.api_key:
+        return []
+    started = []
+    for project in pdf.projects.projects():
+        documents = pdf.variants_unread(project.project_id)
+        if not documents:
+            continue
+
+        def work(job: jobs.Job, documents=documents) -> dict[str, Any]:
+            job.update(stage="reading", total=len(documents))
+            for done, document in enumerate(documents, 1):
+                job.check()
+                job.note(document.filename)
+                pdf.read_variants(document, client=client, progress=job.note)
+                job.update(done=done)
+            return {"document_ids": [document.document_id for document in documents]}
+
+        job = jobs.Job(VARIANTS_KIND, str(pdf.root.resolve()) + "/" + project.project_id, project=project.project_id)
+        started.append(jobs.start(job, work))
+    return started
 
 
 # ---------- asset import and labels ----------
