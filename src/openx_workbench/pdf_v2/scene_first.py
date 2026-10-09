@@ -35,6 +35,13 @@ from .scene_schemas import (
     parse_scene_structure,
     resolve_scenes,
 )
+from .scene_variants import (
+    SceneVariants,
+    build_variant_request,
+    ground_variants,
+    parse_variant_response,
+    reconcile_variant_readings,
+)
 from .shared_containers import prefilter_shared_containers
 from .stage_d_validation import StageDReport, validate_scene_extraction
 from .structure_evidence import check_contradictions, ground_structure, reconcile_readings
@@ -427,6 +434,79 @@ def read_structures(
         scenes.append(scene.model_copy(update={"structure": structure}))
     calls.sort(key=lambda call: (call.batch, call.sample))
     return extraction.model_copy(update={"scenes": tuple(scenes)}), tuple(calls), missing
+
+def _read_variants_once(document: _Document, scene: ResolvedScene, sample: int, *, transport: Transport,
+                        model: str) -> tuple[SceneVariants | None, dict[str, int], str | None]:
+    """One reading of one scene's variants, retried like a structure batch."""
+    usage: dict[str, int] = {}
+    failure, note = None, ""
+    for attempt in range(1, STRUCTURE_ATTEMPTS + 1):
+        request = build_variant_request(document.context_view, document.view(document.own_nodes(scene)), scene.name,
+                                        model=model)
+        if note:
+            request = _retry_note(request, note)
+        try:
+            envelope = transport(request, sample=sample, timeout=structure_timeout(1))
+        except Exception as error:
+            failure = f"{type(error).__name__}: {error}"
+            if not getattr(error, "retryable", False):
+                break
+            time.sleep(min(30, 5 * attempt))
+            continue
+        _add_usage(usage, envelope)
+        try:
+            return parse_variant_response(envelope), usage, None
+        except SceneResponseTruncated as error:
+            failure, note = str(error), ""
+        except SceneResponseInvalid as error:
+            failure, note = str(error), str(error)[:200]
+    return None, usage, failure
+
+
+def read_variants(
+    tree: SectionTree,
+    text_by_node: dict[str, str],
+    extraction: SceneFirstExtraction,
+    *,
+    transport: Transport,
+    model: str,
+    samples: int = STRUCTURE_SAMPLES,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    progress: Callable[[str], None] | None = None,
+) -> tuple[dict[str, SceneVariants], dict[str, int], list[str]]:
+    """Each scene's test conditions (scene_variants), read from the same text as its structure,
+    several times independently; the count most readings agree on stands.
+
+    Returns the variants by scene id, the usage and the scenes no reading came back for."""
+    document = _Document(tree, text_by_node, extraction)
+    scenes = list(extraction.scenes)
+    jobs = [(scene, sample) for scene in scenes for sample in range(samples)]
+    readings: dict[str, list[SceneVariants | None]] = {scene.scene_id: [None] * samples for scene in scenes}
+    usage: dict[str, int] = {}
+    done = 0
+    with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(jobs) or 1))) as pool:
+        futures = {pool.submit(_read_variants_once, document, scene, sample, transport=transport, model=model): (scene, sample)
+                   for scene, sample in jobs}
+        for future in as_completed(futures):
+            scene, sample = futures[future]
+            reading, used, _ = future.result()
+            readings[scene.scene_id][sample] = reading
+            for key, value in used.items():
+                usage[key] = usage.get(key, 0) + value
+            done += 1
+            if progress:
+                progress(f"读取试验工况 {done}/{len(jobs)} / Reading test conditions")
+    result, missing = {}, []
+    for scene in scenes:
+        grounded = [ground_variants(reading, document.source(scene)) if reading else None
+                    for reading in readings[scene.scene_id]]
+        chosen = reconcile_variant_readings(grounded)
+        if chosen is None:
+            missing.append(scene.scene_id)
+        else:
+            result[scene.scene_id] = chosen
+    return result, usage, missing
+
 
 def scene_figures(tree: SectionTree, text_by_node: dict[str, str], extraction: SceneFirstExtraction,
                   figures: Sequence[Figure]) -> dict[str, tuple[Figure, ...]]:
