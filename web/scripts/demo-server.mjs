@@ -30,7 +30,9 @@ export async function startDemo({ port = 8767, dataset = "fixtures", preferences
   if (!fs.existsSync(path.join(WEB, "dist", "index.html"))) throw new Error("web/dist is missing; run `npm run build` first.");
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openx-demo-"));
   const env = cleanEnv(dataDir);
-  const seeded = spawnSync(python(), [path.join(REPO, "scripts", "seed_demo_workspace.py"), dataDir, "--dataset", dataset], { env, encoding: "utf8" });
+  // The benchmark replays the model suggestions recorded in the interface language.
+  const seeded = spawnSync(python(), [path.join(REPO, "scripts", "seed_demo_workspace.py"), dataDir, "--dataset", dataset,
+    "--language", preferences.language ?? "en"], { env, encoding: "utf8" });
   if (seeded.status !== 0) throw new Error(`Seeding failed:\n${seeded.stderr}`);
   const seed = JSON.parse(seeded.stdout.trim().split("\n").pop());
 

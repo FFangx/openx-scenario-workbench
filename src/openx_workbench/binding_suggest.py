@@ -234,12 +234,13 @@ def suggestion_record(pool: list[PoolCandidate], versions: dict, result: Vote,
 def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge, concurrency: int, *,
                    digest: Callable[[ScenePackage], str], save: Callable[[Any, dict], None],
                    ranked: Callable[[Any], None] = lambda scene: None,
-                   judged: Callable[[Any], None] = lambda scene: None) -> int:
+                   judged: Callable[[Any], None] = lambda scene: None, language: str = "zh") -> int:
     """Rank each scene's candidates and ask the model about them, VOTES readings at once, while the next
     scene is ranked. Replies are taken in between scenes, so a scene's suggestion is saved as soon as its
     readings are in, and a failure that stops the run does so before every scene is ranked.
 
-    `save(scene, record)` receives each finished suggestion; returns how many scenes failed.
+    `save(scene, record)` receives each finished suggestion; returns how many scenes failed. `language`
+    ("zh" or "en") is the language the model writes its reasons in.
     """
     failed = 0
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(scenes) * VOTES))) as executor:
@@ -266,7 +267,7 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
                     raise InterruptedError()
                 pool = candidate_pool(index, scene.package)
                 request = judge_request(scene.package, [(item.result.asset, item.result.differences) for item in pool],
-                                        stories=stories)
+                                        stories=stories, language=language)
                 for reading in range(VOTES):
                     futures[executor.submit(judge.reading, request, len(pool), reading)] = (number, reading, scene, pool)
                 ranked(scene)

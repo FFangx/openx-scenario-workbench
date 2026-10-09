@@ -45,6 +45,16 @@ def test_a_kept_story_is_told_once_and_the_request_reads_the_same(monkeypatch):
     assert len(told) == 2  # once for the kept stories, once for the request that keeps none
 
 
+def test_reasons_are_asked_in_the_interface_language():
+    package = requirement()
+    result = search(package, authored_asset(function="AEB"))[0]
+    pool = [(result.asset, result.differences)]
+    chinese, english = judge_request(package, pool), judge_request(package, pool, language="en")
+    assert chinese["messages"][0]["content"] == binding_judge.SYSTEM  # the cached Chinese replies still answer it
+    assert english["messages"][0]["content"] == binding_judge.SYSTEM + binding_judge.ENGLISH
+    assert english["messages"][1] == chinese["messages"][1]
+
+
 def test_binding_keeps_only_candidates_judged_the_same_test():
     judgement = parse_judgement(reply({
         "candidates": candidates(C1="同一测试", C2="不是", C3="同一测试但要改"),

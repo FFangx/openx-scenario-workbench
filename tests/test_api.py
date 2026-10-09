@@ -65,6 +65,7 @@ def test_overview_counts_versions_and_recent_imports(workbench):
     client, _, version = workbench
     overview = client.get("/api/overview").json()
     assert (overview["assets"], overview["versions"], overview["untested"], overview["playable"]) == (1, 1, 1, 0)
+    assert (overview["failed"], overview["road_missing"]) == (0, 0)
     assert overview["recent"][0]["version_id"] == version.version_id
 
 

@@ -49,6 +49,10 @@ SYSTEM = """你是智能驾驶仿真测试工程师。给你一个需求场景�
 只输出 JSON：
 {"candidates": [{"id": "C1", "verdict": "同一测试|同一测试但要改|不是|拿不准", "changes": "", "reason": "一两句依据"}],
  "binding": ["C1"], "preferred": "C1", "note": ""}"""
+# The words a person reads follow the interface language the suggestion was asked in; the Chinese
+# request stays as it was, so its cached replies still answer it.
+ENGLISH = ("\n\n语言：changes、reason、note 用英文写，不夹中文词（“素材”写 asset，“时段”写 time of day）；"
+           "引用的原文和名字保持原样。verdict 仍取上面四个中文值之一。")
 
 
 @dataclass(frozen=True)
@@ -117,9 +121,10 @@ def candidate_block(number: int, asset: OpenXAsset, differences: tuple[ReuseDiff
 
 
 def judge_request(package: ScenePackage, candidates: list[tuple[OpenXAsset, tuple[ReuseDifference, ...]]], *,
-                  show_names: bool = True, stories: dict[str, str] | None = None) -> dict:
+                  show_names: bool = True, stories: dict[str, str] | None = None, language: str = "zh") -> dict:
     """`stories` keeps each asset's story by asset ID for the next request: a story depends on the asset
-    alone, and the stories of assets with many participants take seconds."""
+    alone, and the stories of assets with many participants take seconds. `language` ("zh" or "en") is
+    the language of the reasons, changes and note."""
     stories = {} if stories is None else stories
     for asset, _ in candidates:
         if asset.asset_id not in stories:
@@ -127,7 +132,8 @@ def judge_request(package: ScenePackage, candidates: list[tuple[OpenXAsset, tupl
     blocks = [candidate_block(number, asset, differences, show_name=show_names, story=stories[asset.asset_id])
               for number, (asset, differences) in enumerate(candidates, start=1)]
     user = "## 需求场景\n" + requirement_block(package) + "\n\n## 候选素材\n" + "\n\n".join(blocks)
-    return {"messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
+    system = SYSTEM + ENGLISH if language == "en" else SYSTEM
+    return {"messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "response_format": {"type": "json_object"}}
 
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from typing import Any, Sequence
+import re
+from typing import Any, Iterable, Sequence
 
 from .figures import Figure
 from .models import SectionTree
@@ -847,6 +848,19 @@ def build_shared_container_appendix(
         "\n\n===== 附：疑似共享章节候选清单（确定性预筛，高召回低精确，仅供定位）=====\n"
         + "\n".join(lines)
     )
+
+_CJK = re.compile(r"[一-鿿]")
+_LATIN = re.compile(r"[A-Za-z]")
+
+def build_language_note(texts: Iterable[str]) -> str:
+    """For a document written in English, a note after it asking for English scene names and stories (the
+    frozen prompt asks for Chinese ones); empty for any other document, whose request stays as it was. A
+    document is English when its Chinese characters number under a quarter of its Latin letters, so a
+    Chinese standard quoting km/h, TTC or ISO stays Chinese."""
+    text = "\n".join(texts)
+    if len(_CJK.findall(text)) * 4 >= len(_LATIN.findall(text)):
+        return ""
+    return "\n\n===== 输出语言 =====\n这份文档是英文的：每个场景的 name 和 story 用英文写，与原文同语言。"
 
 def build_scene_request(
     document_view: str,

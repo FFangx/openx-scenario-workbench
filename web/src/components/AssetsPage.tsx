@@ -196,8 +196,13 @@ function AssetTable({ rows, selected, onSelect, onImport }: { rows: AssetRow[]; 
       render: (v: string, r) => <>{valueLabel(v, lang)}{r.needs_review && <span className="st warn"> · {t("待复核", "review")}</span>}</>,
     },
     {
-      title: t("预览状态", "Preview"), dataIndex: "compatibility", width: 100,
-      render: (v: string) => <span className={`dot-status ${v === "playable" ? "ok" : PREVIEW_FAILED.has(v) ? "bad" : ""}`}>{valueLabel(v, lang)}</span>,
+      // One line: the short word here, the full one on hover and in the detail.
+      title: t("预览状态", "Preview"), dataIndex: "compatibility", width: 110,
+      render: (v: string) => (
+        <span className={`dot-status ${v === "playable" ? "ok" : PREVIEW_FAILED.has(v) ? "bad" : ""}`} title={valueLabel(v, lang)}>
+          <span className="ell">{v === "road_missing" ? t("缺道路", "No road") : valueLabel(v, lang)}</span>
+        </span>
+      ),
     },
     { title: t("导入时间", "Imported"), dataIndex: "created_at", width: 130, render: dateTime },
   ];

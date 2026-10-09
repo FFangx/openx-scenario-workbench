@@ -1,11 +1,11 @@
 """Seed an empty data folder with a self-authored demo workspace.
 
-    python scripts/seed_demo_workspace.py <empty-folder> [--dataset fixtures|benchmark]
+    python scripts/seed_demo_workspace.py <empty-folder> [--dataset fixtures|benchmark] [--language zh|en]
 
 ``fixtures`` (the default, used by the browser checks) holds six parser fixtures
 and eight requirements; ``benchmark`` holds the 26-asset reuse benchmark and its
-38 requirements. See openx_workbench/demo_workspace.py. Nothing is downloaded
-and no model is called.
+38 requirements, with the model suggestions recorded in ``--language``. See
+openx_workbench/demo_workspace.py. Nothing is downloaded and no model is called.
 """
 
 from __future__ import annotations
@@ -21,8 +21,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(usage=__doc__)
     parser.add_argument("target", type=Path)
     parser.add_argument("--dataset", choices=("fixtures", "benchmark"), default="fixtures")
+    parser.add_argument("--language", choices=("zh", "en"), default="zh")
     args = parser.parse_args()
     sys.path.insert(0, str(REPO / "src"))
     from openx_workbench.demo_workspace import seed
 
-    print(json.dumps(seed(args.target.resolve(), args.dataset), ensure_ascii=False))
+    print(json.dumps(seed(args.target.resolve(), args.dataset, language=args.language), ensure_ascii=False))

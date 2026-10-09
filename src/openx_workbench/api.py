@@ -257,7 +257,8 @@ def overview() -> dict[str, Any]:
     recent = sorted(versions, key=lambda item: item.created_at, reverse=True)[:8]
     return {"assets": len(latest), "versions": len(versions),
             "playable": sum(item.compatibility == "playable" for item in latest),
-            "unavailable": sum(item.compatibility in {"unsupported", "failed", "timeout", "road_missing"} for item in latest),
+            "failed": sum(item.compatibility in {"unsupported", "failed", "timeout"} for item in latest),
+            "road_missing": sum(item.compatibility == "road_missing" for item in latest),
             "untested": sum(item.compatibility == "not_tested" for item in latest),
             "recent": [{key: getattr(item, key) for key in ("asset_id", "version_id", "title", "source_name",
                                                              "version_number", "compatibility", "created_at")}

@@ -63,6 +63,8 @@ jobs:
       - name: Type-check and build the web interface
         run: npm run build
       - name: Install the browser for UI checks
+        # A stalled download fails here instead of holding the run for the 6-hour default.
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
       - name: UI checks on the authored demo workspace
         run: npm run verify:ui

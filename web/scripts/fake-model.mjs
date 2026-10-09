@@ -6,6 +6,7 @@ import http from "node:http";
 
 export async function startFakeModel({ port = 8768 } = {}) {
   let calls = 0;
+  let english = 0;  // requests asking for the reasons in English
   const seen = new Map();  // calls per request
   let unsettled = null;  // the request whose third reading prefers the second candidate
   const server = http.createServer((req, res) => {
@@ -18,7 +19,9 @@ export async function startFakeModel({ port = 8768 } = {}) {
       };
       if (req.url.endsWith("/models")) return send({ data: [{ id: "fake-judge" }] });
       calls += 1;
-      const text = JSON.parse(body).messages.at(-1).content;
+      const { messages } = JSON.parse(body);
+      if (messages[0].content.includes("用英文写")) english += 1;
+      const text = messages.at(-1).content;
       seen.set(text, (seen.get(text) ?? 0) + 1);
       unsettled ??= text;
       const ids = [...text.matchAll(/### (C\d+)/g)].map((m) => m[1]);
@@ -31,5 +34,5 @@ export async function startFakeModel({ port = 8768 } = {}) {
     });
   });
   await new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
-  return { url: `http://127.0.0.1:${port}`, calls: () => calls, stop: () => server.close() };
+  return { url: `http://127.0.0.1:${port}`, calls: () => calls, english: () => english, stop: () => server.close() };
 }

@@ -173,7 +173,7 @@ export function BindingWorkspace({ projectId, docs, picked, onPicked, focus, esm
     setView((v) => v && { ...v, scenes: v.scenes.map((s) => (rowKey(s) === rowKey(r) ? r : s)) }));
   const suggest = () => {
     setError(null);
-    return api.suggestBindings(projectId, ids).then(setInitial).catch((e: Error) => setError(e.message));
+    return api.suggestBindings(projectId, ids, lang).then(setInitial).catch((e: Error) => setError(e.message));
   };
   const running = job?.status === "running";
   // Each finished suggestion appears in the table while the run goes on.
