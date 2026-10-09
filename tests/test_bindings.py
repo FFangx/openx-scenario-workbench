@@ -303,6 +303,41 @@ def test_readings_that_disagree_leave_the_scene_to_a_person(demo):
     assert named["scenes"][0]["binding"]["source"] == "suggestion"  # a person accepts it by name
 
 
+def test_each_test_condition_gets_its_asset_and_its_own_agreement(demo):
+    from openx_workbench.binding_judge import CONDITIONS
+    from openx_workbench.project_store import ProjectStore
+    client, base, model, seeded = demo
+    project, document = seeded["project_id"], base.documents[0]
+    folder = ProjectStore(AssetStore()).data(project) / "documents" / document
+    (folder / "variants.json").write_text(json.dumps({"scenes": {"scene-0001": {
+        "dimensions": [{"name": "时段", "kind": "时段", "how": "都要做"}],
+        "variants": [{"label": "日间", "values": {"时段": "日间"}}, {"label": "夜间", "values": {"时段": "夜间"}},
+                     {"label": "预试验", "values": {}}]}}}, ensure_ascii=False), encoding="utf-8")
+
+    def answer(body, _, nth):
+        data = json.loads(judged(body)["choices"][0]["message"]["content"])
+        if "## 工况" in body["messages"][1]["content"]:
+            data["conditions"] = [{"id": "V1", "asset": "C1", "fit": "直接复用"},
+                                  {"id": "V2", "asset": "C1" if nth == 3 else "C2", "fit": "修改复用", "changes": "改为夜间"},
+                                  {"id": "V3", "asset": None}]
+        return reply(data)
+
+    model.answer = answer
+    _, view = suggested(client, base)
+    asked = [key for key in model.seen if "## 工况" in key]
+    assert len(asked) == 1 and model.seen[asked[0]] == 3 and "另外输出 conditions" in CONDITIONS and "另外输出 conditions" in asked[0]  # only the scene with conditions
+    row = view["scenes"][0]
+    suggestions = BindingStore().suggestions(view["documents"][0]["pdf_sha256"])
+    saved = suggestions[row["key"]]
+    assert [(item["id"], item["label"], item["asset"], item["fit"], item["agree"], item["other_assets"])
+            for item in saved["conditions"]] == [("V1", "日间", "C1", "直接复用", 3, []),
+                                                 ("V2", "夜间", "C2", "修改复用", 2, ["C1"]),
+                                                 ("V3", "预试验", None, "", 3, [])]
+    assert saved["preferred"] is None and saved["binding"] == ["C1", "C2"]
+    assert (row["suggestion"]["readings"], row["suggestion"]["agree"], row["suggestion"]["stable"]) == (3, 2, False)
+    assert [("conditions" in item) for item in suggestions.values()].count(True) == 1
+
+
 def test_a_reply_cut_off_at_the_deepest_effort_is_read_again_at_the_default(demo):
     client, base, model, _ = demo
     model.answer = lambda body, client, nth: (reply({}, finish="length") if client.config.reasoning_effort == "max"
@@ -359,7 +394,7 @@ def test_a_suggestion_is_saved_while_later_scenes_are_still_ranked(monkeypatch):
         cancel = Event()
         client = SimpleNamespace(config=SimpleNamespace(model="judge"))
 
-        def reading(self, request, count, number):
+        def reading(self, request, count, number, conditions=0):
             answered.release()
             return None, "no reply"
 

@@ -22,7 +22,15 @@ from pathlib import Path
 from threading import Event, Lock
 from typing import Any, Callable
 
-from .binding_judge import JUDGE_VERSION, Judgement, JudgementInvalid, judge_request, parse_judgement
+from .binding_judge import (
+    JUDGE_VERSION,
+    ConditionChoice,
+    Judgement,
+    JudgementInvalid,
+    condition_count,
+    judge_request,
+    parse_judgement,
+)
 from .atomic_write import write_json
 from .catalog import OpenXAsset
 from .llm_service import ModelClient, ModelError, base_url
@@ -148,8 +156,9 @@ class Judge:
                     self.spent[key] += value
         return envelope
 
-    def reading(self, request: dict, count: int, number: int) -> tuple[Judgement | None, str]:
-        """Reading `number` of a request: the judgement, or None and why there is none.
+    def reading(self, request: dict, count: int, number: int, conditions: int = 0) -> tuple[Judgement | None, str]:
+        """Reading `number` of a request about `count` candidates (and `conditions` test conditions): the
+        judgement, or None and why there is none.
 
         A reply cut off at the deep effort is asked again at the fallback effort, one off the candidates
         at the same. Only a reply that fits is cached, under the effort that gave it. A service still
@@ -160,14 +169,14 @@ class Judge:
         for effort in dict.fromkeys((deep, fallback)):
             path = self._path(request, number, effort)
             try:
-                return parse_judgement(json.loads(path.read_text(encoding="utf-8")), count), ""
+                return parse_judgement(json.loads(path.read_text(encoding="utf-8")), count, conditions), ""
             except (OSError, ValueError):  # not cached, unreadable, or no longer fits
                 pass
         failure, effort = "", deep
         for _ in range(TRIES):
             try:
                 envelope = self._call(effort, request)
-                judgement = parse_judgement(envelope, count)
+                judgement = parse_judgement(envelope, count, conditions)
             except JudgementInvalid as error:
                 failure = str(error)
                 if (envelope.get("choices") or [{}])[0].get("finish_reason") == "length":
@@ -185,13 +194,22 @@ class Judge:
 
 
 @dataclass(frozen=True)
+class ConditionVote:
+    """The readings of one test condition taken together."""
+    choice: ConditionChoice  # from the earliest reading naming the asset most readings name for it
+    agree: int  # readings naming that asset (or none)
+    others: tuple[str | None, ...]  # the other assets named, most often first; None: no asset
+
+
+@dataclass(frozen=True)
 class Vote:
     """The readings of one scene taken together."""
     judgement: Judgement | None  # the earliest reading naming the preferred asset most readings name
     readings: int  # readings whose reply fits the candidates
-    agree: int  # of them, how many name that preferred asset (or none)
+    agree: int  # of them, how many name that preferred asset (or none); with test conditions, the fewest of any
     others: tuple[str | None, ...]  # the other preferred assets named, most often first; None: no asset
     failure: str = ""  # why no reading fits
+    conditions: tuple[ConditionVote, ...] = ()
 
     @property
     def stable(self) -> bool:
@@ -199,9 +217,21 @@ class Vote:
 
 
 def vote(readings: list[tuple[Judgement | None, str]]) -> Vote:
+    """A scene of one run takes the preferred asset most readings name; a scene with test conditions takes,
+    for each condition, the asset most readings name for it, and the reading agreeing with most of them."""
     fitting = [judgement for judgement, _ in readings if judgement]
     if not fitting:
         return Vote(None, 0, 0, (), next((why for _, why in reversed(readings) if why), ""))
+    if fitting[0].conditions:
+        votes = []
+        for position in range(len(fitting[0].conditions)):
+            named = Counter(item.conditions[position].asset for item in fitting)
+            most = max(named.values())
+            choice = next(item.conditions[position] for item in fitting if named[item.conditions[position].asset] == most)
+            votes.append(ConditionVote(choice, most, tuple(key for key, _ in named.most_common() if key != choice.asset)))
+        chosen = max(fitting, key=lambda item: sum(mine.asset == voted.choice.asset
+                                                   for mine, voted in zip(item.conditions, votes)))
+        return Vote(chosen, len(fitting), min(item.agree for item in votes), (), conditions=tuple(votes))
     named = Counter(item.preferred for item in fitting)
     most = max(named.values())
     chosen = next(item for item in fitting if named[item.preferred] == most)
@@ -209,9 +239,10 @@ def vote(readings: list[tuple[Judgement | None, str]]) -> Vote:
 
 
 def suggestion_record(pool: list[PoolCandidate], versions: dict, result: Vote,
-                      scene_digest: str, revision: int, model: str) -> dict[str, Any]:
+                      scene_digest: str, revision: int, model: str, conditions: dict | None = None) -> dict[str, Any]:
     """What is kept of one scene's suggestion: the candidates as asset versions with the words of the
-    reading chosen, and how far the readings agree."""
+    reading chosen, how far the readings agree, and the asset of each test condition (`conditions`, the
+    scene's SceneVariants as JSON) with its own agreement."""
     judgement = result.judgement
     judged = {item.id: item for item in judgement.candidates} if judgement else {}
     candidates = []
@@ -223,24 +254,33 @@ def suggestion_record(pool: list[PoolCandidate], versions: dict, result: Vote,
                            "rank": item.rank, "routes": list(item.routes), "level": item.result.confirmation_level,
                            "verdict": words.verdict if words else "", "reason": words.reason if words else "",
                            "changes": words.changes if words else ""})
+    labels = [item.get("label", "") for item in (conditions or {}).get("variants") or []]
+    chosen = [{"id": item.choice.id, "label": labels[number] if number < len(labels) else "",
+               "asset": item.choice.asset, "fit": item.choice.fit, "changes": item.choice.changes,
+               "agree": item.agree, "other_assets": list(item.others)}
+              for number, item in enumerate(result.conditions)]
+    binding = [*judgement.binding, *(item["asset"] for item in chosen if item["asset"])] if judgement else []
     return {"created_at": datetime.now(timezone.utc).isoformat(), "model": model, "judge": JUDGE_VERSION,
             "revision": revision, "scene_digest": scene_digest, "candidates": candidates,
-            "binding": list(judgement.binding) if judgement else [],
+            "binding": list(dict.fromkeys(binding)),
             "preferred": judgement.preferred if judgement else None,
             "note": judgement.note if judgement else "", "failure": result.failure,
-            "readings": result.readings, "agree": result.agree, "other_preferred": list(result.others)}
+            "readings": result.readings, "agree": result.agree, "other_preferred": list(result.others),
+            **({"conditions": chosen} if chosen else {})}
 
 
 def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge, concurrency: int, *,
                    digest: Callable[[ScenePackage], str], save: Callable[[Any, dict], None],
                    ranked: Callable[[Any], None] = lambda scene: None,
-                   judged: Callable[[Any], None] = lambda scene: None, language: str = "zh") -> int:
+                   judged: Callable[[Any], None] = lambda scene: None, language: str = "zh",
+                   conditions: Callable[[Any], dict | None] = lambda scene: None) -> int:
     """Rank each scene's candidates and ask the model about them, VOTES readings at once, while the next
     scene is ranked. Replies are taken in between scenes, so a scene's suggestion is saved as soon as its
     readings are in, and a failure that stops the run does so before every scene is ranked.
 
     `save(scene, record)` receives each finished suggestion; returns how many scenes failed. `language`
-    ("zh" or "en") is the language the model writes its reasons in.
+    ("zh" or "en") is the language the model writes its reasons in; `conditions(scene)` the scene's test
+    conditions, each of which then gets its own asset.
     """
     failed = 0
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(scenes) * VOTES))) as executor:
@@ -250,7 +290,7 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
 
         def take(future) -> None:
             nonlocal failed
-            number, reading, scene, pool = futures.pop(future)
+            number, reading, scene, pool, asked = futures.pop(future)
             done = readings.setdefault(number, [None] * VOTES)
             done[reading] = future.result()
             if None in done:
@@ -258,7 +298,7 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
             result = vote(done)
             failed += result.judgement is None
             save(scene, suggestion_record(pool, versions, result, digest(scene.package),
-                                          scene.revision, judge.client.config.model))
+                                          scene.revision, judge.client.config.model, asked))
             judged(scene)
 
         try:
@@ -266,10 +306,12 @@ def suggest_scenes(scenes: list, index: OpenXIndex, versions: dict, judge: Judge
                 if judge.cancel.is_set():
                     raise InterruptedError()
                 pool = candidate_pool(index, scene.package)
+                asked = conditions(scene) if condition_count(conditions(scene)) else None
                 request = judge_request(scene.package, [(item.result.asset, item.result.differences) for item in pool],
-                                        stories=stories, language=language)
+                                        stories=stories, language=language, conditions=asked)
                 for reading in range(VOTES):
-                    futures[executor.submit(judge.reading, request, len(pool), reading)] = (number, reading, scene, pool)
+                    futures[executor.submit(judge.reading, request, len(pool), reading, condition_count(asked))] = (
+                        number, reading, scene, pool, asked)
                 ranked(scene)
                 for future in [item for item in futures if item.done()]:
                     take(future)

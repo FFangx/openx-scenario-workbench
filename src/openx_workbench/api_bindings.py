@@ -233,6 +233,8 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
         job.note(f"素材库 {len(catalog)} 个素材 · 建立检索索引")
         index = _index(catalog, encoder)  # texts new to the encoder are encoded first: minutes for BGE-M3 after a library change
         judge = Judge(client, group.pdf.assets.root / "model_cache", job.cancel, efforts)
+        conditions = {document.document_id: group.pdf.variants(project_id, document.document_id)
+                      for document in group.documents}
         progress = {"ranked": 0, "judged": 0}
         job.update(stage="ranking", total=len(scenes), ranked=0)
 
@@ -251,7 +253,8 @@ def suggest(project_id: str, request: SuggestRequest) -> dict[str, Any]:
         failed = suggest_scenes(
             scenes, index, versions, judge, client.config.concurrency, digest=scene_digest,
             save=lambda scene, record: store.save_suggestion(scene.document.sha256, group.key(scene), record),
-            ranked=ranked, judged=judged, language=request.lang)
+            ranked=ranked, judged=judged, language=request.lang,
+            conditions=lambda scene: conditions[scene.document.document_id].get(scene.scene_id))
         return {"project_id": project_id, "document_ids": request.document_ids, "failed": failed,
                 "effort": efforts[0], "usage": dict(judge.spent)}
 
