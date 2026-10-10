@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .scene_proposer import SceneResponseInvalid, _response_object
 from .structure_evidence import normalize, quote_found
 
-VARIANT_PROMPT_VERSION = "scene-variants-prompt-v1"
+VARIANT_PROMPT_VERSION = "scene-variants-prompt-v2"
 MAX_VARIANTS = 100  # a table this long is a sweep; the rest is cut and a person is told
 
 VariantHow = Literal["都要做", "按被测车选一", "任选一"]
@@ -123,14 +123,28 @@ _PROMPT_SCENE_VARIANTS_V1 = """你是汽车测试标准的试验工况整理专�
 }
 """
 
-_PROMPT_SHA256 = "293349de8c24d1f877cab8a20a8b66857f84e635cc624a5e651cd2826f7e9a81"
+# v2 (2026-10-10): names, labels and values in the source's language, like the scene name. v1 wrote them in
+# the prompt's Chinese, so an English standard listed 「向左偏离」 under its English clauses.
+_V1_LAST_RULE = "3. 原文没有规定任何分别、分支、重复条件或预试验时，只有一个工况：dimensions 和 variants 都输出空列表。\n"
+
+_V2_LANGUAGE_RULE = """4. name、label、values 用原文的语言写，和场景名一样：英文原文写英文（如 label「Departure left · 0.2 m/s」），
+   中文原文写中文；kind 和 how 只用上面列出的取值。
+"""
+
+_PROMPT_SCENE_VARIANTS_V2 = _PROMPT_SCENE_VARIANTS_V1.replace(_V1_LAST_RULE, _V1_LAST_RULE + _V2_LANGUAGE_RULE)
+
+_PROMPTS = {
+    "scene-variants-prompt-v1": (_PROMPT_SCENE_VARIANTS_V1, "293349de8c24d1f877cab8a20a8b66857f84e635cc624a5e651cd2826f7e9a81"),
+    "scene-variants-prompt-v2": (_PROMPT_SCENE_VARIANTS_V2, "9279e30640aecc16fc5580a64b8a1bb8e0225de14e7eaaa367e47908ca97cfad"),
+}
 
 
-def resolve_variant_prompt() -> str:
-    actual = hashlib.sha256(_PROMPT_SCENE_VARIANTS_V1.encode("utf-8")).hexdigest()
-    if actual != _PROMPT_SHA256:
-        raise RuntimeError(f"variant prompt {VARIANT_PROMPT_VERSION} drifted: expected {_PROMPT_SHA256}, got {actual}")
-    return _PROMPT_SCENE_VARIANTS_V1
+def resolve_variant_prompt(version: str = VARIANT_PROMPT_VERSION) -> str:
+    prompt, expected = _PROMPTS[version]
+    actual = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    if actual != expected:
+        raise RuntimeError(f"variant prompt {version} drifted: expected {expected}, got {actual}")
+    return prompt
 
 
 def build_variant_request(context_view: str, scene_view: str, scene_name: str, *, model: str,
