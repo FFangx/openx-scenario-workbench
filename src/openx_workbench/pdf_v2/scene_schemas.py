@@ -168,6 +168,10 @@ class SceneParams(BaseModel):
     ttc_value: float | None = None
 
     lateral_direction: LateralDirection = "未知"
+    # The ego's lateral (drift) speeds in m/s the test runs at, each a test condition; or the range
+    # (low, high) any speed of which will do. Left out when empty, like speed_limits_kph.
+    lateral_speeds_mps: tuple[float, ...] = Field(default=(), exclude_if=lambda value: not value)
+    lateral_speed_range_mps: tuple[float, ...] = Field(default=(), exclude_if=lambda value: not value)
     curve_radius_m: float | None = None
 
     lane_count: float | None = None
@@ -469,6 +473,18 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
             _number(item, "target_speed") for item in (params_raw.get("target_speeds_kph") or ())
         ) if speed is not None
     )
+    lateral_speeds = sorted({
+        speed for speed in (_speed(item, "lateral_speed") for item in (params_raw.get("lateral_speeds_mps") or ()))
+        if speed
+    })
+    lateral_range = sorted(
+        speed for speed in (_speed(item, "lateral_speed_range") for item in (params_raw.get("lateral_speed_range_mps") or ()))
+        if speed is not None
+    )
+    if len(lateral_range) != 2 or lateral_range[0] == lateral_range[1]:
+        if lateral_range:
+            dropped.add(f"lateral_speed_range={params_raw.get('lateral_speed_range_mps')!r}")
+        lateral_range = []
     end_condition_raw = str(params_raw.get("end_condition") or "").strip()
     params = SceneParams(
         ego_speed_kph=_number(params_raw.get("ego_speed_kph"), "ego_speed"),
@@ -477,6 +493,8 @@ def parse_scene_structure(raw: object, dropped: set[str]) -> SceneStructure | No
         time_of_day=_pick(params_raw.get("time_of_day"), _TIME_VALUES, "time_of_day", "未知"),
         ttc_value=_number(params_raw.get("ttc_value"), "ttc"),
         lateral_direction=_pick(params_raw.get("lateral_direction"), _LATERAL_DIR_VALUES, "lateral_direction", "未知"),
+        lateral_speeds_mps=tuple(lateral_speeds),
+        lateral_speed_range_mps=tuple(lateral_range),
         curve_radius_m=_number(params_raw.get("curve_radius_m"), "curve_radius"),
         lane_count=_number(params_raw.get("lane_count"), "lane_count"),
         lane_direction=_pick(params_raw.get("lane_direction"), _LANE_DIR_VALUES, "lane_direction", "未知"),

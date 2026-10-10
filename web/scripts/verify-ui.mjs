@@ -315,11 +315,15 @@ try {
   await p.locator(".facts-actions .ant-btn").filter({ hasText: "Edit facts" }).click();
   const speed = p.locator(".ant-drawer .ant-form-item").filter({ hasText: "Ego speed" }).locator("input");
   await speed.fill("42");
+  const lateral = p.locator(".ant-drawer .ant-form-item").filter({ hasText: "Lateral speeds" }).locator("input");
+  await lateral.fill("0.2");
+  await lateral.press("Enter");
   await p.locator(".ant-drawer .ant-btn-primary").click();
   await p.locator(".ant-message-success").filter({ hasText: `revision ${revision + 1}` }).waitFor();
   await idle();
   check("saving facts creates the next revision", (await p.locator(".facts-head .muted").innerText()) === `Revision ${revision + 1}`);
   check("the new revision holds the edited value", (await p.locator(".fact-sheet").first().innerText()).includes("42"));
+  check("the new revision holds the lateral speed typed as a tag", /Lateral speeds \(m\/s\)\s+0\.2/.test(await p.locator(".fact-sheet").first().innerText()));
   check("requirement facts no longer publish to a separate library", (await p.locator(".facts-actions .ant-btn").filter({ hasText: "publish" }).count()) === 0);
   await p.locator(".facts-actions .ant-btn").filter({ hasText: "Revision history" }).click();
   await p.locator(".ant-modal:visible tbody tr.ant-table-row").first().waitFor();

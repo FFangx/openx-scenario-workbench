@@ -103,21 +103,37 @@ class LaneSection:
     s: float
     widths: dict[int, tuple[LaneWidth, ...]]
 
+    def width(self, lane_id: int, s: float) -> float | None:
+        entries = self.widths.get(lane_id)
+        if not entries:
+            return None
+        section_offset = s - self.s
+        entry = next(
+            (item for item in reversed(entries) if item.s_offset <= section_offset),
+            entries[0],
+        )
+        return entry.at(section_offset)
+
+    def lane_at(self, t: float, s: float) -> int | None:
+        """The lane a point `t` beside the reference line lies in; None beyond the outermost lane."""
+        step = 1 if t > 0 else -1
+        lane, edge = step, 0.0
+        while (width := self.width(lane, s)) is not None:
+            edge += width
+            if abs(t) <= edge:
+                return lane
+            lane += step
+        return None
+
     def lateral_offset(self, lane_id: int, s: float) -> float | None:
         if lane_id == 0:
             return 0.0
-        section_offset = s - self.s
         step = 1 if lane_id > 0 else -1
         offset = 0.0
         for current in range(step, lane_id + step, step):
-            entries = self.widths.get(current)
-            if not entries:
+            width = self.width(current, s)
+            if width is None:
                 return None
-            entry = next(
-                (item for item in reversed(entries) if item.s_offset <= section_offset),
-                entries[0],
-            )
-            width = entry.at(section_offset)
             offset += width / 2 if current == lane_id else width
         return offset if lane_id > 0 else -offset
 

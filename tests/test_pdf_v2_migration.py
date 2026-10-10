@@ -287,11 +287,12 @@ def test_prompts_are_frozen_and_chain_parser_is_selected():
     v10 = resolve_scene_prompt("scene-structure-prompt-v10")
     assert '"图"' in v10 and "读示意图" in v10 and "出发的一侧" in v10
     assert "也填未知" in v9 and "也填未知" not in v10
-    # v11 adds the lane departure behavior, nothing else.
+    # v11 adds the lane departure behavior and its lateral speeds, nothing else.
     assert PROMPT_VERSION == "scene-first-prompt-v11"
     assert resolve_scene_prompt(PROMPT_VERSION) == resolve_scene_prompt("scene-first-prompt-v1")
     structure = resolve_scene_prompt(STRUCTURE_PROMPTS[PROMPT_VERSION])
     assert "偏离车道" in structure and "偏离车道" not in v10
+    assert all(field in structure and field not in v10 for field in ('"lateral_speeds_mps"', '"lateral_speed_range_mps"'))
     assert _resolve_heading_decoder(None) == "chain"
 
 

@@ -17,6 +17,8 @@ export const PARAM_LABEL: Record<string, [string, string]> = {
   speed_limits_kph: ["限速标志（km/h）", "Speed limit signs (km/h)"],
   target_speeds_kph: ["目标速度（km/h）", "Target speeds (km/h)"],
   lateral_direction: ["横向方向", "Lateral direction"],
+  lateral_speeds_mps: ["横向速度（m/s）", "Lateral speeds (m/s)"],
+  lateral_speed_range_mps: ["横向速度范围（m/s）", "Lateral speed range (m/s)"],
   lane_direction: ["车道方向", "Lane direction"],
   weather: ["天气", "Weather"],
   time_of_day: ["时段", "Time of day"],

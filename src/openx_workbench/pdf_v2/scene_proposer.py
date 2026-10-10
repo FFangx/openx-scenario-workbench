@@ -729,7 +729,29 @@ _V11_EGO_ACTIONS_BLOCK = """ego_actions（主车行为，可多选）：
     params.lateral_direction，两侧都要做时填未知
 """
 
-_PROMPT_SCENE_STRUCTURE_V11 = _PROMPT_SCENE_STRUCTURE_V10.replace(_V6_EGO_ACTIONS_BLOCK, _V11_EGO_ACTIONS_BLOCK)
+# The drift's lateral speed is what tells lane departure tests of one function apart (0.2 against
+# 0.5 m/s); stated values are test conditions, a stated range lets any speed in it do.
+
+_V10_LATERAL_LINE = "  lateral_direction：左 / 右 / 未知 —— 偏离或换道的方向（「向左偏离」→ 左）\n"
+
+_V11_LATERAL_LINES = _V10_LATERAL_LINE + """  lateral_speeds_mps：主车横向（偏离、漂移）速度（数字数组，m/s）——试验要逐个做的值都列上
+    （「横向速度 0.2 m/s 和 0.5 m/s」→ [0.2, 0.5]）；文档没写就留空数组
+  lateral_speed_range_mps：只给了范围、范围内任取一个速度时填 [下限, 上限]
+    （「横向偏离速度在 0.1 至 0.5 m/s 之间」→ [0.1, 0.5]），这时 lateral_speeds_mps 留空
+"""
+
+_V10_EXAMPLE_LATERAL = '          "lateral_direction": "未知",\n'
+
+_V11_EXAMPLE_LATERAL = _V10_EXAMPLE_LATERAL + """          "lateral_speeds_mps": [],
+          "lateral_speed_range_mps": [],
+"""
+
+_PROMPT_SCENE_STRUCTURE_V11 = (
+    _PROMPT_SCENE_STRUCTURE_V10
+    .replace(_V6_EGO_ACTIONS_BLOCK, _V11_EGO_ACTIONS_BLOCK)
+    .replace(_V10_LATERAL_LINE, _V11_LATERAL_LINES)
+    .replace(_V10_EXAMPLE_LATERAL, _V11_EXAMPLE_LATERAL)
+)
 
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
@@ -808,7 +830,7 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
     ),
 
     "scene-structure-prompt-v11": (
-        "e47e1f55b2b2f327f7767f57b40e1cb372c963145d20fbaacc27fc928e6dc660"
+        "490168fbce59b07984e8eca45c2fcca77ff0745e8fe2c79ad9a915f371c76bb8"
     ),
 }
 

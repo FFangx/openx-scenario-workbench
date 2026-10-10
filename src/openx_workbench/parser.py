@@ -60,6 +60,9 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
     command = _first(node, "CustomCommandAction")
     lane = next((child for child in node.iter()
                  if _local(child) in {"RelativeTargetLane", "AbsoluteTargetLane"}), None)
+    lane_dynamics = _first(node, "LaneChangeActionDynamics")
+    offset = next((child for child in node.iter()
+                   if _local(child) in {"AbsoluteTargetLaneOffset", "RelativeTargetLaneOffset"}), None)
     environment = _first(node, "Environment") if _first(node, "EnvironmentAction") is not None else None
     return ActionIR(
         name,
@@ -72,6 +75,8 @@ def _action(node: ET.Element, name: str, actor: str | None, phase: str = "story"
         command=((command.text or command.get("content") or "").strip() or None) if command is not None else None,
         overrides=_overrides(node),
         lane_target={"kind": _local(lane), **lane.attrib} if lane is not None else {},
+        lane_change_dynamics=dict(lane_dynamics.attrib) if lane_dynamics is not None else {},
+        lane_offset={"kind": _local(offset), **offset.attrib} if offset is not None else {},
         waypoints=[{"kind": _local(position[0]), **position[0].attrib}
                    for waypoint in (*_all(node, "Waypoint"), *_all(node, "Vertex"), *_all(node, "AcquirePositionAction"))
                    if (position := _first(waypoint, "Position")) is not None and len(position)],
