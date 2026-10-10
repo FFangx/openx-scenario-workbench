@@ -23,7 +23,10 @@ LIMITS = {
 
 
 def test_the_prompt_is_frozen():
-    assert VARIANT_PROMPT_VERSION == "scene-variants-prompt-v1" and "工况" in resolve_variant_prompt()
+    assert VARIANT_PROMPT_VERSION == "scene-variants-prompt-v2" and "工况" in resolve_variant_prompt()
+    # v2 asks for the source's language; v1 stays as it was.
+    v1, v2 = resolve_variant_prompt("scene-variants-prompt-v1"), resolve_variant_prompt()
+    assert "用原文的语言写" in v2 and "用原文的语言写" not in v1
 
 
 def test_a_reply_lists_dimensions_and_runs():
