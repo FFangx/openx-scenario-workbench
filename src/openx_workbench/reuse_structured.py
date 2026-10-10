@@ -27,6 +27,7 @@ from .scene_package import (
 )
 
 ENUMERATION_LIMIT = 6  # up to 6! = 720 participant pairings are enumerated; beyond, solve the assignment problem
+LONGITUDINAL = frozenset({"cruise", "speed_change", "stop", "following", "reverse"})  # the ego's speed behaviors
 VARIANT_LIMIT = 64  # combinations of alternatives compared per asset; beyond, the first ones in key order
 
 
@@ -146,13 +147,14 @@ def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: Retr
                 )
             )
         elif actual != query.tested_function:
+            related = policy.related_functions(actual, query.tested_function)
             differences.append(
                 ReuseDifference(
                     "function",
                     query.tested_function,
                     actual,
-                    "switch the tested function and its scoring",
-                    cost=policy.COST_FUNCTION,
+                    "switch to the related tested function" if related else "switch the tested function and its scoring",
+                    cost=policy.COST_PARAMETER if related else policy.COST_FUNCTION,
                 )
             )
     if "motorway" in query.road_features:
@@ -203,7 +205,12 @@ def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: Retr
         if unscripted:
             differences.append(ReuseDifference("unverified", "ego_action=lane_change", "not scripted",
                                                "confirm the system changes lanes", cost=0, verified=False))
-        if absent or (candidate.ego_actions - query.ego_actions - {"unknown"} - controlled):
+        extra = candidate.ego_actions - query.ego_actions - {"unknown"} - controlled
+        # Driving at a steady speed is how an asset reads any ego that moves; a requirement that names
+        # no longitudinal behavior (only a lane departure, or the system taking over) asks nothing of it.
+        if not query.ego_actions & LONGITUDINAL:
+            extra -= {"cruise"}
+        if absent or extra:
             differences.append(
                 ReuseDifference(
                     "ego_action",
@@ -217,6 +224,7 @@ def _compare_structure(query: RetrievalQuery, asset: OpenXAsset, candidate: Retr
                 )
             )
     differences.extend(_route_differences(query, candidate))
+    differences.extend(_lateral_speed_differences(query, candidate))
     values = bundle_parameters(asset.bundle)
     visibility = asset_environment(asset.bundle).get("fog_visibility_m")
     if isinstance(visibility, (float, int)):
@@ -319,6 +327,31 @@ def _route_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list
                             cost=policy.COST_BEHAVIOR)]
 
 
+def _lateral_speed_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
+    """Each stated lateral speed, or the stated range, against the speeds the asset scripts. An asset
+    that scripts none (a drift left to the simulator, a lane change of another shape) is not compared:
+    many libraries leave the speed to the test bench, so not reading it says nothing against the asset."""
+    speeds = candidate.lateral_speeds_mps
+    if not speeds:
+        return []
+    tolerance = policy.LATERAL_SPEED_TOLERANCE_MPS
+    differences = []
+    if query.lateral_speed_range_mps:
+        low, high = query.lateral_speed_range_mps
+        if not any(low - tolerance <= speed <= high + tolerance for speed in speeds):
+            closest = min(speeds, key=lambda speed: min(abs(speed - low), abs(speed - high)))
+            differences.append(ReuseDifference(
+                "parameter", f"lateral_speed_mps={low:g}-{high:g}", f"lateral_speed_mps={closest:g}",
+                "set parameter in XOSC", cost=policy.COST_PARAMETER))
+    for value in query.lateral_speeds_mps:
+        closest = min(speeds, key=lambda speed: abs(speed - value))
+        if abs(closest - value) > tolerance:
+            differences.append(ReuseDifference(
+                "parameter", f"lateral_speed_mps={value:g}", f"lateral_speed_mps={closest:g}",
+                "set parameter in XOSC", cost=policy.COST_PARAMETER))
+    return differences
+
+
 def _occlusion_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> list[ReuseDifference]:
     placed = all(item.bearing != "unknown"
                  for item in (*candidate.participant_signatures, *candidate.scenery_signatures))
@@ -339,16 +372,15 @@ def _intent_differences(query: RetrievalQuery, candidate: RetrievalQuery) -> lis
     requested = bool(query.driver_intervention and candidate.driver_request and "lane_change" in query.ego_actions)
     actual = candidate.driver_intervention or requested
     if query.driver_intervention is not None and query.driver_intervention != actual:
-        # A driver-intervention test is another kind of test than a functional one: an asset
-        # without driver inputs cannot be made into one by a small change (blocking). The
-        # other way, removing the driver inputs leaves the functional test (a change).
+        # Driver inputs are one action of the story (an override of the wheel or a pedal while the
+        # system acts): adding or removing them changes one behavior. What a driver-intervention test
+        # reuses is the run that makes the system act (the drift, the cut-in, the lane change).
         differences.append(ReuseDifference(
             "ego_action",
             "driver_intervention" if query.driver_intervention else "no driver_intervention",
             "driver_intervention" if actual else "no driver_intervention",
-            "build a driver-intervention test" if query.driver_intervention else "remove driver input override",
-            blocking=bool(query.driver_intervention),
-            cost=policy.COST_PARTICIPANT if query.driver_intervention else policy.COST_BEHAVIOR,
+            "add driver input override" if query.driver_intervention else "remove driver input override",
+            cost=policy.COST_BEHAVIOR,
         ))
     if query.parking_operation and query.parking_operation != candidate.parking_operation:
         # Parking in against parking out is a change; a driving scenario is no parking test at all.

@@ -126,16 +126,38 @@ def test_relative_speed_means_moving_at_no_stated_speed():
 
 def test_commands_read_function_lane_change_parking_and_door():
     xosc = scenario("", place("Ego", 0, 0, 10), group(
-        "Ego", ("on", command("EnableNOA")), ("lc", command("LaneOffset=left")),
+        "Ego", ("on", command("EnableNOA")), ("lc", command("ALCAMode=left")),
         ("door", command("FrontLeftDoor=Open"))))
     item = asset(xosc)
     facts = command_facts(item.bundle)
     assert (facts["function"], facts["lane_change"], facts["door_open"]) == ("NOA", True, True)
     assert actor_actions(item.bundle, "Ego") == {"cruise", "lane_change", "system_control"}
     assert asset_structure_query(item).tested_function == "NOA"
+    # A lane offset drifts the ego out of its lane without taking the next one: a lane departure.
+    drift = asset(scenario("", place("Ego", 0, 0, 22), group(
+        "Ego", ("on", command("EnableLDW")), ("drift", command("LaneOffset=right")))))
+    assert not command_facts(drift.bundle)["lane_change"]
+    assert actor_actions(drift.bundle, "Ego") == {"cruise", "lane_departure", "system_control"}
+    assert asset_structure_query(drift).lateral_direction == "right"
     parking = asset(scenario("", place("Ego", 0, 0, 0), group(
         "Ego", ("apa", command("EnableAPA;ParkingOut;Target=(1,2,0)")))))
     assert asset_structure_query(parking).parking_operation == "park_out"
+
+
+def test_a_lane_departure_test_matches_a_drifting_asset_not_a_cruising_one():
+    keep = scene_package_to_query(ScenePackage("REQ", "Lane keep", "", structure={
+        "tested_function": "LKA", "ego_actions": ["偏离车道"], "participants": []}))
+    assert keep.ego_actions == {"lane_departure"}
+    drift = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", ("drift", command("LaneOffset=left")))))
+    cruise = asset(scenario("", place("Ego", 0, 0, 20)))
+    ego_action = lambda item: [d.candidate for d in compare_structure(keep, item) if d.category == "ego_action"]  # noqa: E731
+    assert ego_action(drift) == []
+    assert ego_action(cruise) == ["cruise"]
+    # The drift scripted as a lane change towards the next lane, beside the drift command, is still the drift.
+    scripted = asset(scenario("", place("Ego", 0, 0, 20), group(
+        "Ego", ("drift", command("LaneOffset=right")), ("lane_change", lane_change(-1)))))
+    assert actor_actions(scripted.bundle, "Ego") == {"cruise", "lane_departure"}
+    assert ego_action(scripted) == []
 
 
 def test_driver_overrides_make_an_intervention_test_and_reverse_gear_reverses():
@@ -347,12 +369,78 @@ def test_a_tricycle_model_authored_as_a_car_stands_for_either():
         assert not [difference for difference in differences if difference.blocking], kind
 
 
-def lane_change(value, kind="RelativeTargetLane", ref="Ego"):
+def lane_change(value, kind="RelativeTargetLane", ref="Ego", shape="sinusoidal", dimension="time", amount=3):
     target = (f'<RelativeTargetLane entityRef="{ref}" value="{value}"/>' if kind == "RelativeTargetLane"
               else f'<AbsoluteTargetLane value="{value}"/>')
-    return ('<PrivateAction><LateralAction><LaneChangeAction><LaneChangeActionDynamics dynamicsShape="sinusoidal" '
-            f'value="3" dynamicsDimension="time"/><LaneChangeTarget>{target}</LaneChangeTarget></LaneChangeAction>'
+    return (f'<PrivateAction><LateralAction><LaneChangeAction><LaneChangeActionDynamics dynamicsShape="{shape}" '
+            f'value="{amount}" dynamicsDimension="{dimension}"/><LaneChangeTarget>{target}</LaneChangeTarget></LaneChangeAction>'
             '</LateralAction></PrivateAction>')
+
+
+def lane_offset(value):
+    return ('<PrivateAction><LateralAction><LaneOffsetAction continuous="false"><LaneOffsetActionDynamics '
+            f'maxLateralAcc="0.5" dynamicsShape="linear"/><LaneOffsetTarget><AbsoluteTargetLaneOffset value="{value}"/>'
+            '</LaneOffsetTarget></LaneOffsetAction></LateralAction></PrivateAction>')
+
+
+THREE_LANES = (  # 300 m straight, three 3.5 m lanes to the right of the reference line
+    '<OpenDRIVE><header revMajor="1" revMinor="6"/><road id="1" length="300" junction="-1"><planView>'
+    '<geometry s="0" x="0" y="0" hdg="0" length="300"><line/></geometry></planView>'
+    '<lanes><laneSection s="0"><center><lane id="0" type="none"/></center><right>'
+    + "".join(f'<lane id="{lane}" type="driving"><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane>' for lane in (-1, -2, -3))
+    + '</right></laneSection></lanes></road></OpenDRIVE>')
+
+
+def on_three_lanes(groups, value=22.22):
+    """The ego in the middle lane (-2) of THREE_LANES, at 80 km/h by default."""
+    xosc = scenario("", place("Ego", 10, -5.25, value), groups)
+    return build_catalog([AssetFile("lib/c.xosc", xosc.encode()), AssetFile("ThreeLanes.xodr", THREE_LANES.encode())])[0]
+
+
+def test_the_drift_speed_is_read_from_a_linear_lane_change_on_the_road():
+    def speeds(action):
+        groups = group("Ego", ("drift", command("LaneOffset=left")), ("lc", action))
+        return asset_structure_query(on_three_lanes(groups)).lateral_speeds_mps
+
+    # 3.5 m between the lane centres in 7 s; the next lane to the left of lane -2 is lane -1.
+    assert speeds(lane_change(-1, "AbsoluteTargetLane", shape="linear", amount=7)) == (0.5,)
+    assert speeds(lane_change(1, shape="linear", amount=7)) == (0.5,)
+    # Over 155.5 m at 80 km/h, also 7 s; at a rate, the rate itself.
+    assert speeds(lane_change(-3, "AbsoluteTargetLane", shape="linear", dimension="distance", amount=155.54)) == (0.5,)
+    assert speeds(lane_change(-3, "AbsoluteTargetLane", shape="linear", dimension="rate", amount=0.3)) == (0.3,)
+    # Another shape changes speed on the way; without the road file the way is not known.
+    assert speeds(lane_change(-1, "AbsoluteTargetLane", amount=7)) == ()
+    no_road = asset(scenario("", place("Ego", 10, -5.25, 22.22), group(
+        "Ego", ("lc", lane_change(-1, "AbsoluteTargetLane", shape="linear", amount=7)))))
+    assert asset_structure_query(no_road).lateral_speeds_mps == ()
+
+
+def test_lateral_speeds_are_compared_only_where_the_asset_scripts_one():
+    def differences(params, *events):
+        package = ScenePackage("REQ", "Lane keep", "", structure={"ego_actions": ["偏离车道"], "params": params})
+        item = on_three_lanes(group("Ego", ("drift", command("LaneOffset=left")), *events))
+        return [(d.requested, d.candidate, d.cost) for d in compare_structure(scene_package_to_query(package), item)
+                if "lateral_speed" in d.requested]
+
+    at_half = ("lc", lane_change(-1, "AbsoluteTargetLane", shape="linear", amount=7))
+    assert differences({"lateral_speeds_mps": [0.2, 0.5]}, at_half) == [("lateral_speed_mps=0.2", "lateral_speed_mps=0.5", 0.5)]
+    assert differences({"lateral_speed_range_mps": [0.1, 0.5]}, at_half) == []
+    assert differences({"lateral_speed_range_mps": [0.1, 0.4]}, ("lc", lane_change(
+        -1, "AbsoluteTargetLane", shape="linear", amount=5))) == [("lateral_speed_mps=0.1-0.4", "lateral_speed_mps=0.7", 0.5)]
+    # A drift left to the simulator says nothing against the asset.
+    assert differences({"lateral_speeds_mps": [0.2]}) == []
+
+
+def test_a_lane_offset_onto_the_line_is_a_lane_departure():
+    def actions(offset):
+        return actor_actions(on_three_lanes(group("Ego", ("drift", lane_offset(offset))), value=20).bundle, "Ego")
+
+    # Half the ego's 1.8 m and 0.9 m reach half the 3.5 m lane; 0.3 m stays inside it.
+    assert actions(-0.9) == {"cruise", "lane_departure"}
+    assert actions(0.3) == {"cruise"}
+    # Without the road file the reach is not known.
+    no_road = asset(scenario("", place("Ego", 10, -5.25, 20), group("Ego", ("drift", lane_offset(-0.9)))))
+    assert "unknown" in actor_actions(no_road.bundle, "Ego")
 
 
 def route(*headings):
@@ -519,13 +607,14 @@ def test_a_driver_lane_change_request_reads_as_either_test_intent():
     # The driver's request is a driver input for an intervention test ...
     assert intent_differences("驾驶员干预试验", request) == []
     assert intent_differences("驾驶员干预试验", ("ok", command("LaneChangeConfirm"))) == []
-    assert intent_differences("驾驶员干预试验") == [("driver_intervention", "no driver_intervention", True)]
+    assert intent_differences("驾驶员干预试验") == [("driver_intervention", "no driver_intervention", False)]
     # ... and how a functional test triggers the function: nothing to remove.
     assert intent_differences("功能试验", request) == []
     # A request is no driver input for an intervention test whose ego keeps its lane (the wheel, a pedal).
     package = ScenePackage("REQ", "Steering", "", structure={"test_intent": "驾驶员干预试验", "ego_actions": ["匀速行驶"]})
     item = asset(scenario("", place("Ego", 0, 0, 20), group("Ego", ("on", command("SysEngReq")), request)))
-    assert [d.blocking for d in compare_structure(scene_package_to_query(package), item) if "driver_intervention" in d.requested] == [True]
+    assert [d.action for d in compare_structure(scene_package_to_query(package), item) if "driver_intervention" in d.requested] == [
+        "add driver input override"]
 
 
 def test_whether_the_system_drives_is_confirmed_never_a_change():

@@ -714,6 +714,45 @@ _PROMPT_SCENE_STRUCTURE_V10 = (
     .replace(_V9_OUTPUT_REQUIREMENT, _V10_OUTPUT_REQUIREMENT)
 )
 
+# ---------- v11: a lane departure is its own ego behavior ----------
+# Lane departure warning and keeping tests drift the ego towards or over a line without taking the
+# next lane. v10 had no word for it: readings wrote 匀速行驶 (or 变道), and the comparison then took
+# every lane departure asset for a lane change.
+
+_V11_EGO_ACTIONS_BLOCK = """ego_actions（主车行为，可多选）：
+  匀速行驶 / 变速 / 刹停 / 变道 / 定距跟车 / 倒车 / 偏离车道 / 被测系统控制 / 未知
+  - 「被测系统控制」用于 AEB 介入、APA 自动泊车这类由被测系统接管主车的场景
+  - 主车匀速开着等目标出现，就是「匀速行驶」
+  - 「倒车」= 主车倒着行驶（倒车驶出车位、倒车通过通道这类），文档写明才填
+  - 「偏离车道」= 试验让主车横向漂移、驶向或越过车道线，但不换到相邻车道（车道偏离预警、
+    偏离抑制、车道保持这类试验的偏离过程）；换到相邻车道才是「变道」。偏离方向写在
+    params.lateral_direction，两侧都要做时填未知
+"""
+
+# The drift's lateral speed is what tells lane departure tests of one function apart (0.2 against
+# 0.5 m/s); stated values are test conditions, a stated range lets any speed in it do.
+
+_V10_LATERAL_LINE = "  lateral_direction：左 / 右 / 未知 —— 偏离或换道的方向（「向左偏离」→ 左）\n"
+
+_V11_LATERAL_LINES = _V10_LATERAL_LINE + """  lateral_speeds_mps：主车横向（偏离、漂移）速度（数字数组，m/s）——试验要逐个做的值都列上
+    （「横向速度 0.2 m/s 和 0.5 m/s」→ [0.2, 0.5]）；文档没写就留空数组
+  lateral_speed_range_mps：只给了范围、范围内任取一个速度时填 [下限, 上限]
+    （「横向偏离速度在 0.1 至 0.5 m/s 之间」→ [0.1, 0.5]），这时 lateral_speeds_mps 留空
+"""
+
+_V10_EXAMPLE_LATERAL = '          "lateral_direction": "未知",\n'
+
+_V11_EXAMPLE_LATERAL = _V10_EXAMPLE_LATERAL + """          "lateral_speeds_mps": [],
+          "lateral_speed_range_mps": [],
+"""
+
+_PROMPT_SCENE_STRUCTURE_V11 = (
+    _PROMPT_SCENE_STRUCTURE_V10
+    .replace(_V6_EGO_ACTIONS_BLOCK, _V11_EGO_ACTIONS_BLOCK)
+    .replace(_V10_LATERAL_LINE, _V11_LATERAL_LINES)
+    .replace(_V10_EXAMPLE_LATERAL, _V11_EXAMPLE_LATERAL)
+)
+
 _PROMPT_REGISTRY: dict[str, str] = {
     "scene-first-prompt-v1": _PROMPT_SCENE_FIRST_V1,
     "scene-first-prompt-v2": _PROMPT_SCENE_FIRST_V2,
@@ -728,11 +767,14 @@ _PROMPT_REGISTRY: dict[str, str] = {
     "scene-structure-prompt-v9": _PROMPT_SCENE_STRUCTURE_V9,
     "scene-first-prompt-v10": _PROMPT_SCENE_FIRST_V1,
     "scene-structure-prompt-v10": _PROMPT_SCENE_STRUCTURE_V10,
+    "scene-first-prompt-v11": _PROMPT_SCENE_FIRST_V1,
+    "scene-structure-prompt-v11": _PROMPT_SCENE_STRUCTURE_V11,
 }
 
 # Scene prompts whose structure is read in a second step, per batch of scenes.
 STRUCTURE_PROMPTS: dict[str, str] = {"scene-first-prompt-v9": "scene-structure-prompt-v9",
-                                     "scene-first-prompt-v10": "scene-structure-prompt-v10"}
+                                     "scene-first-prompt-v10": "scene-structure-prompt-v10",
+                                     "scene-first-prompt-v11": "scene-structure-prompt-v11"}
 
 _FROZEN_PROMPT_SHA256: dict[str, str] = {
     "scene-first-prompt-v1": (
@@ -781,6 +823,14 @@ _FROZEN_PROMPT_SHA256: dict[str, str] = {
 
     "scene-structure-prompt-v10": (
         "140d79943591ef131e72be4ead8dbd02b7ba246c3aee1821769373e143887b06"
+    ),
+    # The v1 scene-finding text, unchanged.
+    "scene-first-prompt-v11": (
+        "3c9b020cf9a664a8a2174b57692dbdb02f4dc6e527c0514d15144fa70659fd22"
+    ),
+
+    "scene-structure-prompt-v11": (
+        "490168fbce59b07984e8eca45c2fcca77ff0745e8fe2c79ad9a915f371c76bb8"
     ),
 }
 

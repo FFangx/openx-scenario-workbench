@@ -523,10 +523,11 @@ def test_a_requirement_without_participants_is_never_reused_as_is():
     assert search(requirement(participants=[]), asset)[0].reuse_level == "review"
 
 
-def test_a_driver_intervention_test_needs_an_asset_with_driver_inputs():
+def test_a_driver_intervention_test_adds_driver_inputs_to_the_run_it_reuses():
     result = search(requirement(test_intent="驾驶员干预试验"), authored_asset())[0]
-    assert result.reuse_level == "new_build"
-    assert [item.requested for item in result.differences if item.blocking] == ["driver_intervention"]
+    assert result.reuse_level != "new_build"
+    assert [(item.requested, item.action, item.blocking, item.cost) for item in result.differences
+            if item.requested == "driver_intervention"] == [("driver_intervention", "add driver input override", False, 2)]
 
 
 def test_the_tested_function_is_a_setting_not_a_rebuild():
@@ -538,6 +539,17 @@ def test_the_tested_function_is_a_setting_not_a_rebuild():
     unknown = search(requirement(), authored_asset(function="未知"))[0]
     assert unknown.reuse_level == "modify"
     assert any(item.category == "function" and not item.verified for item in unknown.differences)
+
+
+def test_a_related_function_costs_no_more_than_an_unknown_one():
+    def function_costs(requested, offered):
+        result = search(requirement(tested_function=requested), authored_asset(function=offered))[0]
+        return [(item.cost, item.verified) for item in result.differences if item.category == "function"]
+
+    assert function_costs("FCW", "AEB") == [(0.5, True)]  # same kind of run: a setting, like an unknown one
+    assert function_costs("ELK", "LKA") == [(0.5, True)]
+    assert function_costs("FCW", "未知") == [(0.5, False)]
+    assert function_costs("FCW", "ACC") == [(2, True)]  # another kind of test
 
 
 def test_a_parking_requirement_needs_a_parking_asset():
@@ -600,6 +612,7 @@ def test_round_c_fields_are_optional_in_the_stored_structure():
 
     dumped = SceneStructure.model_validate(requirement().structure).model_dump(mode="json")
     assert not {"ego_turn", "traffic_controls"} & set(dumped) and "speed_limits_kph" not in dumped["params"]
+    assert not {"lateral_speeds_mps", "lateral_speed_range_mps"} & set(dumped["params"])
     assert "alternative_group" not in dumped["participants"][0]
     dropped = set()
     parsed = parse_scene_structure({
@@ -608,3 +621,10 @@ def test_round_c_fields_are_optional_in_the_stored_structure():
     assert (parsed.ego_turn, parsed.traffic_controls, parsed.params.speed_limits_kph) == ("左转", ("交通信号灯",), (60.0, 80.0))
     assert [item.alternative_group for item in parsed.participants] == ["A", None]
     assert dropped == {"traffic_control=红绿灯", "speed_limit='x'"}
+    dropped = set()
+    lateral = parse_scene_structure({"params": {"lateral_speeds_mps": [0.5, "0.2", 0.5, -1],
+                                                "lateral_speed_range_mps": [0.5, 0.1]}}, dropped).params
+    assert (lateral.lateral_speeds_mps, lateral.lateral_speed_range_mps) == ((0.2, 0.5), (0.1, 0.5))
+    assert dropped == {"lateral_speed=-1"}
+    lateral = parse_scene_structure({"params": {"lateral_speed_range_mps": [0.3]}}, dropped).params
+    assert lateral.lateral_speed_range_mps == () and "lateral_speed_range=[0.3]" in dropped

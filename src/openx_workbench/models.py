@@ -37,6 +37,10 @@ class ActionIR:
     overrides: dict[str, str] = field(default_factory=dict)
     # LaneChangeAction target: {"kind": "RelativeTargetLane", "value": "1", "entityRef": ...}.
     lane_target: dict[str, str] = field(default_factory=dict)
+    # LaneChangeActionDynamics: {"dynamicsShape": "linear", "dynamicsDimension": "time", "value": "5"}.
+    lane_change_dynamics: dict[str, str] = field(default_factory=dict)
+    # LaneOffsetAction target: {"kind": "AbsoluteTargetLaneOffset", "value": "1.2"}.
+    lane_offset: dict[str, str] = field(default_factory=dict)
     # Where a routing action sends the actor, in order: route waypoints, trajectory vertices or an
     # AcquirePosition target, e.g. {"kind": "WorldPosition", "x": ..., "h": ...}.
     waypoints: list[dict[str, str]] = field(default_factory=list)

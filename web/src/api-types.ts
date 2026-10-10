@@ -3359,6 +3359,16 @@ export interface components {
              */
             lateral_direction: "左" | "右" | "未知";
             /**
+             * Lateral Speed Range Mps
+             * @default []
+             */
+            lateral_speed_range_mps?: number[];
+            /**
+             * Lateral Speeds Mps
+             * @default []
+             */
+            lateral_speeds_mps?: number[];
+            /**
              * Speed Limits Kph
              * @default []
              */
@@ -3489,7 +3499,7 @@ export interface components {
              * Ego Actions
              * @default []
              */
-            ego_actions: ("匀速行驶" | "变速" | "刹停" | "变道" | "定距跟车" | "倒车" | "被测系统控制" | "未知")[];
+            ego_actions: ("匀速行驶" | "变速" | "刹停" | "变道" | "定距跟车" | "倒车" | "被测系统控制" | "未知" | "偏离车道")[];
             /**
              * Ego Lane
              * @default 未知

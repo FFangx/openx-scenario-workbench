@@ -27,6 +27,8 @@ const LEGACY: [keyof Scene, string, string][] = [
   ["entities", "参与者", "Participants"], ["actions", "动作", "Actions"], ["triggers", "触发条件", "Triggers"],
   ["road_types", "道路", "Road types"], ["weather", "天气", "Weather"], ["time_of_day", "时段", "Time of day"],
 ];
+/** Positive numbers typed as tags, once each, in order. */
+const positives = (values: string[]) => [...new Set(values.map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort((a, b) => a - b);
 const EMPTY_ACTOR: Participant = { kind: "未知", bearing: "未知方位", facing: "未知", actions: [], age: "未知" };
 
 type Evidenced = { evidence?: Record<string, FieldEvidence> };
@@ -161,7 +163,15 @@ export function FactEditor({ open, onClose, projectId, scene, onSaved }: Props) 
                   ))}
                   <Form.Item label={t("限速标志（km/h）", "Speed limit signs (km/h)")} extra={t("多个数值表示任选其一", "Several values are alternatives")}>
                     <Select mode="tags" open={false} tokenSeparators={[",", "，", " "]} value={(draft.params.speed_limits_kph ?? []).map(String)}
-                      onChange={(v: string[]) => setParam("speed_limits_kph", [...new Set(v.map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort((a, b) => a - b))} disabled={useJson} />
+                      onChange={(v: string[]) => setParam("speed_limits_kph", positives(v))} disabled={useJson} />
+                  </Form.Item>
+                  <Form.Item label={t("横向速度（m/s）", "Lateral speeds (m/s)")} extra={t("每个数值是一个试验条件", "Each value is a test condition")}>
+                    <Select mode="tags" open={false} tokenSeparators={[",", "，", " "]} value={(draft.params.lateral_speeds_mps ?? []).map(String)}
+                      onChange={(v: string[]) => setParam("lateral_speeds_mps", positives(v))} disabled={useJson} />
+                  </Form.Item>
+                  <Form.Item label={t("横向速度范围（m/s）", "Lateral speed range (m/s)")} extra={t("填下限和上限，范围内任取", "Low and high: any speed in between")}>
+                    <Select mode="tags" open={false} maxCount={2} tokenSeparators={[",", "，", " "]} value={(draft.params.lateral_speed_range_mps ?? []).map(String)}
+                      onChange={(v: string[]) => setParam("lateral_speed_range_mps", positives(v))} disabled={useJson} />
                   </Form.Item>
                   <Form.Item label={t("结束条件", "End condition")}>
                     <Input value={(draft.params.end_condition as string) ?? ""} onChange={(e) => setParam("end_condition", e.target.value || null)} disabled={useJson} />

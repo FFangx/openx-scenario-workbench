@@ -29,6 +29,21 @@ COST_ROAD = 1.0  # select or modify the OpenDRIVE road
 COST_PARAMETER = 0.5  # set one numeric parameter, speed or environment value
 COST_FIGURE = 0.5  # a fact read only from a figure that the asset does not show: check it against the figure
 
+# Functions tested on the same kind of run: the ego drifting towards a lane line (warning, prevention,
+# keeping), closing in on a target (warning, braking), passing a speed limit sign (read, followed).
+# Switching within a family sets the system and its scoring, like a function the file does not
+# state (COST_PARAMETER); an asset that names a related function must not rank below one naming none.
+FUNCTION_FAMILIES = (
+    frozenset({"LSS", "LDW", "LDP", "LKA", "ELK"}),
+    frozenset({"AEB", "FCW"}),
+    frozenset({"TSA", "ISL"}),
+)
+
+
+def related_functions(left: str, right: str) -> bool:
+    """Two tested functions of one family (see FUNCTION_FAMILIES)."""
+    return any(left in family and right in family for family in FUNCTION_FAMILIES)
+
 # ---------- difference tiers ----------
 # Which differences decide reuse. Core facts make up the scenario's story and its road
 # (who is there, what they do, what is tested, which road); an unverified core fact keeps a
@@ -95,6 +110,8 @@ FACING_OPPOSITE_MIN = 5 * math.pi / 6  # from 150° faces the opposite way; betw
 # Absolute tolerance within which an extracted value satisfies a requirement.
 
 PARAMETER_TOLERANCE = {"ttc_s": 0.05, "distance_m": 0.1, "ego_speed_kph": 0.5, "speed_limit_kph": 0.5}
+# Lateral speeds are stated in steps of 0.1 m/s: a reading within half a step is that value.
+LATERAL_SPEED_TOLERANCE_MPS = 0.05
 TARGET_SPEED_TOLERANCE_KPH = 0.5
 # Relative: a road drawn as R251 serves an R250 test; R250 and R500 test variants stay apart.
 CURVE_RADIUS_TOLERANCE = 0.1

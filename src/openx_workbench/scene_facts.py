@@ -18,7 +18,7 @@ from typing import Any
 from . import reuse_policy as policy
 from .models import ActionIR, EntityIR, ParseBundle, PositionIR
 from .reuse_geometry import _position_heading, _relative_offset
-from .road_geometry import RoadAhead, path_curve_radius, road_ahead
+from .road_geometry import RoadAhead, locate, path_curve_radius, road_ahead
 
 # Events that only operate the simulation: TurnOff switches the system under test
 # off when the scenario ends; just_for_test teleports and zeroes the ego. The
@@ -29,7 +29,10 @@ DISCARDED_EVENTS = frozenset({"TurnOff", "just_for_test"})
 # Driver assistance functions switched on by a simulator command (EnableACC, ...).
 _ENABLE = re.compile(r"Enable(ACC|AEB|APA|NOA|LSS|LKA|LDW|LDP|ALCA|DOW|BSM|RCTA|FCW|TSA)", re.IGNORECASE)
 # Commands that make the system under test change lanes.
-_LANE_CHANGE_COMMANDS = ("laneoffset=", "lanechangecmd", "lanechangereq", "驾驶员触发换道指令", "alcamode=")
+_LANE_CHANGE_COMMANDS = ("lanechangecmd", "lanechangereq", "驾驶员触发换道指令", "alcamode=")
+# Commands that make the ego drift out of its lane without taking the next one (LaneOffset=left in a
+# lane departure warning or keeping test): a lane departure, not a lane change.
+_LANE_DEPARTURE_COMMANDS = ("laneoffset=",)
 # A request to engage the system under test.
 _ENGAGE_COMMANDS = ("sysengreq",)
 # The driver asking the system under test for a lane change or confirming one it proposes.
@@ -157,6 +160,7 @@ def command_facts(bundle: ParseBundle, actor: str = "ego") -> dict[str, Any]:
         "function": command_function(bundle, actor),
         "system_control": any(_ENABLE.search(text) or text.startswith(_ENGAGE_COMMANDS) for text in texts),
         "lane_change": any(marker in text for text in texts for marker in _LANE_CHANGE_COMMANDS),
+        "lane_departure": any(marker in text for text in texts for marker in _LANE_DEPARTURE_COMMANDS),
         "parking": parking,
         "door_open": any("door=open" in text for text in texts),
         "brake": any(text.startswith("brakeposition") for text in texts),
@@ -203,15 +207,23 @@ def actor_behaviors(bundle: ParseBundle, actor: str) -> set[str]:
     facts = command_facts(bundle, actor)
     result: set[str] = set()
     checked = actor.casefold() == "ego" and condition_facts(bundle)["lane_change"]
-    if facts["lane_change"] or checked or any(_element(action) == "LaneChangeAction" for action in story):
+    # A lane departure test may script its drift as a lane change towards the next lane; beside a
+    # drift command it is that drift, not a lane change.
+    scripted = any(_element(action) == "LaneChangeAction" for action in story) and not facts["lane_departure"]
+    if facts["lane_change"] or checked or scripted:
         result.add("lane_change")
+    # A standard drift: a lane offset that takes the ego onto a line. One that stays inside the lane
+    # changes no behavior; one whose reach is not read is not understood.
+    offsets = [_offset_departs(bundle, actor, action) for action in story if _element(action) == "LaneOffsetAction"]
+    if facts["lane_departure"] or any(offsets):
+        result.add("lane_departure")
     if facts["system_control"]:
         result.add("system_control")
     if any(_element(action) == "LongitudinalDistanceAction" for action in story):
         result.add("following")
     if _reverse_gear(bundle, actor):
         result.add("reverse")
-    if any(_element(action) not in _UNDERSTOOD for action in story):
+    if None in offsets or any(_element(action) not in _UNDERSTOOD | {"LaneOffsetAction"} for action in story):
         result.add("unknown")
     behaviour = speed_behaviour(bundle, actor)
     if behaviour != "static" or not result:
@@ -254,6 +266,89 @@ def lateral_direction(bundle: ParseBundle, actor: str = "ego") -> str:
             side = text.split(marker, 1)[1] if marker in text else ""
             directions.update(item for item in ("left", "right") if side.startswith(item))
     return directions.pop() if len(directions) == 1 else ""
+
+
+def _start_section(bundle: ParseBundle, actor: str):
+    """The OpenDRIVE lane section, s and lane ID where the actor starts: a lane position, or a world
+    position beside a road of the file. None when not read."""
+    name = actor.casefold()
+    start = next((position for position in bundle.scenario.positions if (position.actor or "").casefold() == name
+                  and position.kind in {"LanePosition", "WorldPosition"}), None)
+    if start is None:
+        return None
+    attributes, road, s, lane = start.attributes, None, None, None
+    if start.kind == "LanePosition":
+        road = bundle.road_geometry.get(attributes.get("roadId", ""))
+        s, lane = _number(attributes.get("s")), _number(attributes.get("laneId"))
+    elif (x := _number(attributes.get("x"))) is not None and (y := _number(attributes.get("y"))) is not None:
+        road, s, t = locate(bundle.road_geometry, x, y) or (None, None, None)
+    section = next((item for item in reversed(road.lane_sections) if item.s <= s), None) \
+        if road is not None and s is not None else None
+    if section is not None and start.kind == "WorldPosition":
+        lane = section.lane_at(t, s)
+    return (section, s, int(lane)) if section is not None and lane else None
+
+
+def _lane_to_the_left(lane: int, count: int) -> int:
+    """The lane `count` lanes to the left of `lane` in its own driving direction (right-hand traffic: negative
+    lanes run along the reference line, so their left is towards it); lane IDs skip 0."""
+    step = 1 if lane < 0 else -1
+    target = lane + step * count
+    return target + step if target == 0 or (target < 0) != (lane < 0) else target
+
+
+def lateral_speeds(bundle: ParseBundle, actor: str = "ego", speed_kph: float | None = None) -> tuple[float, ...]:
+    """The actor's lateral speeds in m/s, where its story moves it sideways at a constant rate: a linear
+    LaneChangeAction at a rate, over a time or over a distance (at `speed_kph`). The way is the one between
+    the lane centres where the actor starts (OpenDRIVE), so a drift scripted as a lane change reads as the
+    drift. Empty when not read: no lane start or road, another shape, a drift left to the simulator.
+    """
+    start = _start_section(bundle, actor)
+    speeds = set()
+    for action in actions_of(bundle, actor):
+        dynamics, target = action.lane_change_dynamics, action.lane_target
+        value = _number(dynamics.get("value"))
+        if action.phase != "story" or dynamics.get("dynamicsShape") != "linear" or not value or value <= 0:
+            continue
+        if dynamics.get("dynamicsDimension") == "rate":
+            speeds.add(value)
+            continue
+        if start is None:
+            continue
+        section, s, lane = start
+        goal = _number(target.get("value"))
+        if goal is None:
+            continue
+        if target.get("kind") == "RelativeTargetLane":
+            if target.get("entityRef", "").casefold() != actor.casefold():
+                continue
+            goal = _lane_to_the_left(lane, int(goal))
+        here, there = section.lateral_offset(lane, s), section.lateral_offset(int(goal), s)
+        if here is None or there is None or here == there:
+            continue
+        way = abs(there - here)
+        if dynamics.get("dynamicsDimension") == "time":
+            speeds.add(way / value)
+        elif dynamics.get("dynamicsDimension") == "distance" and speed_kph:
+            speeds.add(way * speed_kph / 3.6 / value)
+    return tuple(sorted({round(speed, 2) for speed in speeds}))
+
+
+def _offset_departs(bundle: ParseBundle, actor: str, action: ActionIR) -> bool | None:
+    """Whether a LaneOffsetAction takes the actor onto a line of the lane it starts in: its offset from the
+    lane centre and half its width (BoundingBox; 0 when not declared) reach half the lane's width. None
+    when the offset or the lane is not read."""
+    target, start = action.lane_offset, _start_section(bundle, actor)
+    offset = _number(target.get("value")) if target.get("kind") == "AbsoluteTargetLaneOffset" else None
+    if offset is None or start is None:
+        return None
+    section, s, lane = start
+    width = section.width(lane, s)
+    if not width:
+        return None
+    entity = next((item for item in bundle.scenario.entities if item.name.casefold() == actor.casefold()), None)
+    half = (entity.width or 0.0) / 2 if entity is not None else 0.0
+    return abs(offset) + half >= width / 2
 
 
 def _world_pose(position: PositionIR, roads: dict) -> tuple[float, float, float] | None:

@@ -21,7 +21,7 @@ from .pdf_v2.scene_schemas import SceneFirstExtraction
 from .scene_package import EvidenceRef, ScenePackage, canonical_features, clause_text, synchronize_structure
 
 ENGINE_VERSION = "openx-v2-scene-first-5"
-PROMPT_VERSION = "scene-first-prompt-v10"
+PROMPT_VERSION = "scene-first-prompt-v11"
 # Calls one extraction may make beyond its cache: a guard against a runaway loop, not a budget
 # (each call is already limited to a few attempts; a long standard needs scenes x readings, once
 # for the structure and once for the test conditions).

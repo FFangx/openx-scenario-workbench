@@ -49,6 +49,10 @@ It does not introduce a second ingestion, model or indexing stack.
   requirement that does not say who drives, and a requirement under system control
   against an asset without an engage command lists it to confirm (`COST_PARAMETER`,
   adjustable). Standards differ in whether they say it at all.
+- An asset reads any moving ego as driving at a steady speed. A requirement whose ego
+  behaviors name nothing about speed (only a lane departure, a lane change or the system
+  taking over) asks nothing of it, so the asset's steady speed is no extra behavior
+  (2026-10-09).
 - Verdicts (2026-10-04, tiers 2026-10-05): `direct`; `modify` for changes to make;
   `major_modify` when they cost at least `MAJOR_MODIFY_COST` (5: a behavior change plus
   an extra participant removed); `review` for an unverified core fact; `new_build` for
@@ -74,7 +78,12 @@ It does not introduce a second ingestion, model or indexing stack.
   of the assets; the rest needs simulator-specific commands (`EnableXXX`) that other
   libraries may not write. So a different function is a change (`COST_FUNCTION`) and an unknown one is
   confirmed while reusing; neither blocks. A parking requirement against a driving
-  asset stays blocking through the parking operation.
+  asset stays blocking through the parking operation. Functions tested on the same kind of run
+  (2026-10-09) switch at the cost of an unknown one (`FUNCTION_FAMILIES`): lane departure warning,
+  prevention and keeping (LSS, LDW, LDP, LKA, ELK), forward collision warning and braking (FCW,
+  AEB), speed sign reading and following (TSA, ISL). Before, an asset naming a related function
+  cost more than one naming none: an emergency lane keeping clause ranked speed-limit tests above
+  every lane keeping asset.
 - Either-or participants (2026-10-06, prompt v8). A requirement may offer alternatives
   of which one takes part in a run ("a car, a tricycle or a pedestrian stands ahead"):
   they share an `alternative_group`. An asset builds one of them, so every combination
@@ -106,8 +115,20 @@ It does not introduce a second ingestion, model or indexing stack.
   when both sides test the same function. Two near-empty stories always match: before
   the gate, misuse tests were matched `direct` to any asset testing the same function and
   a traffic-light test was offered a static-obstacle asset.
-- A driver-intervention requirement against an asset without driver inputs is blocking:
-  another kind of test. The other way round, removing the inputs is a change.
+- A driver-intervention requirement against an asset without driver inputs is a behavior
+  change (`COST_BEHAVIOR`, 2026-10-10): the inputs are one action of the story, an override of
+  the wheel or a pedal while the system acts. What such a test reuses is the run that makes
+  the system act (the drift, the cut-in, the lane change); before, an asset without inputs was
+  a new build, and a steering override of a lane keeping system ranked lane-change and pedal
+  intervention tests above the lane keeping assets. The other way round, removing the inputs
+  is a change too.
+- Lateral speed (2026-10-10): a requirement's stated lateral speeds are compared with the
+  ones the asset scripts (`scene_facts.lateral_speeds`), each stated speed without a
+  scripted one within 0.05 m/s (`LATERAL_SPEED_TOLERANCE_MPS`) a parameter to set
+  (`COST_PARAMETER`); a stated range needs one scripted speed inside it. An asset that
+  scripts no speed (a drift left to the simulator, a missing road file) is not compared:
+  many libraries leave the speed to the test bench. Lane departure assets of one function
+  often differ in nothing else (0.3 against 0.7 m/s).
 - Lanes (2026-10-05): the parser reads the most driving lanes one direction and both
   directions offer on one cross-section, and the line types drawn on driving lanes
   (`solid`, `broken`). A requirement's lane count is a lower bound: 单向 N counts one
@@ -191,8 +212,11 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   step) to standstill is a stop; two distinct non-zero targets are a speed change; a
   relative target speed means moving at no stated speed. Event order is not used.
 - **Commands.** `EnableXXX` names the tested function and, like `SysEngReq`, puts the
-  ego under system control; lane-offset, lane-change-request and ALCA-mode commands
-  are lane changes; `EnableAPA` / `ParkingOut` are parking in or out; door commands
+  ego under system control; lane-change-request and ALCA-mode commands are lane changes;
+  a lane-offset command is a lane departure (the ego drifts towards or over a line without
+  taking the next lane, 2026-10-09), and so is a `LaneOffsetAction` that takes the ego onto a
+  line of the lane it starts in (its offset and half its width reach half the lane's width;
+  an unread reach leaves the behavior unknown, 2026-10-10); `EnableAPA` / `ParkingOut` are parking in or out; door commands
   and the driver's closing brake (`BrakePosition`) are recorded facts.
 - **Driver input.** Active `OverrideControllerValueAction` channels make a
   driver-intervention test; an active reverse gear is reversing.
@@ -229,7 +253,11 @@ scenario (not on SIM JSON); none of them reads a scenario's name.
   command naming the side (`ALCAMode=left`, `LaneOffset=right`, the library's
   convention). It confirms a requirement's `lateral_direction`; a different side
   leaves it unverified, since a requirement may mean another participant's side (a
-  cut-in "from the left"). The ego's routing turns left or right when the stated
+  cut-in "from the left"). The ego's lateral speed (2026-10-10) is read from a linear
+  `LaneChangeAction`: at a rate, the rate; over a time or a distance (at the ego's speed),
+  the way between the lane centres where the ego starts (OpenDRIVE; a lane position, or a
+  world position beside a road of the file) over that time. A drift scripted as a lane
+  change reads as its drift speed; other shapes change speed on the way and are not read. The ego's routing turns left or right when the stated
   headings from where it starts through its `AssignRouteAction` waypoints,
   `FollowTrajectoryAction` vertices or `AcquirePositionAction` target change by 45°
   or more (each step's change summed, so one vertex heading stated wrong inside a curve

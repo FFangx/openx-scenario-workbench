@@ -131,6 +131,10 @@ class RetrievalQuery:
     test_intent: str = ""
     # Which way an asset's ego moves sideways (scene_facts.lateral_direction), likewise confirming.
     lateral_direction: str = ""
+    # The ego's lateral speeds in m/s: a requirement's stated ones (each a test condition) or its
+    # range (low, high; any speed in it will do); an asset's scripted ones (scene_facts.lateral_speeds).
+    lateral_speeds_mps: tuple[float, ...] = ()
+    lateral_speed_range_mps: tuple[float, ...] = ()
     # Radius of the curve: a requirement's stated one (also kept among `unverified` until an
     # asset's road states its own), an asset's first curve ahead of the ego.
     curve_radius_m: float | None = None
@@ -168,6 +172,7 @@ STRUCTURE_ACTIONS = {
     "变速": "speed_change",
     "刹停": "stop",
     "变道": "lane_change",
+    "偏离车道": "lane_departure",
     "定距跟车": "following",
     "倒车": "reverse",
     "被测系统控制": "system_control",
@@ -368,6 +373,8 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
     for trigger in structure["semantic_triggers"]:
         if trigger not in STRUCTURE_TRIGGERS:
             unverified.append("trigger=" + trigger)
+    # A range is two speeds; an edited one with a single value says nothing yet.
+    lateral_range = tuple(params.get("lateral_speed_range_mps", ()))
     query = RetrievalQuery(
         text=" ".join((package.title, package.preferred_text)),
         structured=True,
@@ -403,6 +410,8 @@ def _structured_query(package: ScenePackage) -> RetrievalQuery:
         lane_count_scope=lane_scope,
         lane_marking=lane_marking,
         curve_radius_m=params["curve_radius_m"],
+        lateral_speeds_mps=tuple(params.get("lateral_speeds_mps", ())),
+        lateral_speed_range_mps=lateral_range if len(lateral_range) == 2 else (),
         ego_turn=STRUCTURE_TURNS.get(structure.get("ego_turn", ""), ""),
         traffic_controls=frozenset(STRUCTURE_TRAFFIC_CONTROLS[item] for item in structure.get("traffic_controls", ())),
         speed_limits_kph=tuple(params.get("speed_limits_kph", ())),
