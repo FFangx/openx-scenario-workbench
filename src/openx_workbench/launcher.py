@@ -21,11 +21,20 @@ from urllib.request import Request, urlopen
 from .app_icon import app_icon
 from .asset_store import default_store_root
 from .checkout import checkout_root, package_revision
+from .preferences import interface_language
 from .windows_job import WindowsJob
 
 
 WEB_DIST = checkout_root() / "web" / "dist"
 HEALTH = "/api/health"
+TRAY_STATES = {"starting": ("启动中", "Starting"), "running": ("运行中", "Running"),
+               "failed": ("启动失败", "Failed to start"),
+               "stopped": ("服务已停止，可重启", "Service stopped, restart it here")}
+
+
+def say(zh, en):
+    """Tray, notification and message text follow the interface language chosen in Settings."""
+    return en if interface_language() == "en" else zh
 
 
 def web_available():
@@ -117,7 +126,8 @@ class Service:
 
     def ready(self):
         if self.process is None or self.process.poll() is not None:
-            raise RuntimeError("网页服务已退出，请查看 web-service.log。")
+            raise RuntimeError(say("网页服务已退出，请查看 web-service.log。",
+                                   "The web service exited; see web-service.log."))
         try:
             with urlopen(self.url + HEALTH, timeout=0.5) as response:
                 return response.status == 200
@@ -139,14 +149,16 @@ class Service:
 class Launcher:
     def __init__(self, root, *, no_browser=False):
         if not web_available():
-            raise RuntimeError("网页界面尚未构建：请在 web 文件夹运行 npm ci 和 npm run build。 / "
-                               "The web interface is not built: run npm ci and npm run build in the web folder.")
+            raise RuntimeError(say("网页界面尚未构建：请在 web 文件夹运行 npm ci 和 npm run build。",
+                                   "The web interface is not built: run npm ci and npm run build in the web folder."))
         self.root = root
         self.no_browser = no_browser
         self.service = Service(root)
         self.done = threading.Event()
         self.guard = threading.Lock()
         self.icon = None
+        self.state = "starting"
+        self.language = None
         self.token = secrets.token_hex(32)
         owner = self
 
@@ -187,30 +199,40 @@ class Launcher:
                 while not self.done.is_set():
                     if service.ready():
                         logging.info("Service ready: %s", service.url)
-                        if self.icon:
-                            self.icon.title = "OpenX · 运行中"
+                        self.state = "running"
                         if not self.no_browser:
                             webbrowser.open(service.url)
                         return
                     if time.monotonic() > deadline:
-                        raise TimeoutError("网页服务启动超时，请查看日志文件夹。")
+                        raise TimeoutError(say("网页服务启动超时，请查看日志文件夹。",
+                                               "The web service did not start in time; see the log folder."))
                     self.done.wait(0.2)
             except Exception as exc:
                 logging.exception("Service startup failed")
                 service.stop()
+                self.state = "failed"
                 if self.icon:
-                    self.icon.title = "OpenX · 启动失败"
-                    self.icon.notify(str(exc), "OpenX 启动失败")
+                    self.icon.notify(str(exc), say("OpenX 启动失败", "OpenX failed to start"))
+
+    def show(self):
+        """Settings may switch the language while the tray runs: rebuild the menu when it changes."""
+        language = interface_language()
+        if language != self.language:
+            self.language = language
+            self.icon.update_menu()
+        self.icon.title = "OpenX · " + say(*TRAY_STATES[self.state])
 
     def run(self, headless=False):
         if not headless:
             import pystray
-            self.icon = pystray.Icon("OpenX", app_icon(), "OpenX · 启动中", pystray.Menu(
-                pystray.MenuItem("打开工作台", lambda: self.dispatch("open"), default=True),
-                pystray.MenuItem("重启服务", lambda: self.dispatch("restart")),
-                pystray.MenuItem("查看日志", lambda: os.startfile(str(self.root))),
+            self.language = interface_language()
+            self.icon = pystray.Icon("OpenX", app_icon(), "OpenX · " + say(*TRAY_STATES[self.state]), pystray.Menu(
+                pystray.MenuItem(lambda item: say("打开工作台", "Open workbench"), lambda: self.dispatch("open"),
+                                 default=True),
+                pystray.MenuItem(lambda item: say("重启服务", "Restart service"), lambda: self.dispatch("restart")),
+                pystray.MenuItem(lambda item: say("查看日志", "Show logs"), lambda: os.startfile(str(self.root))),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("关闭 OpenX", lambda: self.dispatch("stop"))))
+                pystray.MenuItem(lambda item: say("关闭 OpenX", "Quit OpenX"), lambda: self.dispatch("stop"))))
         record_path = self.root / "instance.json"
         try:
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -220,8 +242,10 @@ class Launcher:
                 logging.info("Tray started")
             self.dispatch("open")
             while not self.done.wait(1):
-                if self.icon and self.service.process and self.service.process.poll() is not None:
-                    self.icon.title = "OpenX · 服务已停止，可重启"
+                if self.icon:
+                    if self.service.process and self.service.process.poll() is not None:
+                        self.state = "stopped"
+                    self.show()
         finally:
             self.done.set()
             self.server.shutdown()
@@ -267,7 +291,8 @@ def main():
                         return
                 except (OSError, ValueError, KeyError):
                     time.sleep(0.1)
-            raise RuntimeError("已有 OpenX 启动器未响应。请查看启动器日志。")
+            raise RuntimeError(say("已有 OpenX 启动器未响应。请查看启动器日志。",
+                                   "Another OpenX launcher is not responding. See the launcher log."))
         if not args.stop:
             launcher = Launcher(root, no_browser=args.no_browser)
             launcher.run(headless=args.headless)
@@ -275,7 +300,7 @@ def main():
         logging.exception("Launcher failed")
         if not args.headless:
             import ctypes
-            ctypes.windll.user32.MessageBoxW(None, f"{exc}\n\n日志：{root}", "OpenX", 0x10)
+            ctypes.windll.user32.MessageBoxW(None, f"{exc}\n\n{say('日志：', 'Logs: ')}{root}", "OpenX", 0x10)
         raise
     finally:
         lock.close()

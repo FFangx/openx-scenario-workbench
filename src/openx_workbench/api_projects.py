@@ -18,7 +18,7 @@ from .api_common import _store
 from .api_schemas import (DeletedProject, OpenedFolder, OpenedProject, Project, ProjectList, ProjectLocation,
                           SelectedProject, documented)
 from .local_folders import choose_folder, open_folder
-from .preferences import read_preferences, save_preferences
+from .preferences import interface_language, save_preferences
 from .project_store import DATA, ProjectStore
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -110,7 +110,7 @@ def select_project(project_id: str) -> dict[str, str]:
 @router.post("/{project_id}/open-folder", **documented(OpenedFolder))
 def open_project_folder(project_id: str, request: FolderRequest) -> dict[str, str]:
     store = ProjectStore(_store())
-    language = "en" if read_preferences().get("language") == "English" else "zh"
+    language = interface_language()
     path = store.folder(project_id) if request.target == "project" else store.exports(project_id, language)
     try:
         open_folder(path)
